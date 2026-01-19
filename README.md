@@ -1,5 +1,7 @@
 # Demiarch
 
+> **🚧 Work in Progress** — This project is in early development. See [ROADMAP.md](ROADMAP.md) for current status and planned features.
+
 A local-first, open-source AI app builder that generates code into your local repositories through conversational AI.
 
 ## Philosophy
