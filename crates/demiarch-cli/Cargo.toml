@@ -1,0 +1,18 @@
+[package]
+name = "demiarch-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CLI for Demiarch - local-first AI app builder"
+
+[[bin]]
+name = "demiarch"
+path = "src/main.rs"
+
+[dependencies]
+demiarch-core = { path = "../demiarch-core" }
+tokio.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true

@@ -1,0 +1,64 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/demiarch-core",
+    "crates/demiarch-cli",
+    "crates/demiarch-tui",
+    "crates/demiarch-plugins",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+authors = ["Demiarch Contributors"]
+repository = "https://github.com/TODO/demiarch"
+description = "Local-first AI app builder"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.43", features = ["full"] }
+
+# Database
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "migrate"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+
+# Utilities
+uuid = { version = "1.11", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Security
+aes-gcm = "0.10"
+ed25519-dalek = "2.1"
+
+# Git
+git2 = "0.19"
+
+# Caching
+lru = "0.12"
+
+# WASM (for plugins)
+wasmtime = "29"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

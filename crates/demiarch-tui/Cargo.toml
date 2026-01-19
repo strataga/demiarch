@@ -1,0 +1,19 @@
+[package]
+name = "demiarch-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "TUI monitor for Demiarch - real-time agent dashboard"
+
+[[bin]]
+name = "demiarch-tui"
+path = "src/main.rs"
+
+[dependencies]
+demiarch-core = { path = "../demiarch-core" }
+tokio.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
