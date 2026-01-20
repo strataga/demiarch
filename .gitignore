@@ -1,5 +1,5 @@
 # Rust
-/target/
+**/target/
 **/*.rs.bk
 Cargo.lock
 
@@ -38,6 +38,11 @@ gui/node_modules/
 # Test artifacts
 *.profraw
 coverage/
+**/coverage-report/
+coverage-report.txt
+TEST_COVERAGE_REPORT.md
+lcov.info
+tarpaulin-report.html
 
 # Backup files
 *.bak
