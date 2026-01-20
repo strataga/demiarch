@@ -7,19 +7,19 @@
 //! - Skill activations
 //! - Hook executions
 
-use std::io;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     widgets::{Block, Borders, Paragraph},
-    Terminal,
 };
+use std::io;
 
 fn main() -> anyhow::Result<()> {
     // Setup terminal
@@ -47,9 +47,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyhow::Res
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Length(3),  // Header
-                    Constraint::Min(10),    // Main content
-                    Constraint::Length(3),  // Footer
+                    Constraint::Length(3), // Header
+                    Constraint::Min(10),   // Main content
+                    Constraint::Length(3), // Footer
                 ])
                 .split(frame.area());
 
@@ -63,9 +63,9 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyhow::Res
             let main_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Percentage(30),  // Projects
-                    Constraint::Percentage(40),  // Agents
-                    Constraint::Percentage(30),  // Stats
+                    Constraint::Percentage(30), // Projects
+                    Constraint::Percentage(40), // Agents
+                    Constraint::Percentage(30), // Stats
                 ])
                 .split(chunks[1]);
 
@@ -75,21 +75,29 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyhow::Res
             frame.render_widget(projects, main_chunks[0]);
 
             // Agents panel
-            let agents = Paragraph::new("No active agents\n\nAgents appear here when generating code")
-                .block(Block::default().borders(Borders::ALL).title("Active Agents"));
+            let agents =
+                Paragraph::new("No active agents\n\nAgents appear here when generating code")
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Active Agents"),
+                    );
             frame.render_widget(agents, main_chunks[1]);
 
             // Stats panel
-            let stats = Paragraph::new(
-                "Tokens: 0\nCost: $0.00\nSkills: 0\n\nPress 'q' to quit"
-            )
-                .block(Block::default().borders(Borders::ALL).title("Session Stats"));
+            let stats = Paragraph::new("Tokens: 0\nCost: $0.00\nSkills: 0\n\nPress 'q' to quit")
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Session Stats"),
+                );
             frame.render_widget(stats, main_chunks[2]);
 
             // Footer
-            let footer = Paragraph::new("q: Quit | r: Refresh | p: Projects | a: Agents | s: Skills")
-                .style(Style::default().fg(Color::DarkGray))
-                .block(Block::default().borders(Borders::ALL));
+            let footer =
+                Paragraph::new("q: Quit | r: Refresh | p: Projects | a: Agents | s: Skills")
+                    .style(Style::default().fg(Color::DarkGray))
+                    .block(Block::default().borders(Borders::ALL));
             frame.render_widget(footer, chunks[2]);
         })?;
 

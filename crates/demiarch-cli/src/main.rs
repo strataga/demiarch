@@ -101,54 +101,129 @@ enum Commands {
 #[derive(Subcommand)]
 enum ProjectAction {
     List,
-    Show { id: String },
-    Archive { id: String },
-    Delete { id: String, #[arg(long)] force: bool },
+    Show {
+        id: String,
+    },
+    Archive {
+        id: String,
+    },
+    Delete {
+        id: String,
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]
 enum FeatureAction {
-    List { #[arg(short, long)] status: Option<String> },
-    Show { id: String },
-    Create { title: String, #[arg(short, long)] phase: Option<String> },
-    Update { id: String, #[arg(short, long)] status: Option<String> },
-    Delete { id: String },
+    List {
+        #[arg(short, long)]
+        status: Option<String>,
+    },
+    Show {
+        id: String,
+    },
+    Create {
+        title: String,
+        #[arg(short, long)]
+        phase: Option<String>,
+    },
+    Update {
+        id: String,
+        #[arg(short, long)]
+        status: Option<String>,
+    },
+    Delete {
+        id: String,
+    },
 }
 
 #[derive(Subcommand)]
 enum SkillAction {
-    List { #[arg(short, long)] category: Option<String> },
-    Show { id: String },
-    Search { query: String },
-    Extract { #[arg(short, long)] description: Option<String> },
-    Delete { id: String },
+    List {
+        #[arg(short, long)]
+        category: Option<String>,
+    },
+    Show {
+        id: String,
+    },
+    Search {
+        query: String,
+    },
+    Extract {
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    Delete {
+        id: String,
+    },
     Stats,
 }
 
 #[derive(Subcommand)]
 enum RoutingAction {
     Status,
-    SetPreference { preference: String },
-    Performance { #[arg(short, long)] task: Option<String> },
-    History { #[arg(short, long)] limit: Option<usize> },
+    SetPreference {
+        preference: String,
+    },
+    Performance {
+        #[arg(short, long)]
+        task: Option<String>,
+    },
+    History {
+        #[arg(short, long)]
+        limit: Option<usize>,
+    },
 }
 
 #[derive(Subcommand)]
 enum ContextAction {
-    Stats { #[arg(short, long)] project: Option<String> },
-    Search { query: String, #[arg(short, long)] level: Option<u8> },
-    Prune { #[arg(long)] older_than: Option<u32>, #[arg(long)] dry_run: bool },
-    Rebuild { #[arg(short, long)] project: Option<String> },
+    Stats {
+        #[arg(short, long)]
+        project: Option<String>,
+    },
+    Search {
+        query: String,
+        #[arg(short, long)]
+        level: Option<u8>,
+    },
+    Prune {
+        #[arg(long)]
+        older_than: Option<u32>,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    Rebuild {
+        #[arg(short, long)]
+        project: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
 enum HookAction {
-    List { #[arg(short, long)] r#type: Option<String> },
-    Register { hook_type: String, name: String, #[arg(long)] handler: String },
-    Enable { id: String },
-    Disable { id: String },
-    Remove { id: String },
-    History { #[arg(short, long)] limit: Option<usize> },
+    List {
+        #[arg(short, long)]
+        r#type: Option<String>,
+    },
+    Register {
+        hook_type: String,
+        name: String,
+        #[arg(long)]
+        handler: String,
+    },
+    Enable {
+        id: String,
+    },
+    Disable {
+        id: String,
+    },
+    Remove {
+        id: String,
+    },
+    History {
+        #[arg(short, long)]
+        limit: Option<usize>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -172,14 +247,18 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("demiarch=info".parse()?)
+                .add_directive("demiarch=info".parse()?),
         )
         .init();
 
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::New { name, framework, repo } => {
+        Commands::New {
+            name,
+            framework,
+            repo,
+        } => {
             println!("Creating project '{}' with framework '{}'", name, framework);
             if let Some(repo) = repo {
                 println!("Repository: {}", repo);

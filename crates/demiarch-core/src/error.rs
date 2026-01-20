@@ -22,14 +22,18 @@ pub enum Error {
     #[error("Network error: {0}. Check your internet connection.")]
     NetworkError(#[from] reqwest::Error),
 
-    #[error("LLM API error: {0}. Check your API key with `demiarch config get openrouter_api_key`.")]
+    #[error(
+        "LLM API error: {0}. Check your API key with `demiarch config get openrouter_api_key`."
+    )]
     LLMError(String),
 
     #[error("Rate limited. Waiting {0} seconds before retry.")]
     RateLimited(u64),
 
     // Cost errors (E200-E299)
-    #[error("Daily budget exceeded (${0:.2}/${1:.2}). Increase limit with `demiarch config set cost_daily_limit_usd {2}`.")]
+    #[error(
+        "Daily budget exceeded (${0:.2}/${1:.2}). Increase limit with `demiarch config set cost_daily_limit_usd {2}`."
+    )]
     BudgetExceeded(f64, f64, f64),
 
     // Lock errors (E300-E399)
@@ -136,9 +140,10 @@ impl Error {
             Self::ProjectNotFound(_) => Some("demiarch projects list".to_string()),
             Self::NetworkError(_) => Some("Check internet connection".to_string()),
             Self::LLMError(_) => Some("demiarch config get openrouter_api_key".to_string()),
-            Self::BudgetExceeded(_, _, suggested) => {
-                Some(format!("demiarch config set cost_daily_limit_usd {}", suggested))
-            }
+            Self::BudgetExceeded(_, _, suggested) => Some(format!(
+                "demiarch config set cost_daily_limit_usd {}",
+                suggested
+            )),
             Self::PluginNotFound(name) => Some(format!("demiarch plugin install {}", name)),
             Self::SkillNotFound(_) => Some("demiarch skills list".to_string()),
             Self::ContextRetrievalFailed(_) => Some("demiarch context rebuild".to_string()),

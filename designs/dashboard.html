@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demiarch - Project Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --white: #f5f5f0;
+            --black: #000000;
+            --vermillion: #ff3d00;
+            --gray-light: #e5e5e0;
+            --gray-mid: #999999;
+            --shadow-hard: 8px 8px 0 var(--black);
+            --shadow-soft: 4px 4px 0 var(--black);
+        }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background: var(--white);
+            color: var(--black);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Grid overlay background */
+        .grid-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                linear-gradient(var(--gray-light) 1px, transparent 1px),
+                linear-gradient(90deg, var(--gray-light) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* Exposed structure lines */
+        .structure-line {
+            position: fixed;
+            background: var(--black);
+            z-index: 1;
+        }
+
+        .structure-line.horizontal {
+            height: 2px;
+            width: 100%;
+            left: 0;
+        }
+
+        .structure-line.vertical {
+            width: 2px;
+            height: 100%;
+            top: 0;
+        }
+
+        .structure-line.h1 { top: 80px; }
+        .structure-line.v1 { left: 280px; }
+        .structure-line.v2 { right: 40px; }
+
+        /* Main container */
+        .container {
+            position: relative;
+            z-index: 10;
+            padding: 40px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 60px;
+            padding-bottom: 40px;
+            border-bottom: 3px solid var(--black);
+        }
+
+        .logo {
+            position: relative;
+        }
+
+        .logo h1 {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 48px;
+            letter-spacing: -2px;
+            line-height: 1;
+        }
+
+        .logo::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 60px;
+            height: 6px;
+            background: var(--vermillion);
+        }
+
+        .logo-tag {
+            font-size: 11px;
+            color: var(--gray-mid);
+            margin-top: 8px;
+            letter-spacing: 2px;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 40px;
+            text-align: right;
+        }
+
+        .stat-block {
+            padding: 16px 24px;
+            border: 2px solid var(--black);
+            background: var(--white);
+            position: relative;
+        }
+
+        .stat-block::before {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            right: -4px;
+            bottom: -4px;
+            background: var(--black);
+            z-index: -1;
+        }
+
+        .stat-number {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 36px;
+            line-height: 1;
+        }
+
+        .stat-number.accent {
+            color: var(--vermillion);
+        }
+
+        .stat-label {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--gray-mid);
+            margin-top: 4px;
+        }
+
+        /* Navigation tabs */
+        .nav-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 40px;
+        }
+
+        .nav-tab {
+            padding: 16px 32px;
+            background: transparent;
+            border: 2px solid var(--black);
+            border-right: none;
+            font-family: 'Space Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .nav-tab:last-child {
+            border-right: 2px solid var(--black);
+        }
+
+        .nav-tab:hover {
+            background: var(--gray-light);
+        }
+
+        .nav-tab.active {
+            background: var(--black);
+            color: var(--white);
+        }
+
+        .nav-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid var(--black);
+        }
+
+        /* Project grid */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            position: relative;
+        }
+
+        /* Project cards */
+        .project-card {
+            background: var(--white);
+            border: 3px solid var(--black);
+            position: relative;
+            transition: transform 0.2s ease;
+            cursor: pointer;
+        }
+
+        .project-card::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            right: -8px;
+            bottom: -8px;
+            background: var(--black);
+            z-index: -1;
+            transition: all 0.2s ease;
+        }
+
+        .project-card:hover {
+            transform: translate(-4px, -4px);
+        }
+
+        .project-card:hover::before {
+            top: 12px;
+            left: 12px;
+        }
+
+        /* Rotated/offset cards */
+        .project-card:nth-child(2) {
+            transform: rotate(-1deg);
+        }
+
+        .project-card:nth-child(2):hover {
+            transform: rotate(-1deg) translate(-4px, -4px);
+        }
+
+        .project-card:nth-child(4) {
+            transform: rotate(1deg);
+        }
+
+        .project-card:nth-child(4):hover {
+            transform: rotate(1deg) translate(-4px, -4px);
+        }
+
+        .project-card:nth-child(5) {
+            transform: rotate(-0.5deg);
+        }
+
+        .project-card:nth-child(5):hover {
+            transform: rotate(-0.5deg) translate(-4px, -4px);
+        }
+
+        .card-header {
+            padding: 20px 24px;
+            border-bottom: 2px solid var(--black);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-number {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 32px;
+            color: var(--gray-light);
+            line-height: 1;
+        }
+
+        .status-shape {
+            width: 24px;
+            height: 24px;
+        }
+
+        .status-shape.active {
+            background: var(--vermillion);
+        }
+
+        .status-shape.pending {
+            background: var(--black);
+            clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+        }
+
+        .status-shape.complete {
+            background: var(--black);
+            border-radius: 50%;
+        }
+
+        .card-body {
+            padding: 24px;
+        }
+
+        .project-name {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 24px;
+            line-height: 1.2;
+            margin-bottom: 12px;
+        }
+
+        .project-desc {
+            font-size: 12px;
+            color: var(--gray-mid);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .project-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            padding-top: 16px;
+            border-top: 1px solid var(--gray-light);
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .meta-label {
+            color: var(--gray-mid);
+            letter-spacing: 1px;
+        }
+
+        .meta-value {
+            font-weight: 700;
+        }
+
+        .meta-value.highlight {
+            color: var(--vermillion);
+        }
+
+        /* Progress bar */
+        .progress-container {
+            margin-top: 16px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--gray-light);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--black);
+            position: relative;
+        }
+
+        .progress-fill.loading {
+            background: repeating-linear-gradient(
+                45deg,
+                var(--black),
+                var(--black) 10px,
+                var(--vermillion) 10px,
+                var(--vermillion) 20px
+            );
+            animation: stripe-move 0.5s linear infinite;
+        }
+
+        @keyframes stripe-move {
+            0% { background-position: 0 0; }
+            100% { background-position: 28px 0; }
+        }
+
+        /* Hover layer effect */
+        .card-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--vermillion);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .project-card:hover .card-layer {
+            opacity: 0.05;
+        }
+
+        .layer-content {
+            color: var(--white);
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 14px;
+            letter-spacing: 2px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.2s ease;
+        }
+
+        .project-card:hover .layer-content {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* New project button */
+        .new-project {
+            background: transparent;
+            border: 3px dashed var(--black);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 280px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .new-project:hover {
+            background: var(--gray-light);
+            border-style: solid;
+        }
+
+        .new-project::before {
+            display: none;
+        }
+
+        .new-project-content {
+            text-align: center;
+        }
+
+        .plus-icon {
+            font-family: 'Archivo Black', sans-serif;
+            font-size: 64px;
+            line-height: 1;
+            margin-bottom: 16px;
+        }
+
+        .new-project-text {
+            font-size: 12px;
+            letter-spacing: 2px;
+            color: var(--gray-mid);
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 80px;
+            padding-top: 40px;
+            border-top: 2px solid var(--black);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-left {
+            font-size: 11px;
+            color: var(--gray-mid);
+            letter-spacing: 1px;
+        }
+
+        .footer-right {
+            display: flex;
+            gap: 24px;
+        }
+
+        .footer-link {
+            font-size: 11px;
+            color: var(--black);
+            text-decoration: none;
+            letter-spacing: 1px;
+            padding-bottom: 2px;
+            border-bottom: 2px solid transparent;
+            transition: border-color 0.2s ease;
+        }
+
+        .footer-link:hover {
+            border-color: var(--vermillion);
+        }
+
+        /* Decorative elements */
+        .corner-marker {
+            position: fixed;
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            color: var(--gray-mid);
+            z-index: 100;
+        }
+
+        .corner-marker.top-left {
+            top: 16px;
+            left: 16px;
+        }
+
+        .corner-marker.top-right {
+            top: 16px;
+            right: 16px;
+        }
+
+        .corner-marker.bottom-left {
+            bottom: 16px;
+            left: 16px;
+        }
+
+        .corner-marker.bottom-right {
+            bottom: 16px;
+            right: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .projects-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .projects-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 32px;
+            }
+
+            .header-stats {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .nav-tabs {
+                flex-wrap: wrap;
+            }
+
+            .nav-tab {
+                border-right: 2px solid var(--black);
+                margin-bottom: -2px;
+            }
+
+            .project-card:nth-child(n) {
+                transform: none;
+            }
+
+            .project-card:nth-child(n):hover {
+                transform: translate(-4px, -4px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-overlay"></div>
+    <div class="structure-line horizontal h1"></div>
+    <div class="structure-line vertical v1"></div>
+
+    <div class="corner-marker top-left">X:0 Y:0</div>
+    <div class="corner-marker top-right">X:1440 Y:0</div>
+    <div class="corner-marker bottom-left">X:0 Y:900</div>
+    <div class="corner-marker bottom-right">X:1440 Y:900</div>
+
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <h1>DEMIARCH</h1>
+                <div class="logo-tag">PROJECT DASHBOARD</div>
+            </div>
+
+            <div class="header-stats">
+                <div class="stat-block">
+                    <div class="stat-number">12</div>
+                    <div class="stat-label">ACTIVE PROJECTS</div>
+                </div>
+                <div class="stat-block">
+                    <div class="stat-number accent">3</div>
+                    <div class="stat-label">BUILDING NOW</div>
+                </div>
+                <div class="stat-block">
+                    <div class="stat-number">847</div>
+                    <div class="stat-label">AGENTS DEPLOYED</div>
+                </div>
+            </div>
+        </header>
+
+        <nav class="nav-tabs">
+            <button class="nav-tab active">ALL PROJECTS</button>
+            <button class="nav-tab">ACTIVE</button>
+            <button class="nav-tab">COMPLETED</button>
+            <button class="nav-tab">ARCHIVED</button>
+        </nav>
+
+        <div class="projects-grid">
+            <div class="project-card">
+                <div class="card-layer">
+                    <span class="layer-content">OPEN PROJECT →</span>
+                </div>
+                <div class="card-header">
+                    <span class="card-number">01</span>
+                    <div class="status-shape active"></div>
+                </div>
+                <div class="card-body">
+                    <h3 class="project-name">E-Commerce Platform</h3>
+                    <p class="project-desc">Full-stack marketplace with Stripe payments, inventory management, and real-time order tracking.</p>
+                    <div class="project-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">PHASE</span>
+                            <span class="meta-value">3 of 5</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">AGENTS</span>
+                            <span class="meta-value highlight">24</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">COST</span>
+                            <span class="meta-value">$12.40</span>
+                        </div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill loading" style="width: 60%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="project-card">
+                <div class="card-layer">
+                    <span class="layer-content">OPEN PROJECT →</span>
+                </div>
+                <div class="card-header">
+                    <span class="card-number">02</span>
+                    <div class="status-shape active"></div>
+                </div>
+                <div class="card-body">
+                    <h3 class="project-name">API Gateway</h3>
+                    <p class="project-desc">Centralized authentication, rate limiting, and request routing for microservices architecture.</p>
+                    <div class="project-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">PHASE</span>
+                            <span class="meta-value">2 of 4</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">AGENTS</span>
+                            <span class="meta-value highlight">18</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">COST</span>
+                            <span class="meta-value">$8.20</span>
+                        </div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill loading" style="width: 50%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="project-card">
+                <div class="card-layer">
+                    <span class="layer-content">OPEN PROJECT →</span>
+                </div>
+                <div class="card-header">
+                    <span class="card-number">03</span>
+                    <div class="status-shape complete"></div>
+                </div>
+                <div class="card-body">
+                    <h3 class="project-name">Auth System</h3>
+                    <p class="project-desc">JWT-based authentication with OAuth2 providers, MFA support, and session management.</p>
+                    <div class="project-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">PHASE</span>
+                            <span class="meta-value">4 of 4</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">AGENTS</span>
+                            <span class="meta-value">12</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">COST</span>
+                            <span class="meta-value">$6.80</span>
+                        </div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="project-card">
+                <div class="card-layer">
+                    <span class="layer-content">OPEN PROJECT →</span>
+                </div>
+                <div class="card-header">
+                    <span class="card-number">04</span>
+                    <div class="status-shape pending"></div>
+                </div>
+                <div class="card-body">
+                    <h3 class="project-name">Analytics Dashboard</h3>
+                    <p class="project-desc">Real-time data visualization with customizable widgets, export tools, and alerting system.</p>
+                    <div class="project-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">PHASE</span>
+                            <span class="meta-value">1 of 6</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">AGENTS</span>
+                            <span class="meta-value">0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">COST</span>
+                            <span class="meta-value">$0.00</span>
+                        </div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="project-card">
+                <div class="card-layer">
+                    <span class="layer-content">OPEN PROJECT →</span>
+                </div>
+                <div class="card-header">
+                    <span class="card-number">05</span>
+                    <div class="status-shape active"></div>
+                </div>
+                <div class="card-body">
+                    <h3 class="project-name">Mobile Backend</h3>
+                    <p class="project-desc">Push notifications, offline sync, and optimized endpoints for React Native application.</p>
+                    <div class="project-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">PHASE</span>
+                            <span class="meta-value">2 of 3</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">AGENTS</span>
+                            <span class="meta-value highlight">8</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">COST</span>
+                            <span class="meta-value">$4.50</span>
+                        </div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill loading" style="width: 67%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="project-card new-project">
+                <div class="new-project-content">
+                    <div class="plus-icon">+</div>
+                    <div class="new-project-text">NEW PROJECT</div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <div class="footer-left">
+                DEMIARCH v0.1.0 — COMPOUND ENGINEERING
+            </div>
+            <div class="footer-right">
+                <a href="#" class="footer-link">DOCUMENTATION</a>
+                <a href="#" class="footer-link">SETTINGS</a>
+                <a href="#" class="footer-link">SUPPORT</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            });
+        });
+
+        // Update corner markers on resize
+        function updateCornerMarkers() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            document.querySelector('.corner-marker.top-right').textContent = `X:${w} Y:0`;
+            document.querySelector('.corner-marker.bottom-left').textContent = `X:0 Y:${h}`;
+            document.querySelector('.corner-marker.bottom-right').textContent = `X:${w} Y:${h}`;
+        }
+
+        window.addEventListener('resize', updateCornerMarkers);
+        updateCornerMarkers();
+
+        // Card click handler
+        document.querySelectorAll('.project-card:not(.new-project)').forEach(card => {
+            card.addEventListener('click', () => {
+                const projectName = card.querySelector('.project-name').textContent;
+                console.log(`Opening project: ${projectName}`);
+            });
+        });
+    </script>
+</body>
+</html>

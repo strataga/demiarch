@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demiarch - Activity Logs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --paper: #f5f2e8;
+            --paper-shadow: #e8e4d8;
+            --ink: #1a1814;
+            --ink-faded: #4a4640;
+            --ink-light: #8a8680;
+            --red-ink: #c41e3a;
+            --blue-ink: #1e4fc4;
+            --green-ink: #1e7a3a;
+            --perforation: #d0ccc0;
+            --highlight: #fff4b8;
+        }
+
+        body {
+            font-family: 'IBM Plex Mono', monospace;
+            background: #2a2824;
+            color: var(--ink);
+            min-height: 100vh;
+            padding: 40px;
+        }
+
+        /* Main tape container */
+        .tape-container {
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* Header - like a label on the tape */
+        .tape-header {
+            background: var(--paper);
+            padding: 24px 32px;
+            border-bottom: 3px solid var(--ink);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+        }
+
+        .tape-header::before,
+        .tape-header::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 24px;
+            background:
+                radial-gradient(circle at 12px 12px, transparent 4px, var(--paper) 4px, var(--paper) 5px, transparent 5px),
+                radial-gradient(circle at 12px 36px, transparent 4px, var(--paper) 4px, var(--paper) 5px, transparent 5px);
+            background-size: 24px 48px;
+        }
+
+        .tape-header::before {
+            left: -24px;
+            background-color: var(--perforation);
+        }
+
+        .tape-header::after {
+            right: -24px;
+            background-color: var(--perforation);
+        }
+
+        .header-title {
+            font-family: 'Special Elite', cursive;
+            font-size: 28px;
+            letter-spacing: 2px;
+        }
+
+        .header-meta {
+            font-size: 12px;
+            color: var(--ink-faded);
+            text-align: right;
+        }
+
+        .header-meta div {
+            margin-bottom: 4px;
+        }
+
+        /* Controls bar */
+        .controls-bar {
+            background: var(--paper-shadow);
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px dashed var(--ink-light);
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--ink-light);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-tab:hover {
+            background: var(--paper);
+        }
+
+        .filter-tab.active {
+            background: var(--ink);
+            color: var(--paper);
+            border-color: var(--ink);
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .search-input {
+            padding: 8px 12px;
+            border: 1px solid var(--ink-light);
+            background: var(--paper);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            width: 200px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--ink);
+        }
+
+        /* Paper tape feed */
+        .tape-feed {
+            background: var(--paper);
+            position: relative;
+            min-height: 600px;
+        }
+
+        /* Perforated edges */
+        .tape-feed::before,
+        .tape-feed::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 24px;
+            background:
+                radial-gradient(circle at 12px 12px, var(--perforation) 4px, var(--paper) 4px);
+            background-size: 24px 24px;
+        }
+
+        .tape-feed::before { left: 0; }
+        .tape-feed::after { right: 0; }
+
+        /* Log entries */
+        .log-entries {
+            padding: 24px 56px;
+        }
+
+        .log-entry {
+            padding: 16px 0;
+            border-bottom: 1px dotted var(--ink-light);
+            position: relative;
+            animation: print-in 0.3s ease-out;
+        }
+
+        @keyframes print-in {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        /* Entry header */
+        .entry-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+
+        .entry-timestamp {
+            font-size: 11px;
+            color: var(--ink-light);
+            font-family: 'Special Elite', cursive;
+            min-width: 140px;
+        }
+
+        .entry-type {
+            font-size: 10px;
+            letter-spacing: 2px;
+            padding: 2px 8px;
+            border: 1px solid;
+            font-weight: 600;
+        }
+
+        .entry-type.orchestrator {
+            color: var(--blue-ink);
+            border-color: var(--blue-ink);
+        }
+
+        .entry-type.planner {
+            color: var(--green-ink);
+            border-color: var(--green-ink);
+        }
+
+        .entry-type.worker {
+            color: var(--ink-faded);
+            border-color: var(--ink-faded);
+        }
+
+        .entry-type.error {
+            color: var(--red-ink);
+            border-color: var(--red-ink);
+            background: #fff0f0;
+        }
+
+        .entry-type.system {
+            color: var(--ink);
+            border-color: var(--ink);
+            background: var(--highlight);
+        }
+
+        .entry-id {
+            font-size: 10px;
+            color: var(--ink-light);
+            margin-left: auto;
+        }
+
+        /* Entry content */
+        .entry-content {
+            font-family: 'Special Elite', cursive;
+            font-size: 15px;
+            line-height: 1.8;
+            color: var(--ink);
+            padding-left: 156px;
+        }
+
+        .entry-content code {
+            font-family: 'IBM Plex Mono', monospace;
+            background: var(--paper-shadow);
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+
+        /* Highlighted entries */
+        .log-entry.highlighted {
+            background: var(--highlight);
+            margin: 0 -16px;
+            padding: 16px;
+        }
+
+        .log-entry.highlighted::before {
+            content: '▶';
+            position: absolute;
+            left: -24px;
+            color: var(--red-ink);
+        }
+
+        /* Strikethrough for completed */
+        .entry-content.completed {
+            text-decoration: line-through;
+            color: var(--ink-light);
+        }
+
+        /* Annotations */
+        .entry-annotation {
+            font-family: 'Special Elite', cursive;
+            font-size: 12px;
+            color: var(--red-ink);
+            margin-top: 8px;
+            padding-left: 156px;
+            font-style: italic;
+        }
+
+        .entry-annotation::before {
+            content: '↳ ';
+        }
+
+        /* Stats summary */
+        .tape-summary {
+            background: var(--paper-shadow);
+            padding: 24px 56px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            border-top: 2px solid var(--ink);
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-value {
+            font-family: 'Special Elite', cursive;
+            font-size: 32px;
+            color: var(--ink);
+        }
+
+        .summary-label {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--ink-light);
+            margin-top: 4px;
+        }
+
+        /* Tape end */
+        .tape-end {
+            background: var(--paper);
+            padding: 32px;
+            text-align: center;
+            position: relative;
+            border-top: 3px solid var(--ink);
+        }
+
+        .tape-end::before,
+        .tape-end::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 24px;
+            background:
+                radial-gradient(circle at 12px 12px, var(--perforation) 4px, var(--paper) 4px);
+            background-size: 24px 24px;
+        }
+
+        .tape-end::before { left: 0; }
+        .tape-end::after { right: 0; }
+
+        .end-marker {
+            font-family: 'Special Elite', cursive;
+            font-size: 14px;
+            color: var(--ink-light);
+            letter-spacing: 4px;
+        }
+
+        .load-more {
+            margin-top: 16px;
+            padding: 12px 32px;
+            background: var(--ink);
+            color: var(--paper);
+            border: none;
+            font-family: 'Special Elite', cursive;
+            font-size: 14px;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .load-more:hover {
+            background: var(--ink-faded);
+        }
+
+        /* Live indicator */
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--green-ink);
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--green-ink);
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+            }
+
+            .tape-header::before,
+            .tape-header::after,
+            .tape-feed::before,
+            .tape-feed::after,
+            .tape-end::before,
+            .tape-end::after {
+                display: none;
+            }
+
+            .log-entries {
+                padding: 16px 24px;
+            }
+
+            .entry-content {
+                padding-left: 0;
+                margin-top: 8px;
+            }
+
+            .entry-annotation {
+                padding-left: 0;
+            }
+
+            .tape-summary {
+                grid-template-columns: repeat(2, 1fr);
+                padding: 24px;
+            }
+
+            .controls-bar {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .filter-tabs {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="tape-container">
+        <header class="tape-header">
+            <h1 class="header-title">ACTIVITY LOG</h1>
+            <div class="header-meta">
+                <div>PROJECT: E-COMMERCE PLATFORM</div>
+                <div>SESSION: #4827</div>
+                <div>DATE: 2026-01-19</div>
+            </div>
+        </header>
+
+        <div class="controls-bar">
+            <div class="filter-tabs">
+                <button class="filter-tab active">ALL</button>
+                <button class="filter-tab">ORCHESTRATOR</button>
+                <button class="filter-tab">PLANNER</button>
+                <button class="filter-tab">WORKER</button>
+                <button class="filter-tab">ERRORS</button>
+            </div>
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                <span>LIVE FEED</span>
+            </div>
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="Search logs...">
+            </div>
+        </div>
+
+        <div class="tape-feed">
+            <div class="log-entries" id="logEntries">
+                <div class="log-entry highlighted">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:00.000</span>
+                        <span class="entry-type system">SYSTEM</span>
+                        <span class="entry-id">#LOG-4827-001</span>
+                    </div>
+                    <div class="entry-content">
+                        Session initialized. Loading project context for E-Commerce Platform build.
+                    </div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:01.234</span>
+                        <span class="entry-type orchestrator">ORCHESTRATOR</span>
+                        <span class="entry-id">#LOG-4827-002</span>
+                    </div>
+                    <div class="entry-content">
+                        Received user request: "Build payment integration with Stripe SDK"
+                    </div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:02.891</span>
+                        <span class="entry-type orchestrator">ORCHESTRATOR</span>
+                        <span class="entry-id">#LOG-4827-003</span>
+                    </div>
+                    <div class="entry-content">
+                        Decomposing request into phases. Identified 4 major components: SDK setup, webhook handlers, payment intents, subscription billing.
+                    </div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:03.445</span>
+                        <span class="entry-type planner">PLANNER-1</span>
+                        <span class="entry-id">#LOG-4827-004</span>
+                    </div>
+                    <div class="entry-content">
+                        Assigned to SDK setup phase. Analyzing existing <code>package.json</code> for dependencies.
+                    </div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:04.112</span>
+                        <span class="entry-type worker">WORKER-1</span>
+                        <span class="entry-id">#LOG-4827-005</span>
+                    </div>
+                    <div class="entry-content completed">
+                        Installing <code>stripe@14.0.0</code> package dependency.
+                    </div>
+                    <div class="entry-annotation">Completed in 2.3s</div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:06.778</span>
+                        <span class="entry-type worker">WORKER-2</span>
+                        <span class="entry-id">#LOG-4827-006</span>
+                    </div>
+                    <div class="entry-content">
+                        Generating TypeScript types for Stripe webhook events at <code>src/types/stripe.ts</code>
+                    </div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:08.234</span>
+                        <span class="entry-type error">ERROR</span>
+                        <span class="entry-id">#LOG-4827-007</span>
+                    </div>
+                    <div class="entry-content">
+                        Environment variable <code>STRIPE_SECRET_KEY</code> not found. Proceeding with placeholder for development.
+                    </div>
+                    <div class="entry-annotation">Non-blocking, will require configuration before deploy</div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:09.001</span>
+                        <span class="entry-type planner">PLANNER-2</span>
+                        <span class="entry-id">#LOG-4827-008</span>
+                    </div>
+                    <div class="entry-content">
+                        Assigned to webhook handlers. Creating endpoint structure at <code>/api/webhooks/stripe</code>
+                    </div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:11.445</span>
+                        <span class="entry-type worker">WORKER-3</span>
+                        <span class="entry-id">#LOG-4827-009</span>
+                    </div>
+                    <div class="entry-content">
+                        Implementing webhook signature verification using <code>stripe.webhooks.constructEvent()</code>
+                    </div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:14.889</span>
+                        <span class="entry-type worker">WORKER-4</span>
+                        <span class="entry-id">#LOG-4827-010</span>
+                    </div>
+                    <div class="entry-content completed">
+                        Created payment intent handler with error recovery and idempotency key support.
+                    </div>
+                    <div class="entry-annotation">23 lines added to src/services/payment.ts</div>
+                </div>
+
+                <div class="log-entry">
+                    <div class="entry-header">
+                        <span class="entry-timestamp">14:32:17.223</span>
+                        <span class="entry-type orchestrator">ORCHESTRATOR</span>
+                        <span class="entry-id">#LOG-4827-011</span>
+                    </div>
+                    <div class="entry-content">
+                        Checkpoint reached: Phase 1 complete (SDK setup). Tokens used: 12,400. Cost: $0.18
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tape-summary">
+            <div class="summary-item">
+                <div class="summary-value">847</div>
+                <div class="summary-label">TOTAL ENTRIES</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value">3</div>
+                <div class="summary-label">ERRORS</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value">124K</div>
+                <div class="summary-label">TOKENS USED</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value">$2.40</div>
+                <div class="summary-label">SESSION COST</div>
+            </div>
+        </div>
+
+        <div class="tape-end">
+            <div class="end-marker">• • • END OF CURRENT FEED • • •</div>
+            <button class="load-more">LOAD EARLIER ENTRIES</button>
+        </div>
+    </div>
+
+    <script>
+        // Filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            });
+        });
+
+        // Simulate live log entries
+        const logTypes = [
+            { type: 'worker', label: 'WORKER-' + Math.floor(Math.random() * 8 + 1), messages: [
+                'Writing unit test for payment validation',
+                'Refactoring error handling in checkout flow',
+                'Updating API response types',
+                'Implementing retry logic for failed transactions'
+            ]},
+            { type: 'planner', label: 'PLANNER-' + Math.floor(Math.random() * 3 + 1), messages: [
+                'Analyzing dependency graph for optimization',
+                'Scheduling parallel worker tasks',
+                'Reviewing completed subtask outputs'
+            ]},
+            { type: 'orchestrator', label: 'ORCHESTRATOR', messages: [
+                'Monitoring worker progress: 67% complete',
+                'Reallocating resources to blocking task',
+                'Checkpoint: saving progress state'
+            ]}
+        ];
+
+        let logId = 12;
+
+        function addLogEntry() {
+            const container = document.getElementById('logEntries');
+            const typeData = logTypes[Math.floor(Math.random() * logTypes.length)];
+            const message = typeData.messages[Math.floor(Math.random() * typeData.messages.length)];
+            const now = new Date();
+            const timestamp = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <div class="entry-header">
+                    <span class="entry-timestamp">${timestamp}</span>
+                    <span class="entry-type ${typeData.type}">${typeData.label}</span>
+                    <span class="entry-id">#LOG-4827-${String(logId++).padStart(3, '0')}</span>
+                </div>
+                <div class="entry-content">${message}</div>
+            `;
+
+            container.appendChild(entry);
+            entry.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        // Add new log every 4 seconds
+        setInterval(addLogEntry, 4000);
+
+        // Search functionality
+        document.querySelector('.search-input').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            document.querySelectorAll('.log-entry').forEach(entry => {
+                const text = entry.textContent.toLowerCase();
+                entry.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        });
+    </script>
+</body>
+</html>

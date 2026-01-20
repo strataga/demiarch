@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demiarch - API Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&family=Saira+Condensed:wght@400;500;600;700&family=Saira:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #f8f6f1;
+            --bg-alt: #efeде8;
+            --ink: #1c1c1c;
+            --ink-secondary: #4a4a4a;
+            --ink-light: #8a8a8a;
+            --accent: #cc3300;
+            --accent-light: #ff6633;
+            --caution: #ffcc00;
+            --success: #339900;
+            --border: #ccc8bc;
+            --header-bg: #2b2b2b;
+        }
+
+        body {
+            font-family: 'Saira', sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+            min-height: 100vh;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Header - military/technical style */
+        .doc-header {
+            background: var(--header-bg);
+            color: var(--bg);
+            padding: 0;
+            border-bottom: 4px solid var(--accent);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 40px;
+            border-bottom: 1px solid #444;
+        }
+
+        .classification {
+            background: var(--accent);
+            color: white;
+            padding: 4px 16px;
+            font-family: 'Saira Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 3px;
+        }
+
+        .doc-number {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .header-main {
+            padding: 24px 40px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 40px;
+            align-items: end;
+        }
+
+        .doc-title {
+            font-family: 'Saira Condensed', sans-serif;
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            line-height: 1.1;
+        }
+
+        .doc-subtitle {
+            font-size: 14px;
+            color: #aaa;
+            margin-top: 8px;
+            letter-spacing: 1px;
+        }
+
+        .header-meta {
+            text-align: right;
+            font-size: 11px;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .header-meta div {
+            margin-bottom: 4px;
+            color: #888;
+        }
+
+        .header-meta span {
+            color: var(--bg);
+        }
+
+        /* Main layout */
+        .doc-container {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            min-height: calc(100vh - 150px);
+        }
+
+        /* Sidebar navigation */
+        .doc-nav {
+            background: var(--bg-alt);
+            border-right: 1px solid var(--border);
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-section-title {
+            font-family: 'Saira Condensed', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--ink-light);
+            padding: 8px 24px;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item {
+            display: block;
+            padding: 10px 24px;
+            color: var(--ink-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            border-left: 3px solid transparent;
+            transition: all 0.15s ease;
+        }
+
+        .nav-item:hover {
+            background: var(--bg);
+            color: var(--ink);
+            border-left-color: var(--border);
+        }
+
+        .nav-item.active {
+            background: var(--bg);
+            color: var(--accent);
+            border-left-color: var(--accent);
+            font-weight: 500;
+        }
+
+        .nav-item .method {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 2px;
+            margin-right: 8px;
+        }
+
+        .method.get { background: #e3f2fd; color: #1565c0; }
+        .method.post { background: #e8f5e9; color: #2e7d32; }
+        .method.put { background: #fff3e0; color: #ef6c00; }
+        .method.delete { background: #ffebee; color: #c62828; }
+
+        /* Main content */
+        .doc-content {
+            padding: 40px;
+            max-width: 900px;
+        }
+
+        /* Section styling */
+        .section {
+            margin-bottom: 48px;
+            padding-bottom: 48px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-number {
+            font-family: 'Saira Condensed', sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+
+        .section-title {
+            font-family: 'Saira Condensed', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .section-title .method {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            padding: 4px 12px;
+        }
+
+        .section-desc {
+            color: var(--ink-secondary);
+            margin-bottom: 24px;
+            max-width: 700px;
+        }
+
+        /* Endpoint box */
+        .endpoint-box {
+            background: var(--header-bg);
+            color: var(--bg);
+            padding: 16px 20px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 14px;
+            border-radius: 4px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .endpoint-method {
+            padding: 4px 12px;
+            border-radius: 2px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .endpoint-method.post { background: var(--success); }
+        .endpoint-method.get { background: #1976d2; }
+        .endpoint-method.delete { background: var(--accent); }
+
+        /* Warning/note boxes */
+        .callout {
+            padding: 16px 20px;
+            border-left: 4px solid;
+            margin: 24px 0;
+            display: flex;
+            gap: 12px;
+        }
+
+        .callout.warning {
+            background: #fff8e1;
+            border-left-color: var(--caution);
+        }
+
+        .callout.danger {
+            background: #ffebee;
+            border-left-color: var(--accent);
+        }
+
+        .callout.info {
+            background: #e3f2fd;
+            border-left-color: #1976d2;
+        }
+
+        .callout-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .callout-title {
+            font-family: 'Saira Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .callout-text {
+            font-size: 13px;
+            color: var(--ink-secondary);
+        }
+
+        /* Parameters table */
+        .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+            font-size: 13px;
+        }
+
+        .params-table th {
+            text-align: left;
+            padding: 12px 16px;
+            background: var(--bg-alt);
+            font-family: 'Saira Condensed', sans-serif;
+            font-weight: 600;
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: var(--ink-secondary);
+            border-bottom: 2px solid var(--border);
+        }
+
+        .params-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        .param-name {
+            font-family: 'Roboto Mono', monospace;
+            font-weight: 500;
+        }
+
+        .param-type {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 11px;
+            color: var(--ink-light);
+        }
+
+        .param-required {
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: var(--header-bg);
+            border-radius: 4px;
+            margin: 24px 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+        }
+
+        .code-label {
+            font-size: 11px;
+            color: #888;
+            letter-spacing: 1px;
+        }
+
+        .code-lang {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 10px;
+            color: #666;
+            background: #333;
+            padding: 2px 8px;
+            border-radius: 2px;
+        }
+
+        .code-content {
+            padding: 20px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #e0e0e0;
+            overflow-x: auto;
+        }
+
+        .code-content .key { color: #82aaff; }
+        .code-content .string { color: #c3e88d; }
+        .code-content .number { color: #f78c6c; }
+        .code-content .bool { color: #c792ea; }
+        .code-content .comment { color: #546e7a; }
+
+        /* Response status */
+        .response-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .status-code {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 2px;
+            font-weight: 700;
+        }
+
+        .status-code.success { background: #e8f5e9; color: #2e7d32; }
+        .status-code.error { background: #ffebee; color: #c62828; }
+
+        .status-text {
+            font-size: 13px;
+            color: var(--ink-secondary);
+        }
+
+        /* Diagram style box */
+        .diagram-box {
+            border: 2px solid var(--ink);
+            padding: 24px;
+            margin: 24px 0;
+            position: relative;
+        }
+
+        .diagram-box::before {
+            content: 'FIGURE 1.1';
+            position: absolute;
+            top: -10px;
+            left: 16px;
+            background: var(--bg);
+            padding: 0 8px;
+            font-size: 10px;
+            font-family: 'Saira Condensed', sans-serif;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: var(--ink-light);
+        }
+
+        .diagram-content {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            white-space: pre;
+            line-height: 1.4;
+            overflow-x: auto;
+        }
+
+        /* Footer */
+        .doc-footer {
+            background: var(--bg-alt);
+            border-top: 1px solid var(--border);
+            padding: 24px 40px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--ink-light);
+        }
+
+        .footer-nav {
+            display: flex;
+            gap: 24px;
+        }
+
+        .footer-nav a {
+            color: var(--ink-secondary);
+            text-decoration: none;
+        }
+
+        .footer-nav a:hover {
+            color: var(--accent);
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .doc-container {
+                grid-template-columns: 1fr;
+            }
+
+            .doc-nav {
+                display: none;
+            }
+
+            .doc-content {
+                padding: 24px;
+            }
+
+            .header-main {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .header-meta {
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="doc-header">
+        <div class="header-top">
+            <div class="classification">TECHNICAL REFERENCE</div>
+            <div class="doc-number">TM-DEMI-API-2026-01</div>
+        </div>
+        <div class="header-main">
+            <div>
+                <h1 class="doc-title">DEMIARCH API REFERENCE</h1>
+                <div class="doc-subtitle">Agent Orchestration & Build System Interface</div>
+            </div>
+            <div class="header-meta">
+                <div>VERSION: <span>2.4.1</span></div>
+                <div>REVISION: <span>2026-01-19</span></div>
+                <div>STATUS: <span>APPROVED</span></div>
+            </div>
+        </div>
+    </header>
+
+    <div class="doc-container">
+        <nav class="doc-nav">
+            <div class="nav-section">
+                <div class="nav-section-title">OVERVIEW</div>
+                <a href="#" class="nav-item active">Introduction</a>
+                <a href="#" class="nav-item">Authentication</a>
+                <a href="#" class="nav-item">Rate Limits</a>
+                <a href="#" class="nav-item">Error Handling</a>
+            </div>
+            <div class="nav-section">
+                <div class="nav-section-title">PROJECTS</div>
+                <a href="#" class="nav-item"><span class="method get">GET</span>List Projects</a>
+                <a href="#" class="nav-item"><span class="method post">POST</span>Create Project</a>
+                <a href="#" class="nav-item"><span class="method get">GET</span>Get Project</a>
+                <a href="#" class="nav-item"><span class="method delete">DEL</span>Delete Project</a>
+            </div>
+            <div class="nav-section">
+                <div class="nav-section-title">AGENTS</div>
+                <a href="#" class="nav-item"><span class="method post">POST</span>Deploy Agent</a>
+                <a href="#" class="nav-item"><span class="method get">GET</span>Agent Status</a>
+                <a href="#" class="nav-item"><span class="method post">POST</span>Send Message</a>
+                <a href="#" class="nav-item"><span class="method delete">DEL</span>Terminate</a>
+            </div>
+            <div class="nav-section">
+                <div class="nav-section-title">BUILDS</div>
+                <a href="#" class="nav-item"><span class="method post">POST</span>Start Build</a>
+                <a href="#" class="nav-item"><span class="method get">GET</span>Build Status</a>
+                <a href="#" class="nav-item"><span class="method get">GET</span>Build Logs</a>
+            </div>
+        </nav>
+
+        <main class="doc-content">
+            <section class="section">
+                <div class="section-number">SECTION 1.0</div>
+                <h2 class="section-title">Introduction</h2>
+                <p class="section-desc">
+                    The Demiarch API provides programmatic access to the agent orchestration system, enabling automated project creation, agent deployment, and build management. All API access is over HTTPS, and all data is sent and received as JSON.
+                </p>
+
+                <div class="diagram-box">
+                    <pre class="diagram-content">
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLIENT REQUEST                          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         API GATEWAY                             │
+│                   Authentication & Rate Limiting                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+        ┌──────────┐   ┌──────────┐   ┌──────────┐
+        │ PROJECTS │   │  AGENTS  │   │  BUILDS  │
+        └──────────┘   └──────────┘   └──────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    ORCHESTRATOR ENGINE                          │
+└─────────────────────────────────────────────────────────────────┘
+                    </pre>
+                </div>
+
+                <div class="callout info">
+                    <span class="callout-icon">ℹ</span>
+                    <div>
+                        <div class="callout-title">BASE URL</div>
+                        <div class="callout-text">All API requests should be made to: <code>https://api.demiarch.io/v1</code></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <div class="section-number">SECTION 2.1</div>
+                <h2 class="section-title">
+                    <span class="method post">POST</span>
+                    Deploy Agent
+                </h2>
+                <p class="section-desc">
+                    Deploys a new agent instance within the specified project. The agent will be initialized with the provided configuration and begin processing according to its assigned role.
+                </p>
+
+                <div class="endpoint-box">
+                    <span class="endpoint-method post">POST</span>
+                    <span>/projects/{project_id}/agents</span>
+                </div>
+
+                <div class="callout warning">
+                    <span class="callout-icon">⚠</span>
+                    <div>
+                        <div class="callout-title">CAUTION</div>
+                        <div class="callout-text">Agent deployment incurs token costs. Ensure budget limits are configured before deployment.</div>
+                    </div>
+                </div>
+
+                <h3 style="font-size: 14px; margin: 24px 0 16px; font-family: 'Saira Condensed', sans-serif; letter-spacing: 1px;">REQUEST PARAMETERS</h3>
+
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>PARAMETER</th>
+                            <th>TYPE</th>
+                            <th>DESCRIPTION</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <span class="param-name">role</span><br>
+                                <span class="param-required">REQUIRED</span>
+                            </td>
+                            <td><span class="param-type">string</span></td>
+                            <td>Agent role: "orchestrator", "planner", or "worker"</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <span class="param-name">model</span><br>
+                                <span class="param-required">REQUIRED</span>
+                            </td>
+                            <td><span class="param-type">string</span></td>
+                            <td>Model to use: "opus", "sonnet", or "haiku"</td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name">temperature</span></td>
+                            <td><span class="param-type">number</span></td>
+                            <td>Sampling temperature (0.0 - 1.0). Default: 0.7</td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name">max_tokens</span></td>
+                            <td><span class="param-type">integer</span></td>
+                            <td>Maximum tokens per response. Default: 4096</td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name">system_prompt</span></td>
+                            <td><span class="param-type">string</span></td>
+                            <td>Custom system prompt override</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 style="font-size: 14px; margin: 24px 0 16px; font-family: 'Saira Condensed', sans-serif; letter-spacing: 1px;">REQUEST EXAMPLE</h3>
+
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-label">REQUEST BODY</span>
+                        <span class="code-lang">JSON</span>
+                    </div>
+                    <div class="code-content">
+{
+  <span class="key">"role"</span>: <span class="string">"worker"</span>,
+  <span class="key">"model"</span>: <span class="string">"sonnet"</span>,
+  <span class="key">"temperature"</span>: <span class="number">0.5</span>,
+  <span class="key">"max_tokens"</span>: <span class="number">8192</span>,
+  <span class="key">"config"</span>: {
+    <span class="key">"auto_retry"</span>: <span class="bool">true</span>,
+    <span class="key">"verbose_logging"</span>: <span class="bool">false</span>
+  }
+}
+                    </div>
+                </div>
+
+                <h3 style="font-size: 14px; margin: 24px 0 16px; font-family: 'Saira Condensed', sans-serif; letter-spacing: 1px;">RESPONSE</h3>
+
+                <div class="response-status">
+                    <span class="status-code success">201</span>
+                    <span class="status-text">Agent created successfully</span>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-label">RESPONSE BODY</span>
+                        <span class="code-lang">JSON</span>
+                    </div>
+                    <div class="code-content">
+{
+  <span class="key">"id"</span>: <span class="string">"agent_7x8k2m9p"</span>,
+  <span class="key">"project_id"</span>: <span class="string">"proj_4n2h8j"</span>,
+  <span class="key">"role"</span>: <span class="string">"worker"</span>,
+  <span class="key">"status"</span>: <span class="string">"initializing"</span>,
+  <span class="key">"created_at"</span>: <span class="string">"2026-01-19T14:32:00Z"</span>,
+  <span class="key">"estimated_ready"</span>: <span class="string">"2026-01-19T14:32:05Z"</span>
+}
+                    </div>
+                </div>
+
+                <div class="response-status">
+                    <span class="status-code error">400</span>
+                    <span class="status-text">Invalid parameters</span>
+                </div>
+
+                <div class="response-status">
+                    <span class="status-code error">402</span>
+                    <span class="status-text">Insufficient token budget</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <footer class="doc-footer">
+        <div>© 2026 Compound Engineering — Demiarch Technical Documentation</div>
+        <nav class="footer-nav">
+            <a href="#">Changelog</a>
+            <a href="#">Status</a>
+            <a href="#">Support</a>
+        </nav>
+    </footer>
+
+    <script>
+        // Nav item click
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

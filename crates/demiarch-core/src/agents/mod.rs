@@ -1,11 +1,11 @@
 //! Agent system - Russian Doll hierarchical agents
 
+pub mod coder;
+pub mod context;
 pub mod orchestrator;
 pub mod planner;
-pub mod coder;
 pub mod reviewer;
 pub mod tester;
-pub mod context;
 
 /// Agent types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

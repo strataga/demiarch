@@ -1,0 +1,28 @@
+[package]
+name = "demiarch-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core business logic and shared functionality for Demiarch"
+
+[dependencies]
+# Workspace dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+sqlx = { workspace = true }
+rusqlite = { workspace = true }
+reqwest = { workspace = true }
+
+# Additional core-specific dependencies
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand_chacha = "0.3"
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+keyring = "2.3"
+hex = "0.4"
+base64 = "0.22"
+async-trait = "0.1"

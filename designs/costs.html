@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demiarch - Cost Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --cream: #faf8f5;
+            --cream-dark: #f0ede8;
+            --forest: #1a3c34;
+            --forest-light: #2a5c4c;
+            --coral: #ff6b6b;
+            --gold: #d4af37;
+            --text-dark: #1a1a1a;
+            --text-muted: #6b6b6b;
+            --border: #e0dcd6;
+        }
+
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            background: var(--cream);
+            color: var(--text-dark);
+            min-height: 100vh;
+            position: relative;
+        }
+
+        /* Paper texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Header masthead */
+        .masthead {
+            background: var(--forest);
+            color: var(--cream);
+            padding: 16px 0;
+            border-bottom: 4px double var(--gold);
+        }
+
+        .masthead-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .masthead-logo {
+            font-family: 'Playfair Display', serif;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 4px;
+        }
+
+        .masthead-date {
+            font-size: 12px;
+            letter-spacing: 2px;
+            opacity: 0.8;
+        }
+
+        .masthead-nav {
+            display: flex;
+            gap: 32px;
+        }
+
+        .masthead-link {
+            color: var(--cream);
+            text-decoration: none;
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.8;
+            transition: opacity 0.2s ease;
+        }
+
+        .masthead-link:hover {
+            opacity: 1;
+        }
+
+        /* Main content */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        /* Headline section */
+        .headline-section {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 40px;
+            margin-bottom: 40px;
+        }
+
+        .section-label {
+            font-size: 10px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--coral);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .main-headline {
+            font-family: 'Playfair Display', serif;
+            font-size: 56px;
+            font-weight: 500;
+            line-height: 1.1;
+            margin-bottom: 16px;
+            max-width: 800px;
+        }
+
+        .sub-headline {
+            font-size: 18px;
+            color: var(--text-muted);
+            font-weight: 300;
+            max-width: 600px;
+            line-height: 1.6;
+        }
+
+        /* Multi-column layout */
+        .columns {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 60px;
+        }
+
+        .main-column {
+            display: flex;
+            flex-direction: column;
+            gap: 48px;
+        }
+
+        /* Big numbers display */
+        .big-numbers {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            padding: 32px 0;
+            border-top: 2px solid var(--forest);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .big-number-item {
+            text-align: center;
+        }
+
+        .big-number {
+            font-family: 'Playfair Display', serif;
+            font-size: 64px;
+            font-weight: 400;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .big-number.positive { color: var(--forest); }
+        .big-number.negative { color: var(--coral); }
+        .big-number.gold { color: var(--gold); }
+
+        .big-number-label {
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        .big-number-change {
+            font-size: 13px;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        .big-number-change.up { color: var(--coral); }
+        .big-number-change.down { color: var(--forest); }
+
+        /* Article block */
+        .article-block {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 32px;
+        }
+
+        .article-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 28px;
+            font-weight: 500;
+            margin-bottom: 16px;
+            line-height: 1.3;
+        }
+
+        .article-body {
+            font-size: 15px;
+            line-height: 1.8;
+            color: var(--text-muted);
+        }
+
+        .article-body p {
+            margin-bottom: 16px;
+        }
+
+        /* Sparkline inline */
+        .sparkline-inline {
+            display: inline-block;
+            vertical-align: middle;
+            width: 60px;
+            height: 20px;
+            margin: 0 8px;
+        }
+
+        .sparkline-path {
+            fill: none;
+            stroke: var(--forest);
+            stroke-width: 1.5;
+        }
+
+        /* Pull quote */
+        .pull-quote {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            font-style: italic;
+            color: var(--forest);
+            padding: 24px 32px;
+            border-left: 3px solid var(--gold);
+            margin: 24px 0;
+            background: var(--cream-dark);
+        }
+
+        .pull-quote-source {
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 12px;
+            font-style: normal;
+            color: var(--text-muted);
+            margin-top: 12px;
+            letter-spacing: 1px;
+        }
+
+        /* Cost breakdown table */
+        .cost-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+        }
+
+        .cost-table th {
+            font-size: 10px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-align: left;
+            padding: 12px 0;
+            border-bottom: 2px solid var(--forest);
+            color: var(--text-muted);
+        }
+
+        .cost-table td {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .cost-table tr:hover {
+            background: var(--cream-dark);
+        }
+
+        .cost-table .name {
+            font-weight: 500;
+        }
+
+        .cost-table .amount {
+            text-align: right;
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+        }
+
+        .cost-table .change {
+            text-align: right;
+            font-size: 13px;
+        }
+
+        .cost-table .change.up { color: var(--coral); }
+        .cost-table .change.down { color: var(--forest); }
+
+        /* Sidebar */
+        .sidebar {
+            border-left: 1px solid var(--border);
+            padding-left: 40px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 40px;
+        }
+
+        .sidebar-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--forest);
+        }
+
+        /* Stock ticker style */
+        .ticker {
+            background: var(--forest);
+            color: var(--cream);
+            padding: 16px;
+            margin-bottom: 24px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .ticker-header {
+            font-size: 10px;
+            letter-spacing: 2px;
+            opacity: 0.7;
+            margin-bottom: 8px;
+        }
+
+        .ticker-value {
+            font-family: 'Playfair Display', serif;
+            font-size: 32px;
+            margin-bottom: 4px;
+        }
+
+        .ticker-change {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ticker-change.up { color: var(--coral); }
+        .ticker-change.down { color: #7dcea0; }
+
+        .ticker-time {
+            font-size: 10px;
+            opacity: 0.6;
+            margin-top: 8px;
+        }
+
+        /* Budget items */
+        .budget-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .budget-name {
+            font-size: 14px;
+        }
+
+        .budget-bar {
+            flex: 1;
+            height: 8px;
+            background: var(--cream-dark);
+            margin: 0 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .budget-fill {
+            height: 100%;
+            background: var(--forest);
+            transition: width 0.3s ease;
+        }
+
+        .budget-fill.warning {
+            background: var(--gold);
+        }
+
+        .budget-fill.over {
+            background: var(--coral);
+        }
+
+        .budget-amount {
+            font-variant-numeric: tabular-nums;
+            font-size: 14px;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        /* Insights list */
+        .insights-list {
+            list-style: none;
+        }
+
+        .insight-item {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .insight-icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .insight-icon.savings { color: var(--gold); }
+        .insight-icon.warning { color: var(--coral); }
+
+        .insight-text {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 60px;
+            padding: 32px 0;
+            border-top: 2px solid var(--forest);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .columns {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                border-left: none;
+                border-top: 1px solid var(--border);
+                padding-left: 0;
+                padding-top: 40px;
+            }
+
+            .big-numbers {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .main-headline {
+                font-size: 40px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 24px;
+            }
+
+            .big-numbers {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+
+            .big-number {
+                font-size: 48px;
+            }
+
+            .main-headline {
+                font-size: 32px;
+            }
+
+            .masthead-nav {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="masthead">
+        <div class="masthead-inner">
+            <div>
+                <div class="masthead-logo">DEMIARCH</div>
+            </div>
+            <div class="masthead-date">SUNDAY, JANUARY 19, 2026</div>
+            <nav class="masthead-nav">
+                <a href="#" class="masthead-link">Dashboard</a>
+                <a href="#" class="masthead-link">Projects</a>
+                <a href="#" class="masthead-link">Agents</a>
+                <a href="#" class="masthead-link">Costs</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="headline-section">
+            <div class="section-label">Cost Intelligence Report</div>
+            <h1 class="main-headline">Token Economy: Efficiency Gains Offset Rising Model Costs</h1>
+            <p class="sub-headline">A comprehensive analysis of your AI infrastructure spending, with insights on optimization opportunities and budget projections for Q1 2026.</p>
+        </section>
+
+        <div class="columns">
+            <div class="main-column">
+                <div class="big-numbers">
+                    <div class="big-number-item">
+                        <div class="big-number positive">$847</div>
+                        <div class="big-number-label">Total This Month</div>
+                        <div class="big-number-change down">-12% vs last month</div>
+                    </div>
+                    <div class="big-number-item">
+                        <div class="big-number negative">$124</div>
+                        <div class="big-number-label">Over Budget</div>
+                        <div class="big-number-change up">+8% deviation</div>
+                    </div>
+                    <div class="big-number-item">
+                        <div class="big-number gold">$2,340</div>
+                        <div class="big-number-label">Projected Savings</div>
+                        <div class="big-number-change down">Annual estimate</div>
+                    </div>
+                </div>
+
+                <article class="article-block">
+                    <h2 class="article-title">Model Selection Drives 40% of Cost Variance</h2>
+                    <div class="article-body">
+                        <p>Analysis of 14,000 agent operations this month reveals a striking pattern: projects that leverage intelligent model routing—automatically selecting between Claude 3.5 Sonnet and Claude 3 Haiku based on task complexity—show 40% lower costs than those using a fixed-model approach.</p>
+
+                        <p>The E-Commerce Platform project demonstrates this principle: its orchestrator routes 73% of routine code generation to Haiku
+                            <svg class="sparkline-inline" viewBox="0 0 60 20">
+                                <path class="sparkline-path" d="M0,15 L10,12 L20,14 L30,8 L40,10 L50,6 L60,4"/>
+                            </svg>
+                            while reserving Opus for architectural decisions, reducing per-feature costs from $2.40 to $1.44 average.</p>
+
+                        <div class="pull-quote">
+                            "The most expensive token is the one you didn't need to generate."
+                            <div class="pull-quote-source">— Cost Analysis Report, Week 3</div>
+                        </div>
+
+                        <p>Projects currently exceeding budget allocation share a common trait: over-reliance on high-context conversations. The Auth System project, now 18% over budget, maintains conversation threads averaging 47,000 tokens—well above the recommended 20,000 token threshold for cost-efficient operation.</p>
+                    </div>
+                </article>
+
+                <article class="article-block">
+                    <h2 class="article-title">Project Cost Breakdown</h2>
+                    <table class="cost-table">
+                        <thead>
+                            <tr>
+                                <th>Project</th>
+                                <th>Phase</th>
+                                <th style="text-align: right;">Spend</th>
+                                <th style="text-align: right;">vs Budget</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="name">E-Commerce Platform</td>
+                                <td>3 of 5</td>
+                                <td class="amount">$312.40</td>
+                                <td class="change down">-8%</td>
+                            </tr>
+                            <tr>
+                                <td class="name">API Gateway</td>
+                                <td>2 of 4</td>
+                                <td class="amount">$198.20</td>
+                                <td class="change down">-3%</td>
+                            </tr>
+                            <tr>
+                                <td class="name">Auth System</td>
+                                <td>4 of 4</td>
+                                <td class="amount">$186.80</td>
+                                <td class="change up">+18%</td>
+                            </tr>
+                            <tr>
+                                <td class="name">Mobile Backend</td>
+                                <td>2 of 3</td>
+                                <td class="amount">$104.50</td>
+                                <td class="change down">-2%</td>
+                            </tr>
+                            <tr>
+                                <td class="name">Analytics Dashboard</td>
+                                <td>1 of 6</td>
+                                <td class="amount">$45.10</td>
+                                <td class="change">on budget</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </article>
+
+                <article class="article-block">
+                    <h2 class="article-title">Token Efficiency by Agent Type</h2>
+                    <div class="article-body">
+                        <p>Worker agents demonstrate the highest token efficiency at 0.82 useful tokens per input token—a metric measuring how much generated code survives into the final commit. Planners follow at 0.71, while the Orchestrator's efficiency of 0.45 reflects its coordination overhead, an acceptable trade-off for maintaining project coherence.</p>
+                    </div>
+                </article>
+            </div>
+
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <div class="ticker">
+                        <div class="ticker-header">REAL-TIME SPEND</div>
+                        <div class="ticker-value">$0.042</div>
+                        <div class="ticker-change up">
+                            <span>+$0.003</span>
+                            <span>last minute</span>
+                        </div>
+                        <div class="ticker-time">Updated 3 seconds ago</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3 class="sidebar-title">Budget Allocation</h3>
+                    <div class="budget-item">
+                        <span class="budget-name">Orchestrator</span>
+                        <div class="budget-bar">
+                            <div class="budget-fill" style="width: 65%"></div>
+                        </div>
+                        <span class="budget-amount">$156</span>
+                    </div>
+                    <div class="budget-item">
+                        <span class="budget-name">Planners</span>
+                        <div class="budget-bar">
+                            <div class="budget-fill warning" style="width: 85%"></div>
+                        </div>
+                        <span class="budget-amount">$312</span>
+                    </div>
+                    <div class="budget-item">
+                        <span class="budget-name">Workers</span>
+                        <div class="budget-bar">
+                            <div class="budget-fill" style="width: 45%"></div>
+                        </div>
+                        <span class="budget-amount">$289</span>
+                    </div>
+                    <div class="budget-item">
+                        <span class="budget-name">Embedding</span>
+                        <div class="budget-bar">
+                            <div class="budget-fill over" style="width: 102%"></div>
+                        </div>
+                        <span class="budget-amount">$90</span>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3 class="sidebar-title">Cost Insights</h3>
+                    <ul class="insights-list">
+                        <li class="insight-item">
+                            <svg class="insight-icon savings" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                            </svg>
+                            <span class="insight-text">Switching to Haiku for test generation could save <strong>$89/month</strong></span>
+                        </li>
+                        <li class="insight-item">
+                            <svg class="insight-icon warning" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="insight-text">Auth System approaching monthly limit—<strong>3 days remaining</strong></span>
+                        </li>
+                        <li class="insight-item">
+                            <svg class="insight-icon savings" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span class="insight-text">Context pruning reduced E-Commerce costs by <strong>23%</strong> this week</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3 class="sidebar-title">Model Distribution</h3>
+                    <div class="budget-item">
+                        <span class="budget-name">Opus</span>
+                        <div class="budget-bar">
+                            <div class="budget-fill" style="width: 15%"></div>
+                        </div>
+                        <span class="budget-amount">15%</span>
+                    </div>
+                    <div class="budget-item">
+                        <span class="budget-name">Sonnet</span>
+                        <div class="budget-bar">
+                            <div class="budget-fill" style="width: 55%"></div>
+                        </div>
+                        <span class="budget-amount">55%</span>
+                    </div>
+                    <div class="budget-item">
+                        <span class="budget-name">Haiku</span>
+                        <div class="budget-bar">
+                            <div class="budget-fill" style="width: 30%"></div>
+                        </div>
+                        <span class="budget-amount">30%</span>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <footer class="footer">
+            <span>DEMIARCH FINANCIAL INTELLIGENCE • COMPOUND ENGINEERING</span>
+            <span>Report generated at 14:32:00 UTC</span>
+        </footer>
+    </main>
+
+    <script>
+        // Simulate real-time ticker updates
+        const tickerValue = document.querySelector('.ticker-value');
+        const tickerChange = document.querySelector('.ticker-change span:first-child');
+
+        setInterval(() => {
+            const current = parseFloat(tickerValue.textContent.replace('$', ''));
+            const change = (Math.random() - 0.4) * 0.01; // Slight upward bias
+            const newValue = Math.max(0, current + change);
+
+            tickerValue.textContent = '$' + newValue.toFixed(3);
+
+            if (change >= 0) {
+                tickerChange.textContent = '+$' + change.toFixed(3);
+                tickerChange.parentElement.classList.add('up');
+                tickerChange.parentElement.classList.remove('down');
+            } else {
+                tickerChange.textContent = '-$' + Math.abs(change).toFixed(3);
+                tickerChange.parentElement.classList.add('down');
+                tickerChange.parentElement.classList.remove('up');
+            }
+        }, 5000);
+
+        // Animate budget bars on scroll
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const bars = entry.target.querySelectorAll('.budget-fill');
+                    bars.forEach(bar => {
+                        const width = bar.style.width;
+                        bar.style.width = '0%';
+                        setTimeout(() => {
+                            bar.style.width = width;
+                        }, 100);
+                    });
+                }
+            });
+        }, { threshold: 0.5 });
+
+        document.querySelectorAll('.sidebar-section').forEach(section => {
+            observer.observe(section);
+        });
+    </script>
+</body>
+</html>

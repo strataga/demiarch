@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demiarch - Debug Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --terminal-bg: #0a0a0a;
+            --terminal-green: #33ff33;
+            --terminal-amber: #ffb000;
+            --terminal-red: #ff3333;
+            --terminal-cyan: #00ffff;
+            --terminal-white: #cccccc;
+            --terminal-dim: #444444;
+            --glitch-1: #ff0000;
+            --glitch-2: #00ffff;
+        }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background: var(--terminal-bg);
+            color: var(--terminal-green);
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* CRT effects container */
+        .crt-container {
+            position: relative;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Scanlines */
+        .crt-container::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent 0px,
+                transparent 1px,
+                rgba(0, 0, 0, 0.3) 1px,
+                rgba(0, 0, 0, 0.3) 2px
+            );
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Screen flicker */
+        .crt-container::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(51, 255, 51, 0.02);
+            pointer-events: none;
+            z-index: 999;
+            animation: flicker 0.1s infinite;
+        }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 0.02; }
+            50% { opacity: 0.04; }
+        }
+
+        /* Vignette */
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.5) 100%);
+            pointer-events: none;
+            z-index: 998;
+        }
+
+        /* Glitch effects */
+        .glitch-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 997;
+            opacity: 0;
+            animation: glitch-trigger 8s ease-in-out infinite;
+        }
+
+        @keyframes glitch-trigger {
+            0%, 90%, 100% { opacity: 0; }
+            92%, 94%, 96%, 98% { opacity: 1; }
+        }
+
+        .glitch-overlay::before,
+        .glitch-overlay::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .glitch-overlay::before {
+            background: var(--glitch-1);
+            mix-blend-mode: multiply;
+            animation: glitch-1 0.2s steps(2) infinite;
+        }
+
+        .glitch-overlay::after {
+            background: var(--glitch-2);
+            mix-blend-mode: multiply;
+            animation: glitch-2 0.3s steps(3) infinite;
+        }
+
+        @keyframes glitch-1 {
+            0% { clip-path: inset(40% 0 50% 0); transform: translateX(-5px); }
+            50% { clip-path: inset(10% 0 80% 0); transform: translateX(5px); }
+            100% { clip-path: inset(70% 0 10% 0); transform: translateX(-3px); }
+        }
+
+        @keyframes glitch-2 {
+            0% { clip-path: inset(80% 0 5% 0); transform: translateX(5px); }
+            50% { clip-path: inset(20% 0 60% 0); transform: translateX(-5px); }
+            100% { clip-path: inset(50% 0 30% 0); transform: translateX(3px); }
+        }
+
+        /* Main layout */
+        .debug-container {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            gap: 1px;
+            background: var(--terminal-dim);
+        }
+
+        /* Header */
+        .debug-header {
+            grid-column: span 2;
+            background: var(--terminal-bg);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--terminal-dim);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-family: 'VT323', monospace;
+            font-size: 24px;
+            color: var(--terminal-green);
+            text-shadow: 0 0 10px var(--terminal-green);
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            background: rgba(255, 51, 51, 0.2);
+            border: 1px solid var(--terminal-red);
+            color: var(--terminal-red);
+            font-size: 11px;
+            letter-spacing: 2px;
+            animation: pulse-red 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .header-right {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--terminal-dim);
+        }
+
+        .header-stat {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .header-stat span {
+            color: var(--terminal-amber);
+        }
+
+        /* Main terminal area */
+        .terminal-main {
+            background: var(--terminal-bg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .terminal-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--terminal-dim);
+            background: #0d0d0d;
+        }
+
+        .terminal-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            color: var(--terminal-dim);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .terminal-tab:hover {
+            color: var(--terminal-white);
+        }
+
+        .terminal-tab.active {
+            color: var(--terminal-green);
+            border-bottom-color: var(--terminal-green);
+            text-shadow: 0 0 5px var(--terminal-green);
+        }
+
+        .terminal-output {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .terminal-output::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .terminal-output::-webkit-scrollbar-track {
+            background: var(--terminal-bg);
+        }
+
+        .terminal-output::-webkit-scrollbar-thumb {
+            background: var(--terminal-dim);
+        }
+
+        /* Log lines */
+        .log-line {
+            margin-bottom: 4px;
+            animation: type-in 0.05s ease-out;
+        }
+
+        @keyframes type-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .log-line .timestamp {
+            color: var(--terminal-dim);
+            margin-right: 8px;
+        }
+
+        .log-line .level {
+            margin-right: 8px;
+            padding: 1px 6px;
+            font-size: 10px;
+        }
+
+        .log-line .level.error {
+            background: var(--terminal-red);
+            color: #000;
+        }
+
+        .log-line .level.warn {
+            background: var(--terminal-amber);
+            color: #000;
+        }
+
+        .log-line .level.info {
+            background: var(--terminal-green);
+            color: #000;
+        }
+
+        .log-line .level.debug {
+            background: var(--terminal-dim);
+            color: var(--terminal-white);
+        }
+
+        .log-line .source {
+            color: var(--terminal-cyan);
+            margin-right: 8px;
+        }
+
+        .log-line .message {
+            color: var(--terminal-white);
+        }
+
+        .log-line.error .message {
+            color: var(--terminal-red);
+        }
+
+        /* Glitched text effect */
+        .glitch-text {
+            position: relative;
+            animation: glitch-text 2s infinite;
+        }
+
+        @keyframes glitch-text {
+            0%, 90%, 100% { transform: translateX(0); }
+            92% { transform: translateX(-2px); }
+            94% { transform: translateX(2px); }
+            96% { transform: translateX(-1px); }
+            98% { transform: translateX(1px); }
+        }
+
+        /* Stack trace */
+        .stack-trace {
+            background: #0d0d0d;
+            border: 1px solid var(--terminal-red);
+            padding: 16px;
+            margin: 12px 0;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+
+        .stack-trace .header {
+            color: var(--terminal-red);
+            font-weight: bold;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stack-trace .frame {
+            color: var(--terminal-dim);
+            padding-left: 16px;
+            margin-bottom: 4px;
+        }
+
+        .stack-trace .frame .file {
+            color: var(--terminal-cyan);
+        }
+
+        .stack-trace .frame .line {
+            color: var(--terminal-amber);
+        }
+
+        /* Sidebar */
+        .debug-sidebar {
+            background: var(--terminal-bg);
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--terminal-dim);
+        }
+
+        .sidebar-section {
+            border-bottom: 1px solid var(--terminal-dim);
+            padding: 16px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            color: var(--terminal-dim);
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+
+        /* Variable inspector */
+        .var-list {
+            font-size: 12px;
+        }
+
+        .var-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #1a1a1a;
+        }
+
+        .var-name {
+            color: var(--terminal-cyan);
+        }
+
+        .var-value {
+            color: var(--terminal-amber);
+        }
+
+        .var-value.string { color: var(--terminal-green); }
+        .var-value.null { color: var(--terminal-dim); font-style: italic; }
+        .var-value.error { color: var(--terminal-red); }
+
+        /* Agent state */
+        .agent-state {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .agent-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .agent-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .agent-indicator.active {
+            background: var(--terminal-green);
+            box-shadow: 0 0 8px var(--terminal-green);
+        }
+
+        .agent-indicator.error {
+            background: var(--terminal-red);
+            box-shadow: 0 0 8px var(--terminal-red);
+            animation: pulse-red 0.5s ease-in-out infinite;
+        }
+
+        .agent-indicator.idle {
+            background: var(--terminal-dim);
+        }
+
+        .agent-name {
+            color: var(--terminal-white);
+            flex: 1;
+        }
+
+        .agent-status {
+            font-size: 10px;
+            color: var(--terminal-dim);
+        }
+
+        /* Call stack */
+        .call-stack {
+            font-size: 11px;
+        }
+
+        .call-item {
+            padding: 8px;
+            margin-bottom: 4px;
+            background: #0d0d0d;
+            border-left: 2px solid var(--terminal-dim);
+        }
+
+        .call-item.current {
+            border-left-color: var(--terminal-amber);
+            background: rgba(255, 176, 0, 0.1);
+        }
+
+        .call-func {
+            color: var(--terminal-green);
+        }
+
+        .call-location {
+            color: var(--terminal-dim);
+            font-size: 10px;
+            margin-top: 4px;
+        }
+
+        /* Footer input */
+        .debug-footer {
+            grid-column: span 2;
+            background: var(--terminal-bg);
+            border-top: 1px solid var(--terminal-dim);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .prompt {
+            color: var(--terminal-green);
+            text-shadow: 0 0 5px var(--terminal-green);
+        }
+
+        .command-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--terminal-white);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .command-input::placeholder {
+            color: var(--terminal-dim);
+        }
+
+        .cursor-blink {
+            width: 8px;
+            height: 16px;
+            background: var(--terminal-green);
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* Action buttons */
+        .action-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            background: transparent;
+            border: 1px solid var(--terminal-dim);
+            color: var(--terminal-dim);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-btn:hover {
+            border-color: var(--terminal-green);
+            color: var(--terminal-green);
+        }
+
+        .action-btn.danger:hover {
+            border-color: var(--terminal-red);
+            color: var(--terminal-red);
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .debug-container {
+                grid-template-columns: 1fr;
+            }
+
+            .debug-sidebar {
+                display: none;
+            }
+
+            .debug-header {
+                grid-column: span 1;
+            }
+
+            .debug-footer {
+                grid-column: span 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="crt-container">
+        <div class="vignette"></div>
+        <div class="glitch-overlay"></div>
+
+        <div class="debug-container">
+            <header class="debug-header">
+                <div class="header-left">
+                    <div class="logo">DEMIARCH://DEBUG</div>
+                    <div class="status-badge">3 ERRORS</div>
+                </div>
+                <div class="header-right">
+                    <div class="header-stat">MEM: <span>847MB</span></div>
+                    <div class="header-stat">CPU: <span>34%</span></div>
+                    <div class="header-stat">AGENTS: <span>12/14</span></div>
+                </div>
+            </header>
+
+            <main class="terminal-main">
+                <div class="terminal-tabs">
+                    <button class="terminal-tab active">CONSOLE</button>
+                    <button class="terminal-tab">NETWORK</button>
+                    <button class="terminal-tab">MEMORY</button>
+                    <button class="terminal-tab">AGENTS</button>
+                </div>
+
+                <div class="terminal-output" id="terminalOutput">
+                    <div class="log-line">
+                        <span class="timestamp">14:32:00.001</span>
+                        <span class="level info">INFO</span>
+                        <span class="source">[ORCHESTRATOR]</span>
+                        <span class="message">Session initialized. Loading project context...</span>
+                    </div>
+                    <div class="log-line">
+                        <span class="timestamp">14:32:00.234</span>
+                        <span class="level debug">DEBUG</span>
+                        <span class="source">[PLANNER-1]</span>
+                        <span class="message">Received task decomposition request</span>
+                    </div>
+                    <div class="log-line">
+                        <span class="timestamp">14:32:01.102</span>
+                        <span class="level warn">WARN</span>
+                        <span class="source">[WORKER-3]</span>
+                        <span class="message">Rate limit approaching: 85% of quota used</span>
+                    </div>
+                    <div class="log-line error">
+                        <span class="timestamp">14:32:02.445</span>
+                        <span class="level error">ERROR</span>
+                        <span class="source">[WORKER-5]</span>
+                        <span class="message glitch-text">TypeError: Cannot read property 'id' of undefined</span>
+                    </div>
+
+                    <div class="stack-trace">
+                        <div class="header">⚠ STACK TRACE</div>
+                        <div class="frame">at processPayment (<span class="file">src/services/payment.ts</span>:<span class="line">47</span>)</div>
+                        <div class="frame">at handleCheckout (<span class="file">src/handlers/checkout.ts</span>:<span class="line">123</span>)</div>
+                        <div class="frame">at executeTask (<span class="file">src/agent/worker.ts</span>:<span class="line">89</span>)</div>
+                        <div class="frame">at Agent.run (<span class="file">src/agent/base.ts</span>:<span class="line">234</span>)</div>
+                    </div>
+
+                    <div class="log-line">
+                        <span class="timestamp">14:32:02.890</span>
+                        <span class="level info">INFO</span>
+                        <span class="source">[ORCHESTRATOR]</span>
+                        <span class="message">Initiating retry for failed task...</span>
+                    </div>
+                    <div class="log-line">
+                        <span class="timestamp">14:32:03.112</span>
+                        <span class="level debug">DEBUG</span>
+                        <span class="source">[WORKER-5]</span>
+                        <span class="message">Retry attempt 1/3 with exponential backoff</span>
+                    </div>
+                    <div class="log-line error">
+                        <span class="timestamp">14:32:04.778</span>
+                        <span class="level error">ERROR</span>
+                        <span class="source">[WORKER-5]</span>
+                        <span class="message glitch-text">Retry failed: same error persists</span>
+                    </div>
+                    <div class="log-line">
+                        <span class="timestamp">14:32:05.001</span>
+                        <span class="level warn">WARN</span>
+                        <span class="source">[ORCHESTRATOR]</span>
+                        <span class="message">Escalating to PLANNER-1 for alternative approach</span>
+                    </div>
+                </div>
+            </main>
+
+            <aside class="debug-sidebar">
+                <div class="sidebar-section">
+                    <div class="section-title">AGENT STATE</div>
+                    <div class="agent-state">
+                        <div class="agent-row">
+                            <div class="agent-indicator active"></div>
+                            <span class="agent-name">ORCHESTRATOR</span>
+                            <span class="agent-status">ACTIVE</span>
+                        </div>
+                        <div class="agent-row">
+                            <div class="agent-indicator active"></div>
+                            <span class="agent-name">PLANNER-1</span>
+                            <span class="agent-status">THINKING</span>
+                        </div>
+                        <div class="agent-row">
+                            <div class="agent-indicator idle"></div>
+                            <span class="agent-name">PLANNER-2</span>
+                            <span class="agent-status">IDLE</span>
+                        </div>
+                        <div class="agent-row">
+                            <div class="agent-indicator error"></div>
+                            <span class="agent-name">WORKER-5</span>
+                            <span class="agent-status">ERROR</span>
+                        </div>
+                        <div class="agent-row">
+                            <div class="agent-indicator active"></div>
+                            <span class="agent-name">WORKER-7</span>
+                            <span class="agent-status">WRITING</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="section-title">CALL STACK</div>
+                    <div class="call-stack">
+                        <div class="call-item current">
+                            <div class="call-func">processPayment()</div>
+                            <div class="call-location">payment.ts:47</div>
+                        </div>
+                        <div class="call-item">
+                            <div class="call-func">handleCheckout()</div>
+                            <div class="call-location">checkout.ts:123</div>
+                        </div>
+                        <div class="call-item">
+                            <div class="call-func">executeTask()</div>
+                            <div class="call-location">worker.ts:89</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="section-title">VARIABLES</div>
+                    <div class="var-list">
+                        <div class="var-item">
+                            <span class="var-name">userId</span>
+                            <span class="var-value null">undefined</span>
+                        </div>
+                        <div class="var-item">
+                            <span class="var-name">orderId</span>
+                            <span class="var-value string">"ord_7x8k2m"</span>
+                        </div>
+                        <div class="var-item">
+                            <span class="var-name">amount</span>
+                            <span class="var-value">4999</span>
+                        </div>
+                        <div class="var-item">
+                            <span class="var-name">error</span>
+                            <span class="var-value error">TypeError</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <footer class="debug-footer">
+                <span class="prompt">demiarch&gt;</span>
+                <input type="text" class="command-input" placeholder="Enter command..." id="commandInput">
+                <div class="cursor-blink"></div>
+                <div class="action-btns">
+                    <button class="action-btn">STEP</button>
+                    <button class="action-btn">CONTINUE</button>
+                    <button class="action-btn danger">KILL AGENT</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        document.querySelectorAll('.terminal-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.terminal-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            });
+        });
+
+        // Simulate log streaming
+        const logMessages = [
+            { level: 'debug', source: 'WORKER-7', message: 'Writing file: src/components/Checkout.tsx' },
+            { level: 'info', source: 'PLANNER-1', message: 'Generated alternative approach: use session.user instead' },
+            { level: 'debug', source: 'WORKER-5', message: 'Applying patch to payment.ts' },
+            { level: 'info', source: 'WORKER-5', message: 'Task completed successfully after fix' },
+            { level: 'warn', source: 'ORCHESTRATOR', message: 'Cost threshold at 78% - monitoring enabled' },
+        ];
+
+        let logIndex = 0;
+
+        function addLogLine() {
+            const output = document.getElementById('terminalOutput');
+            const log = logMessages[logIndex % logMessages.length];
+            const now = new Date();
+            const timestamp = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
+            const line = document.createElement('div');
+            line.className = `log-line ${log.level === 'error' ? 'error' : ''}`;
+            line.innerHTML = `
+                <span class="timestamp">${timestamp}</span>
+                <span class="level ${log.level}">${log.level.toUpperCase()}</span>
+                <span class="source">[${log.source}]</span>
+                <span class="message">${log.message}</span>
+            `;
+
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+            logIndex++;
+        }
+
+        setInterval(addLogLine, 3000);
+
+        // Command input
+        document.getElementById('commandInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.target.value) {
+                const output = document.getElementById('terminalOutput');
+                const now = new Date();
+                const timestamp = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
+                const line = document.createElement('div');
+                line.className = 'log-line';
+                line.innerHTML = `
+                    <span class="timestamp">${timestamp}</span>
+                    <span class="level debug">EXEC</span>
+                    <span class="source">[USER]</span>
+                    <span class="message">${e.target.value}</span>
+                `;
+
+                output.appendChild(line);
+                output.scrollTop = output.scrollHeight;
+                e.target.value = '';
+            }
+        });
+
+        // Randomize glitch timing
+        setInterval(() => {
+            const overlay = document.querySelector('.glitch-overlay');
+            overlay.style.animation = 'none';
+            overlay.offsetHeight; // Trigger reflow
+            overlay.style.animation = `glitch-trigger ${5 + Math.random() * 10}s ease-in-out infinite`;
+        }, 10000);
+    </script>
+</body>
+</html>

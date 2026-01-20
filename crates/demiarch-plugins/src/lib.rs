@@ -6,10 +6,10 @@
 //! - Offline license verification (ed25519 signatures)
 //! - Plugin marketplace integration
 
-pub mod loader;
-pub mod sandbox;
 pub mod license;
+pub mod loader;
 pub mod registry;
+pub mod sandbox;
 
 use thiserror::Error;
 

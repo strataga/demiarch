@@ -105,40 +105,81 @@ Demiarch is a local-first, open-source AI app builder that generates code into u
 **Backend (Rust)**
 ```toml
 [dependencies]
-tokio = { version = "1.35", features = ["full"] }
+# Async runtime
+tokio = { version = "1.41", features = ["full"] }
+
+# Database
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+rusqlite = { version = "0.32", features = ["bundled"] }  # For extension loading
+
+# Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-uuid = { version = "1.6", features = ["v4"] }
+
+# Utilities
+uuid = { version = "1.11", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
-tauri = "2.0"
-clap = { version = "4.4", features = ["derive"] }
-ratatui = "0.25"
-git2 = "0.18"
+hex = "0.4"
+base64 = "0.22"
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+
+# UI
+tauri = "2.1"
+clap = { version = "4.5", features = ["derive"] }
+ratatui = "0.29"
+
+# Git
+git2 = "0.19"
+
+# Logging
 tracing = "0.1"
-tracing-subscriber = "0.3"
-thiserror = "1.0"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "2.0"
 anyhow = "1.0"
+
+# Caching
 lru = "0.12"
-wasmtime = "16.0"  # Plugin sandbox
-ed25519-dalek = "2.1"  # License signing
-aes-gcm = "0.10"  # API key encryption
+moka = { version = "0.12", features = ["future"] }  # Async cache
+
+# Plugin sandbox (WASM)
+wasmtime = "27.0"
+
+# Cryptography - Security Critical
+ed25519-dalek = "2.1"           # License signing
+aes-gcm = "0.10"                # API key encryption
+argon2 = "0.5"                  # Key derivation (CRITICAL: replaces raw machine ID)
+sha2 = "0.10"                   # Hashing for audit
+rand = "0.8"                    # Secure random generation
+zeroize = "1.8"                 # Secure memory wiping
+
+# Rate limiting
+governor = "0.7"
+
+# Signature verification for updates
+ring = "0.17"                   # For update signature verification
 ```
 
 **Frontend (React + TypeScript)**
 ```json
 {
   "dependencies": {
-    "react": "^18.2.0",
-    "typescript": "^5.3.0",
-    "@tauri-apps/api": "^2.0.0",
-    "zustand": "^4.4.0",
+    "react": "^18.3.0",
+    "typescript": "^5.6.0",
+    "@tauri-apps/api": "^2.1.0",
+    "zustand": "^5.0.0",
     "tailwindcss": "^3.4.0",
-    "@radix-ui/react-*": "latest",
-    "monaco-editor": "^0.45.0",
-    "react-diff-viewer-continued": "^3.3.0",
-    "lucide-react": "^0.300.0"
+    "@radix-ui/react-dialog": "^1.1.0",
+    "@radix-ui/react-dropdown-menu": "^2.1.0",
+    "@radix-ui/react-tabs": "^1.1.0",
+    "@radix-ui/react-toast": "^1.2.0",
+    "monaco-editor": "^0.52.0",
+    "react-diff-viewer-continued": "^3.4.0",
+    "lucide-react": "^0.460.0",
+    "dompurify": "^3.2.0"
   }
 }
 ```
@@ -602,6 +643,140 @@ CREATE TABLE hook_executions (
 );
 
 -- ============================================================
+-- OFFLINE QUEUE & OPERATIONS
+-- ============================================================
+
+CREATE TABLE queued_operations (
+    id TEXT PRIMARY KEY,
+    operation_type TEXT NOT NULL CHECK (operation_type IN ('llm_request', 'sync', 'backup', 'plugin_action')),
+    payload TEXT NOT NULL,  -- JSON: operation-specific data
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    retry_count INTEGER DEFAULT 0,
+    max_retries INTEGER DEFAULT 3,
+    last_error TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    processed_at TEXT
+);
+
+-- ============================================================
+-- CHAT SESSIONS (Groups chat messages by session)
+-- ============================================================
+
+CREATE TABLE chat_sessions (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    global_session_id TEXT REFERENCES global_sessions(id) ON DELETE SET NULL,
+    title TEXT,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+    message_count INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Update chat_messages to reference chat_sessions
+-- Note: Add session_id column via migration if upgrading existing schema
+-- ALTER TABLE chat_messages ADD COLUMN session_id TEXT REFERENCES chat_sessions(id);
+
+-- ============================================================
+-- PLUGIN CONFIGURATION (Per-plugin settings storage)
+-- ============================================================
+
+CREATE TABLE plugin_config (
+    id TEXT PRIMARY KEY,
+    plugin_id TEXT NOT NULL REFERENCES installed_plugins(id) ON DELETE CASCADE,
+    config_key TEXT NOT NULL,
+    config_value TEXT NOT NULL,  -- JSON value
+    is_secret INTEGER DEFAULT 0,  -- 1 if encrypted
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(plugin_id, config_key)
+);
+
+-- ============================================================
+-- AUDIT LOG (Security and compliance tracking)
+-- ============================================================
+
+CREATE TABLE audit_log (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL CHECK (event_type IN (
+        'project_created', 'project_deleted', 'project_archived',
+        'feature_generated', 'feature_deleted',
+        'api_key_changed', 'api_key_accessed',
+        'plugin_installed', 'plugin_removed', 'plugin_enabled', 'plugin_disabled',
+        'backup_created', 'backup_restored',
+        'config_changed', 'login', 'export', 'import'
+    )),
+    entity_type TEXT,  -- 'project', 'feature', 'plugin', etc.
+    entity_id TEXT,
+    details TEXT,  -- JSON: event-specific details (sanitized, no secrets)
+    ip_address TEXT,  -- For future multi-user support
+    user_agent TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ============================================================
+-- CONFLICT RESOLUTION HISTORY
+-- ============================================================
+
+CREATE TABLE conflict_resolutions (
+    id TEXT PRIMARY KEY,
+    generated_code_id TEXT NOT NULL REFERENCES generated_code(id) ON DELETE CASCADE,
+    resolution_type TEXT NOT NULL CHECK (resolution_type IN ('keep_user', 'keep_ai', 'merge', 'manual')),
+    user_content_before TEXT,
+    ai_content_before TEXT,
+    merged_content TEXT,
+    resolved_by TEXT DEFAULT 'user',  -- 'user', 'auto', 'ai'
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ============================================================
+-- API KEY ROTATION TRACKING
+-- ============================================================
+
+CREATE TABLE api_key_history (
+    id TEXT PRIMARY KEY,
+    key_type TEXT NOT NULL CHECK (key_type IN ('openrouter', 'plugin')),
+    key_identifier TEXT NOT NULL,  -- Last 4 chars or hash, never full key
+    plugin_id TEXT REFERENCES installed_plugins(id) ON DELETE CASCADE,
+    rotated_at TEXT DEFAULT (datetime('now')),
+    rotated_reason TEXT CHECK (rotated_reason IN ('manual', 'scheduled', 'compromised', 'expired')),
+    previous_key_hash TEXT  -- SHA-256 hash for audit, not the key itself
+);
+
+-- ============================================================
+-- RATE LIMITING PER PROJECT
+-- ============================================================
+
+CREATE TABLE project_rate_limits (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    limit_type TEXT NOT NULL CHECK (limit_type IN ('daily_cost', 'hourly_requests', 'concurrent_agents')),
+    limit_value REAL NOT NULL,
+    current_value REAL DEFAULT 0,
+    reset_at TEXT,  -- When the limit resets
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(project_id, limit_type)
+);
+
+-- ============================================================
+-- GENERATION CLEANUP TRACKING (for rollback on failure)
+-- ============================================================
+
+CREATE TABLE generation_transactions (
+    id TEXT PRIMARY KEY,
+    feature_id TEXT NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+    agent_execution_id TEXT REFERENCES agent_executions(id) ON DELETE SET NULL,
+    status TEXT DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'completed', 'failed', 'rolled_back')),
+    files_created TEXT DEFAULT '[]',  -- JSON array of file paths
+    files_modified TEXT DEFAULT '[]',  -- JSON array of {path, original_checksum}
+    started_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT,
+    rolled_back_at TEXT,
+    rollback_reason TEXT
+);
+
+-- ============================================================
 -- METADATA & SYNC
 -- ============================================================
 
@@ -684,9 +859,87 @@ CREATE INDEX idx_routing_decisions_agent ON routing_decisions(agent_execution_id
 CREATE INDEX idx_hooks_type ON lifecycle_hooks(hook_type);
 CREATE INDEX idx_hook_executions_hook ON hook_executions(hook_id);
 CREATE INDEX idx_hook_executions_session ON hook_executions(session_id);
+
+-- Queued Operations
+CREATE INDEX idx_queued_ops_status ON queued_operations(status);
+CREATE INDEX idx_queued_ops_type ON queued_operations(operation_type);
+CREATE INDEX idx_queued_ops_created ON queued_operations(created_at);
+
+-- Chat Sessions
+CREATE INDEX idx_chat_sessions_project ON chat_sessions(project_id);
+CREATE INDEX idx_chat_sessions_global ON chat_sessions(global_session_id);
+
+-- Plugin Config
+CREATE INDEX idx_plugin_config_plugin ON plugin_config(plugin_id);
+
+-- Audit Log
+CREATE INDEX idx_audit_log_type ON audit_log(event_type);
+CREATE INDEX idx_audit_log_entity ON audit_log(entity_type, entity_id);
+CREATE INDEX idx_audit_log_created ON audit_log(created_at);
+
+-- Conflict Resolutions
+CREATE INDEX idx_conflict_resolutions_code ON conflict_resolutions(generated_code_id);
+
+-- API Key History
+CREATE INDEX idx_api_key_history_type ON api_key_history(key_type);
+CREATE INDEX idx_api_key_history_rotated ON api_key_history(rotated_at);
+
+-- Project Rate Limits
+CREATE INDEX idx_project_rate_limits_project ON project_rate_limits(project_id);
+CREATE INDEX idx_project_rate_limits_reset ON project_rate_limits(reset_at);
+
+-- Generation Transactions
+CREATE INDEX idx_gen_transactions_feature ON generation_transactions(feature_id);
+CREATE INDEX idx_gen_transactions_status ON generation_transactions(status);
 ```
 
-### 3.2 Migration Strategy
+### 3.2 Vector Search Extension
+
+**Required Extension:** SQLite does not natively support vector operations. Install one of:
+
+```toml
+# Option 1: sqlite-vss (recommended)
+# https://github.com/asg017/sqlite-vss
+[dependencies]
+sqlite-vss = "0.1"
+
+# Option 2: sqlite-vec (newer, pure Rust)
+# https://github.com/asg017/sqlite-vec
+sqlite-vec = "0.1"
+```
+
+**Initialization:**
+```rust
+use rusqlite::Connection;
+
+pub fn init_vector_extension(conn: &Connection) -> Result<()> {
+    // Load the vector extension
+    unsafe {
+        conn.load_extension_enable()?;
+        conn.load_extension("vector0", None)?;  // or "vss0" for sqlite-vss
+        conn.load_extension_disable()?;
+    }
+    Ok(())
+}
+
+/// Vector distance function wrapper
+/// Embeddings are stored as BLOB (f32 array, 1536 dimensions for text-embedding-3-small)
+pub fn vector_distance(a: &[f32], b: &[f32]) -> f32 {
+    // Cosine distance: 1 - cosine_similarity
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    1.0 - (dot / (norm_a * norm_b))
+}
+```
+
+**Embedding Column Specification:**
+- Model: `text-embedding-3-small` (OpenAI) or equivalent
+- Dimensions: 1536 (configurable)
+- Storage: BLOB containing packed f32 array (1536 * 4 = 6144 bytes)
+- Distance metric: Cosine distance (lower = more similar)
+
+### 3.3 Migration Strategy
 
 ```sql
 -- migrations/V1__initial.sql
@@ -2242,7 +2495,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DemiarchError {
+    // ============================================================
     // User-facing errors (with helpful messages)
+    // ============================================================
+
     #[error("Feature '{0}' not found. Run `demiarch features list` to see all features.")]
     FeatureNotFound(String),
 
@@ -2267,6 +2523,10 @@ pub enum DemiarchError {
     #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
 
+    // ============================================================
+    // Plugin errors
+    // ============================================================
+
     #[error("Plugin '{0}' not found. Install with `demiarch plugin install {0}`.")]
     PluginNotFound(String),
 
@@ -2276,6 +2536,19 @@ pub enum DemiarchError {
     #[error("License expired for plugin '{0}'. Renew at {1}")]
     LicenseExpired(String, String),
 
+    #[error("License error: {0}")]
+    LicenseError(String),
+
+    #[error("Plugin execution failed: {0}")]
+    PluginExecutionFailed(String),
+
+    #[error("Plugin timeout: execution exceeded time limit")]
+    PluginTimeout,
+
+    // ============================================================
+    // Configuration errors
+    // ============================================================
+
     #[error("Configuration error: {0}")]
     ConfigError(String),
 
@@ -2284,6 +2557,85 @@ pub enum DemiarchError {
 
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+
+    // ============================================================
+    // Security errors (NEW)
+    // ============================================================
+
+    #[error("Security violation: {0}")]
+    SecurityViolation(String),
+
+    #[error("Cryptographic error: {0}")]
+    CryptoError(String),
+
+    #[error("Update verification failed: {0}")]
+    UpdateVerificationFailed(String),
+
+    #[error("Update failed: {0}")]
+    UpdateFailed(String),
+
+    // ============================================================
+    // Hook errors (NEW)
+    // ============================================================
+
+    #[error("Hook execution error: {0}")]
+    HookError(String),
+
+    #[error("Hook timeout after {0} seconds")]
+    HookTimeout(u64),
+
+    // ============================================================
+    // Import/Export errors (NEW)
+    // ============================================================
+
+    #[error("Import error: {0}")]
+    ImportError(String),
+
+    #[error("Export error: {0}")]
+    ExportError(String),
+
+    // ============================================================
+    // Skill errors
+    // ============================================================
+
+    #[error("Skill '{0}' not found. Run `demiarch skills list` to see all skills.")]
+    SkillNotFound(String),
+
+    #[error("Skill extraction failed: {0}")]
+    SkillExtractionFailed(String),
+
+    #[error("No matching skills found for the current context")]
+    NoMatchingSkills,
+
+    // ============================================================
+    // Context/Memory errors
+    // ============================================================
+
+    #[error("Context retrieval failed: {0}. Run `demiarch context rebuild` to fix.")]
+    ContextRetrievalFailed(String),
+
+    #[error("Embedding generation failed: {0}")]
+    EmbeddingFailed(String),
+
+    // ============================================================
+    // Model routing errors
+    // ============================================================
+
+    #[error("Model routing failed: {0}")]
+    RoutingFailed(String),
+
+    #[error("No suitable model available for task type '{0}'")]
+    NoSuitableModel(String),
+
+    // ============================================================
+    // Generation errors (NEW)
+    // ============================================================
+
+    #[error("Generation rolled back: {0}")]
+    GenerationRolledBack(String),
+
+    #[error("Agent cancelled during execution")]
+    AgentCancelled,
 }
 
 impl DemiarchError {
@@ -2295,27 +2647,105 @@ impl DemiarchError {
             Self::LLMError(_) => Some("demiarch config get openrouter_api_key".to_string()),
             Self::BudgetExceeded(_, _, suggested) => Some(format!("demiarch config set cost_daily_limit_usd {}", suggested)),
             Self::PluginNotFound(name) => Some(format!("demiarch plugin install {}", name)),
+            Self::SkillNotFound(_) => Some("demiarch skills list".to_string()),
+            Self::ContextRetrievalFailed(_) => Some("demiarch context rebuild".to_string()),
+            Self::CryptoError(_) => Some("Check API key encryption settings".to_string()),
+            Self::HookError(_) => Some("demiarch hooks list --check".to_string()),
+            Self::ImportError(_) => Some("Validate JSONL file format".to_string()),
+            Self::NoSuitableModel(_) => Some("demiarch routing status".to_string()),
             _ => None,
         }
     }
 
     pub fn error_code(&self) -> &'static str {
         match self {
+            // Core errors (E001-E099)
             Self::FeatureNotFound(_) => "E001",
             Self::ProjectNotFound(_) => "E002",
+
+            // Network errors (E100-E199)
             Self::NetworkError(_) => "E100",
             Self::LLMError(_) => "E101",
             Self::RateLimited(_) => "E102",
+
+            // Budget errors (E200-E299)
             Self::BudgetExceeded(..) => "E200",
+
+            // Lock errors (E300-E399)
             Self::LockTimeout(_) => "E300",
+
+            // Database errors (E400-E499)
             Self::DatabaseError(_) => "E400",
+
+            // Plugin errors (E500-E599)
             Self::PluginNotFound(_) => "E500",
             Self::PluginValidationFailed(_) => "E501",
             Self::LicenseExpired(..) => "E502",
+            Self::LicenseError(_) => "E503",
+            Self::PluginExecutionFailed(_) => "E504",
+            Self::PluginTimeout => "E505",
+
+            // Config errors (E600-E699)
             Self::ConfigError(_) => "E600",
+
+            // User action errors (E700-E799)
             Self::UserCancelled => "E700",
+
+            // Input validation errors (E800-E899)
             Self::InvalidInput(_) => "E800",
+
+            // Skill errors (E900-E999)
+            Self::SkillNotFound(_) => "E900",
+            Self::SkillExtractionFailed(_) => "E901",
+            Self::NoMatchingSkills => "E902",
+
+            // Hook errors (E1000-E1099)
+            Self::HookError(_) => "E1000",
+            Self::HookTimeout(_) => "E1001",
+
+            // Routing errors (E1100-E1199)
+            Self::RoutingFailed(_) => "E1100",
+            Self::NoSuitableModel(_) => "E1101",
+
+            // Context errors (E1200-E1299)
+            Self::ContextRetrievalFailed(_) => "E1200",
+            Self::EmbeddingFailed(_) => "E1201",
+
+            // Security errors (E1300-E1399)
+            Self::SecurityViolation(_) => "E1300",
+            Self::CryptoError(_) => "E1301",
+            Self::UpdateVerificationFailed(_) => "E1302",
+            Self::UpdateFailed(_) => "E1303",
+
+            // Import/Export errors (E1400-E1499)
+            Self::ImportError(_) => "E1400",
+            Self::ExportError(_) => "E1401",
+
+            // Generation errors (E1500-E1599)
+            Self::GenerationRolledBack(_) => "E1500",
+            Self::AgentCancelled => "E1501",
         }
+    }
+
+    /// Returns true if this error is recoverable (can be retried)
+    pub fn is_recoverable(&self) -> bool {
+        matches!(self,
+            Self::NetworkError(_) |
+            Self::RateLimited(_) |
+            Self::LockTimeout(_) |
+            Self::HookTimeout(_) |
+            Self::PluginTimeout
+        )
+    }
+
+    /// Returns true if this error should be logged as security-relevant
+    pub fn is_security_relevant(&self) -> bool {
+        matches!(self,
+            Self::SecurityViolation(_) |
+            Self::CryptoError(_) |
+            Self::UpdateVerificationFailed(_) |
+            Self::LicenseError(_)
+        )
     }
 }
 ```
@@ -2980,45 +3410,201 @@ const shortcuts = {
 
 ### 12.1 API Key Encryption
 
+**SECURITY CRITICAL:** API keys are encrypted using AES-256-GCM with keys derived via Argon2id from machine-specific entropy plus a user-provided passphrase.
+
 ```rust
 use aes_gcm::{Aes256Gcm, Key, Nonce};
-use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::aead::{Aead, KeyInit, OsRng};
+use argon2::{Argon2, Algorithm, Version, Params};
+use sha2::{Sha256, Digest};
+use zeroize::Zeroize;
+use rand::RngCore;
+use std::collections::HashSet;
+use std::sync::RwLock;
+
+/// Tracks used nonces to prevent reuse (critical for AES-GCM security)
+static USED_NONCES: RwLock<HashSet<[u8; 12]>> = RwLock::new(HashSet::new());
 
 pub struct KeyEncryption {
     cipher: Aes256Gcm,
+    salt: [u8; 32],  // Stored alongside encrypted data
 }
 
 impl KeyEncryption {
-    pub fn new() -> Result<Self> {
-        // Derive key from machine-specific data
+    /// Create new encryption instance
+    /// passphrase: Optional user-provided secret for additional security
+    pub fn new(passphrase: Option<&str>) -> Result<Self> {
         let machine_id = Self::get_machine_id()?;
-        let key = Self::derive_key(&machine_id)?;
+        let salt = Self::generate_salt();
+        let key = Self::derive_key(&machine_id, passphrase, &salt)?;
         let cipher = Aes256Gcm::new(&key);
-        Ok(Self { cipher })
+        Ok(Self { cipher, salt })
+    }
+
+    /// Load existing encryption instance with stored salt
+    pub fn load(salt: [u8; 32], passphrase: Option<&str>) -> Result<Self> {
+        let machine_id = Self::get_machine_id()?;
+        let key = Self::derive_key(&machine_id, passphrase, &salt)?;
+        let cipher = Aes256Gcm::new(&key);
+        Ok(Self { cipher, salt })
+    }
+
+    /// Derive encryption key using Argon2id (memory-hard KDF)
+    fn derive_key(machine_id: &[u8], passphrase: Option<&str>, salt: &[u8; 32]) -> Result<Key<Aes256Gcm>> {
+        // Combine machine ID with optional passphrase
+        let mut input = machine_id.to_vec();
+        if let Some(pass) = passphrase {
+            input.extend_from_slice(pass.as_bytes());
+        }
+
+        // Argon2id parameters (OWASP recommended for 2024+)
+        let params = Params::new(
+            64 * 1024,  // 64 MB memory
+            3,          // 3 iterations
+            4,          // 4 parallel lanes
+            Some(32),   // 32-byte output
+        ).map_err(|e| Error::CryptoError(format!("Invalid Argon2 params: {}", e)))?;
+
+        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+        let mut key_bytes = [0u8; 32];
+
+        argon2.hash_password_into(&input, salt, &mut key_bytes)
+            .map_err(|e| Error::CryptoError(format!("Key derivation failed: {}", e)))?;
+
+        // Zeroize sensitive input
+        input.zeroize();
+
+        Ok(*Key::<Aes256Gcm>::from_slice(&key_bytes))
+    }
+
+    fn generate_salt() -> [u8; 32] {
+        let mut salt = [0u8; 32];
+        OsRng.fill_bytes(&mut salt);
+        salt
+    }
+
+    /// Generate a unique nonce with collision detection
+    fn generate_unique_nonce() -> Result<[u8; 12]> {
+        let mut nonce = [0u8; 12];
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: u32 = 100;
+
+        loop {
+            OsRng.fill_bytes(&mut nonce);
+
+            let mut used = USED_NONCES.write()
+                .map_err(|_| Error::CryptoError("Nonce lock poisoned".to_string()))?;
+
+            if !used.contains(&nonce) {
+                used.insert(nonce);
+                return Ok(nonce);
+            }
+
+            attempts += 1;
+            if attempts >= MAX_ATTEMPTS {
+                return Err(Error::CryptoError("Nonce generation failed after max attempts".to_string()));
+            }
+        }
     }
 
     pub fn encrypt(&self, api_key: &str) -> Result<String> {
-        let nonce = Nonce::from_slice(&Self::random_nonce());
-        let ciphertext = self.cipher.encrypt(nonce, api_key.as_bytes())?;
-        Ok(format!("{}:{}", hex::encode(nonce), hex::encode(ciphertext)))
+        let nonce_bytes = Self::generate_unique_nonce()?;
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let ciphertext = self.cipher.encrypt(nonce, api_key.as_bytes())
+            .map_err(|e| Error::CryptoError(format!("Encryption failed: {}", e)))?;
+
+        // Format: salt:nonce:ciphertext (all hex-encoded)
+        Ok(format!("{}:{}:{}",
+            hex::encode(self.salt),
+            hex::encode(nonce_bytes),
+            hex::encode(ciphertext)
+        ))
     }
 
     pub fn decrypt(&self, encrypted: &str) -> Result<String> {
         let parts: Vec<&str> = encrypted.split(':').collect();
-        let nonce = Nonce::from_slice(&hex::decode(parts[0])?);
-        let ciphertext = hex::decode(parts[1])?;
-        let plaintext = self.cipher.decrypt(nonce, ciphertext.as_ref())?;
-        Ok(String::from_utf8(plaintext)?)
+        if parts.len() != 3 {
+            return Err(Error::CryptoError("Invalid encrypted format".to_string()));
+        }
+
+        let stored_salt = hex::decode(parts[0])
+            .map_err(|_| Error::CryptoError("Invalid salt encoding".to_string()))?;
+
+        // Verify salt matches
+        if stored_salt != self.salt {
+            return Err(Error::CryptoError("Salt mismatch - wrong encryption key".to_string()));
+        }
+
+        let nonce_bytes = hex::decode(parts[1])
+            .map_err(|_| Error::CryptoError("Invalid nonce encoding".to_string()))?;
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        let ciphertext = hex::decode(parts[2])
+            .map_err(|_| Error::CryptoError("Invalid ciphertext encoding".to_string()))?;
+
+        let plaintext = self.cipher.decrypt(nonce, ciphertext.as_ref())
+            .map_err(|_| Error::CryptoError("Decryption failed - invalid key or corrupted data".to_string()))?;
+
+        String::from_utf8(plaintext)
+            .map_err(|_| Error::CryptoError("Decrypted data is not valid UTF-8".to_string()))
     }
 
+    /// Platform-specific machine ID retrieval
     fn get_machine_id() -> Result<Vec<u8>> {
-        // Platform-specific machine ID
         #[cfg(target_os = "linux")]
-        { std::fs::read("/etc/machine-id") }
+        {
+            std::fs::read("/etc/machine-id")
+                .or_else(|_| std::fs::read("/var/lib/dbus/machine-id"))
+                .map_err(|e| Error::CryptoError(format!("Failed to read machine ID: {}", e)))
+        }
+
         #[cfg(target_os = "macos")]
-        { Command::new("ioreg").args(["-rd1", "-c", "IOPlatformExpertDevice"]).output()?.stdout }
+        {
+            use std::process::Command;
+            let output = Command::new("ioreg")
+                .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+                .output()
+                .map_err(|e| Error::CryptoError(format!("Failed to get machine ID: {}", e)))?;
+
+            // Extract IOPlatformUUID from output
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                if line.contains("IOPlatformUUID") {
+                    if let Some(uuid) = line.split('"').nth(3) {
+                        return Ok(uuid.as_bytes().to_vec());
+                    }
+                }
+            }
+            Err(Error::CryptoError("IOPlatformUUID not found".to_string()))
+        }
+
         #[cfg(target_os = "windows")]
-        { /* Registry HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid */ }
+        {
+            use winreg::enums::*;
+            use winreg::RegKey;
+
+            let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+            let crypto_key = hklm.open_subkey("SOFTWARE\\Microsoft\\Cryptography")
+                .map_err(|e| Error::CryptoError(format!("Failed to open registry: {}", e)))?;
+
+            let machine_guid: String = crypto_key.get_value("MachineGuid")
+                .map_err(|e| Error::CryptoError(format!("Failed to read MachineGuid: {}", e)))?;
+
+            Ok(machine_guid.into_bytes())
+        }
+
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            Err(Error::CryptoError("Unsupported platform for machine ID".to_string()))
+        }
+    }
+}
+
+impl Drop for KeyEncryption {
+    fn drop(&mut self) {
+        // Zeroize salt on drop for security
+        self.salt.zeroize();
     }
 }
 ```
@@ -3026,39 +3612,128 @@ impl KeyEncryption {
 ### 12.2 Input Validation
 
 ```rust
+use std::path::{Path, PathBuf};
+use percent_encoding::percent_decode_str;
+
 pub struct InputValidator;
 
 impl InputValidator {
-    /// Validate file path (prevent traversal attacks)
-    pub fn validate_path(path: &str) -> Result<()> {
-        if path.contains("..") {
-            return Err(Error::InvalidInput("Path traversal not allowed".to_string()));
+    /// Validate and canonicalize file path (prevent traversal attacks)
+    /// Returns the validated canonical path within project bounds
+    pub fn validate_path(path: &str, project_root: &Path) -> Result<PathBuf> {
+        // Decode URL-encoded paths (prevent %2e%2e attacks)
+        let decoded = percent_decode_str(path)
+            .decode_utf8()
+            .map_err(|_| Error::InvalidInput("Invalid UTF-8 in path".to_string()))?;
+        let decoded_path = decoded.as_ref();
+
+        // Check for obvious traversal patterns (pre-canonicalization)
+        let suspicious_patterns = ["..", "..\\", "../", "..%", "%2e%2e", "%252e"];
+        for pattern in suspicious_patterns {
+            if decoded_path.to_lowercase().contains(pattern) {
+                return Err(Error::SecurityViolation("Path traversal attempt detected".to_string()));
+            }
         }
-        if Path::new(path).is_absolute() {
-            return Err(Error::InvalidInput("Absolute paths not allowed".to_string()));
+
+        // Build the full path
+        let full_path = if Path::new(decoded_path).is_absolute() {
+            PathBuf::from(decoded_path)
+        } else {
+            project_root.join(decoded_path)
+        };
+
+        // Canonicalize to resolve symlinks and get absolute path
+        let canonical = full_path.canonicalize()
+            .map_err(|e| Error::InvalidInput(format!("Cannot resolve path: {}", e)))?;
+
+        // Verify the canonical path is within project root
+        let canonical_root = project_root.canonicalize()
+            .map_err(|e| Error::InvalidInput(format!("Cannot resolve project root: {}", e)))?;
+
+        if !canonical.starts_with(&canonical_root) {
+            return Err(Error::SecurityViolation(
+                "Path resolves outside project directory".to_string()
+            ));
         }
-        if !Self::is_safe_filename(path) {
-            return Err(Error::InvalidInput("Invalid characters in path".to_string()));
+
+        // Additional checks for sensitive paths
+        let path_str = canonical.to_string_lossy().to_lowercase();
+        let blocked_paths = [
+            ".git/config", ".env", "credentials", "secrets",
+            ".ssh", ".gnupg", ".aws", "id_rsa", "id_ed25519"
+        ];
+        for blocked in blocked_paths {
+            if path_str.contains(blocked) {
+                return Err(Error::SecurityViolation(
+                    format!("Access to sensitive path '{}' is blocked", blocked)
+                ));
+            }
         }
-        Ok(())
+
+        Ok(canonical)
     }
 
     /// Validate feature input
     pub fn validate_feature(input: &CreateFeatureInput) -> Result<()> {
-        if input.title.is_empty() || input.title.len() > 200 {
-            return Err(Error::InvalidInput("Title must be 1-200 characters".to_string()));
+        // Title validation
+        let title = input.title.trim();
+        if title.is_empty() {
+            return Err(Error::InvalidInput("Title cannot be empty".to_string()));
         }
-        if input.description.as_ref().map(|d| d.len()).unwrap_or(0) > 10000 {
-            return Err(Error::InvalidInput("Description too long (max 10000)".to_string()));
+        if title.len() > 200 {
+            return Err(Error::InvalidInput("Title must be 200 characters or less".to_string()));
         }
+        if !Self::is_safe_text(title) {
+            return Err(Error::InvalidInput("Title contains invalid characters".to_string()));
+        }
+
+        // Description validation
+        if let Some(ref desc) = input.description {
+            if desc.len() > 10000 {
+                return Err(Error::InvalidInput("Description must be 10000 characters or less".to_string()));
+            }
+        }
+
+        // Priority validation
         if !(1..=5).contains(&input.priority) {
-            return Err(Error::InvalidInput("Priority must be 1-5".to_string()));
+            return Err(Error::InvalidInput("Priority must be between 1 and 5".to_string()));
         }
+
+        // Labels validation (prevent injection)
+        for label in &input.labels {
+            if !Self::is_safe_label(label) {
+                return Err(Error::InvalidInput(format!("Invalid label: {}", label)));
+            }
+        }
+
         Ok(())
     }
 
-    fn is_safe_filename(name: &str) -> bool {
-        name.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'))
+    /// Check for safe text (no control characters or null bytes)
+    fn is_safe_text(text: &str) -> bool {
+        !text.chars().any(|c| c.is_control() && c != '\n' && c != '\t')
+    }
+
+    /// Check for safe label format
+    fn is_safe_label(label: &str) -> bool {
+        !label.is_empty()
+            && label.len() <= 50
+            && label.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | ' '))
+    }
+
+    /// Sanitize SQL identifier (for dynamic table/column names - use sparingly!)
+    pub fn sanitize_sql_identifier(name: &str) -> Result<String> {
+        // Only allow alphanumeric and underscore
+        if name.is_empty() || name.len() > 64 {
+            return Err(Error::InvalidInput("Invalid identifier length".to_string()));
+        }
+        if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(Error::InvalidInput("Invalid characters in identifier".to_string()));
+        }
+        if name.chars().next().map(|c| c.is_numeric()).unwrap_or(true) {
+            return Err(Error::InvalidInput("Identifier cannot start with number".to_string()));
+        }
+        Ok(name.to_string())
     }
 }
 ```
@@ -3066,55 +3741,819 @@ impl InputValidator {
 ### 12.3 Plugin Security
 
 ```rust
-pub struct PluginSecurityScanner;
+use wasmtime::*;
+use std::time::Duration;
+
+pub struct PluginSecurityScanner {
+    vulnerability_db: VulnerabilityDatabase,
+}
 
 impl PluginSecurityScanner {
     pub async fn scan(&self, plugin_path: &Path) -> Result<SecurityReport> {
         let mut report = SecurityReport::default();
 
-        // Check for dangerous patterns
+        // 1. Static analysis - check for dangerous patterns
+        let content = std::fs::read_to_string(plugin_path)?;
+        report.static_analysis = self.static_analysis(&content);
+
+        // 2. Dependency audit
+        report.dependency_audit = self.audit_dependencies(plugin_path).await?;
+
+        // 3. WASM validation (if applicable)
+        if plugin_path.extension().map(|e| e == "wasm").unwrap_or(false) {
+            report.wasm_validation = self.validate_wasm(plugin_path)?;
+        }
+
+        // 4. Calculate risk score
+        report.risk_score = self.calculate_risk_score(&report);
+        report.approved = report.risk_score < 0.7;  // Block high-risk plugins
+
+        Ok(report)
+    }
+
+    fn static_analysis(&self, content: &str) -> StaticAnalysisResult {
+        let mut warnings = Vec::new();
+
+        // Pattern-based detection with context
         let dangerous_patterns = [
-            ("eval(", "Dynamic code execution"),
-            ("exec(", "Shell execution"),
-            ("system(", "System command"),
-            ("__import__", "Dynamic import"),
-            ("subprocess", "Subprocess execution"),
-            ("os.system", "OS command"),
-            ("child_process", "Child process"),
+            (r"eval\s*\(", "Dynamic code execution", Severity::Critical),
+            (r"exec\s*\(", "Shell command execution", Severity::Critical),
+            (r"system\s*\(", "System command execution", Severity::Critical),
+            (r"__import__\s*\(", "Dynamic import", Severity::High),
+            (r"subprocess\.", "Subprocess execution", Severity::High),
+            (r"os\.system", "OS command execution", Severity::Critical),
+            (r"child_process", "Child process spawning", Severity::Critical),
+            (r"require\s*\(\s*['\"]child_process", "Child process import", Severity::Critical),
+            (r"\.innerHTML\s*=", "Potential XSS via innerHTML", Severity::Medium),
+            (r"document\.write", "Potential XSS via document.write", Severity::Medium),
+            (r"fetch\s*\(|XMLHttpRequest|axios\.", "Network access", Severity::Low),
+            (r"localStorage|sessionStorage", "Browser storage access", Severity::Low),
         ];
 
-        let content = std::fs::read_to_string(plugin_path)?;
-        for (pattern, description) in dangerous_patterns {
-            if content.contains(pattern) {
-                report.warnings.push(SecurityWarning {
-                    severity: Severity::High,
+        for (pattern, description, severity) in dangerous_patterns {
+            let regex = regex::Regex::new(pattern).unwrap();
+            for mat in regex.find_iter(content) {
+                warnings.push(SecurityWarning {
+                    severity,
                     pattern: pattern.to_string(),
                     description: description.to_string(),
+                    location: mat.start(),
+                    context: content[mat.start().saturating_sub(20)..mat.end().saturating_add(20).min(content.len())].to_string(),
                 });
             }
         }
 
-        // Check dependencies for known vulnerabilities
-        report.dependency_audit = self.audit_dependencies(plugin_path).await?;
+        StaticAnalysisResult { warnings }
+    }
 
-        Ok(report)
+    fn validate_wasm(&self, wasm_path: &Path) -> Result<WasmValidationResult> {
+        let wasm_bytes = std::fs::read(wasm_path)?;
+
+        // Validate WASM module structure
+        wasmparser::validate(&wasm_bytes)
+            .map_err(|e| Error::PluginValidationFailed(format!("Invalid WASM: {}", e)))?;
+
+        // Check for dangerous imports
+        let parser = wasmparser::Parser::new(0);
+        let mut imports = Vec::new();
+        let mut has_memory_grow = false;
+
+        for payload in parser.parse_all(&wasm_bytes) {
+            match payload? {
+                wasmparser::Payload::ImportSection(reader) => {
+                    for import in reader {
+                        let import = import?;
+                        imports.push(format!("{}::{}", import.module, import.name));
+                    }
+                }
+                wasmparser::Payload::CodeSectionEntry(body) => {
+                    // Check for memory.grow instruction
+                    let mut reader = body.get_operators_reader()?;
+                    while !reader.eof() {
+                        if matches!(reader.read()?, wasmparser::Operator::MemoryGrow { .. }) {
+                            has_memory_grow = true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(WasmValidationResult {
+            valid: true,
+            imports,
+            has_memory_grow,
+            estimated_memory_mb: 0,  // Calculated from memory section
+        })
+    }
+}
+
+/// Enhanced WASM sandbox with strict resource limits
+pub struct PluginSandbox {
+    engine: Engine,
+    linker: Linker<SandboxState>,
+    config: SandboxConfig,
+}
+
+#[derive(Clone)]
+pub struct SandboxConfig {
+    pub max_memory_bytes: u64,
+    pub max_fuel: u64,
+    pub max_execution_time: Duration,
+    pub allowed_imports: HashSet<String>,
+}
+
+impl Default for SandboxConfig {
+    fn default() -> Self {
+        Self {
+            max_memory_bytes: 64 * 1024 * 1024,  // 64MB
+            max_fuel: 10_000_000,
+            max_execution_time: Duration::from_secs(30),
+            allowed_imports: HashSet::from([
+                "env::log".to_string(),
+                "env::read_file".to_string(),
+                "env::write_file".to_string(),
+            ]),
+        }
+    }
+}
+
+impl PluginSandbox {
+    pub fn new(capabilities: PluginCapabilities, config: SandboxConfig) -> Result<Self> {
+        let mut engine_config = Config::new();
+        engine_config.consume_fuel(true);
+        engine_config.epoch_interruption(true);
+        engine_config.max_wasm_stack(512 * 1024);  // 512KB stack
+
+        let engine = Engine::new(&engine_config)?;
+        let mut linker = Linker::new(&engine);
+
+        // Only link explicitly allowed capabilities
+        if capabilities.read_files {
+            linker.func_wrap("env", "read_file", Self::sandbox_read_file)?;
+        }
+        if capabilities.write_files {
+            linker.func_wrap("env", "write_file", Self::sandbox_write_file)?;
+        }
+        // Network and execute are NEVER linked - plugins cannot access network or execute commands
+
+        Ok(Self { engine, linker, config })
+    }
+
+    pub async fn execute_plugin(
+        &mut self,
+        wasm_bytes: &[u8],
+        function: &str,
+        input: &[u8],
+    ) -> Result<Vec<u8>> {
+        let module = Module::new(&self.engine, wasm_bytes)?;
+
+        // Create store with resource limits
+        let mut store = Store::new(&self.engine, SandboxState::default());
+        store.set_fuel(self.config.max_fuel)?;
+        store.limiter(|state| &mut state.limiter);
+
+        // Configure memory limits
+        store.data_mut().limiter = StoreLimits::new()
+            .memory_size(self.config.max_memory_bytes as usize)
+            .instances(1)
+            .tables(1)
+            .memories(1);
+
+        let instance = self.linker.instantiate(&mut store, &module)?;
+        let func = instance.get_typed_func::<(i32, i32), i32>(&mut store, function)?;
+
+        // Execute with timeout
+        let result = tokio::time::timeout(
+            self.config.max_execution_time,
+            async {
+                func.call_async(&mut store, (input.as_ptr() as i32, input.len() as i32)).await
+            }
+        ).await
+        .map_err(|_| Error::PluginTimeout)?
+        .map_err(|e| Error::PluginExecutionFailed(e.to_string()))?;
+
+        Ok(self.read_output(&store, result))
     }
 }
 ```
 
-### 12.4 Data Privacy
+### 12.4 License Signature Security
+
+```rust
+use ed25519_dalek::{Verifier, VerifyingKey, Signature, SigningKey};
+use sha2::{Sha256, Digest};
+
+/// Secure license verification with delimiter-safe encoding
+pub struct LicenseVerifier {
+    public_key: VerifyingKey,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PluginLicense {
+    pub plugin_id: String,
+    pub license_key: String,
+    pub tier: String,
+    pub issued_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub signature: Vec<u8>,
+}
+
+impl LicenseVerifier {
+    pub fn new(public_key_bytes: &[u8; 32]) -> Result<Self> {
+        let public_key = VerifyingKey::from_bytes(public_key_bytes)
+            .map_err(|e| Error::LicenseError(format!("Invalid public key: {}", e)))?;
+        Ok(Self { public_key })
+    }
+
+    pub fn verify(&self, license: &PluginLicense) -> Result<LicenseStatus> {
+        // Validate fields don't contain delimiter (prevents injection)
+        if license.plugin_id.contains('\0') || license.tier.contains('\0') {
+            return Err(Error::LicenseError("Invalid characters in license fields".to_string()));
+        }
+
+        // Create canonical message with length-prefixed fields (prevents delimiter injection)
+        let message = self.create_canonical_message(license);
+
+        let signature = Signature::from_slice(&license.signature)
+            .map_err(|e| Error::LicenseError(format!("Invalid signature format: {}", e)))?;
+
+        self.public_key.verify(&message, &signature)
+            .map_err(|_| Error::LicenseError("Signature verification failed".to_string()))?;
+
+        // Check expiration
+        if let Some(expires) = license.expires_at {
+            if expires < Utc::now() {
+                return Ok(LicenseStatus::Expired {
+                    expired_at: expires,
+                    tier: license.tier.clone(),
+                });
+            }
+        }
+
+        Ok(LicenseStatus::Valid { tier: license.tier.clone() })
+    }
+
+    /// Create canonical message with length-prefixed fields
+    /// Format: [4-byte len][plugin_id][4-byte len][license_key][4-byte len][tier][8-byte timestamp][8-byte expires]
+    fn create_canonical_message(&self, license: &PluginLicense) -> Vec<u8> {
+        let mut message = Vec::new();
+
+        // Plugin ID with length prefix
+        message.extend_from_slice(&(license.plugin_id.len() as u32).to_le_bytes());
+        message.extend_from_slice(license.plugin_id.as_bytes());
+
+        // License key with length prefix
+        message.extend_from_slice(&(license.license_key.len() as u32).to_le_bytes());
+        message.extend_from_slice(license.license_key.as_bytes());
+
+        // Tier with length prefix
+        message.extend_from_slice(&(license.tier.len() as u32).to_le_bytes());
+        message.extend_from_slice(license.tier.as_bytes());
+
+        // Issued timestamp (8 bytes)
+        message.extend_from_slice(&license.issued_at.timestamp().to_le_bytes());
+
+        // Expires timestamp (8 bytes, 0 if none)
+        let expires_ts = license.expires_at.map(|t| t.timestamp()).unwrap_or(0);
+        message.extend_from_slice(&expires_ts.to_le_bytes());
+
+        message
+    }
+}
+
+/// For license issuers
+pub struct LicenseSigner {
+    signing_key: SigningKey,
+}
+
+impl LicenseSigner {
+    pub fn sign(&self, license: &mut PluginLicense) -> Result<()> {
+        let verifier = LicenseVerifier {
+            public_key: self.signing_key.verifying_key()
+        };
+        let message = verifier.create_canonical_message(license);
+
+        use ed25519_dalek::Signer;
+        let signature = self.signing_key.sign(&message);
+        license.signature = signature.to_bytes().to_vec();
+
+        Ok(())
+    }
+}
+```
+
+### 12.5 Update Signature Verification
+
+```rust
+use ring::signature::{self, UnparsedPublicKey, ED25519};
+
+/// Verify update binary signature before installation
+pub struct UpdateVerifier {
+    public_key: UnparsedPublicKey<Vec<u8>>,
+}
+
+impl UpdateVerifier {
+    /// Initialize with the official Demiarch public key
+    pub fn new() -> Self {
+        // This key should be embedded at compile time
+        const PUBLIC_KEY: &[u8] = include_bytes!("../keys/update_signing_key.pub");
+        Self {
+            public_key: UnparsedPublicKey::new(&ED25519, PUBLIC_KEY.to_vec()),
+        }
+    }
+
+    /// Verify update package before installation
+    pub async fn verify_update(&self, update_path: &Path, signature_path: &Path) -> Result<bool> {
+        let update_bytes = tokio::fs::read(update_path).await?;
+        let signature_bytes = tokio::fs::read(signature_path).await?;
+
+        self.public_key.verify(&update_bytes, &signature_bytes)
+            .map(|_| true)
+            .map_err(|_| Error::UpdateVerificationFailed(
+                "Update signature verification failed - possible tampering".to_string()
+            ))
+    }
+
+    /// Verify checksum matches expected value
+    pub fn verify_checksum(data: &[u8], expected_sha256: &str) -> Result<bool> {
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        let hash = hasher.finalize();
+        let actual = hex::encode(hash);
+
+        if actual != expected_sha256.to_lowercase() {
+            return Err(Error::UpdateVerificationFailed(
+                format!("Checksum mismatch: expected {}, got {}", expected_sha256, actual)
+            ));
+        }
+
+        Ok(true)
+    }
+}
+
+impl Updater {
+    pub async fn download_and_install(&self, update: &UpdateInfo) -> Result<()> {
+        let verifier = UpdateVerifier::new();
+
+        // 1. Download to temp file
+        let temp_dir = std::env::temp_dir().join("demiarch-update");
+        tokio::fs::create_dir_all(&temp_dir).await?;
+
+        let binary_path = temp_dir.join("demiarch");
+        let sig_path = temp_dir.join("demiarch.sig");
+
+        // Download binary
+        let binary_bytes = reqwest::get(&update.download_url).await?.bytes().await?;
+        tokio::fs::write(&binary_path, &binary_bytes).await?;
+
+        // Download signature
+        let sig_url = format!("{}.sig", update.download_url);
+        let sig_bytes = reqwest::get(&sig_url).await?.bytes().await?;
+        tokio::fs::write(&sig_path, &sig_bytes).await?;
+
+        // 2. Verify signature (CRITICAL - do not skip!)
+        verifier.verify_update(&binary_path, &sig_path).await?;
+
+        // 3. Verify checksum
+        UpdateVerifier::verify_checksum(&binary_bytes, &update.checksum)?;
+
+        // 4. Replace current binary atomically
+        let current_exe = std::env::current_exe()?;
+        let backup_path = current_exe.with_extension("backup");
+
+        // Backup current
+        tokio::fs::rename(&current_exe, &backup_path).await?;
+
+        // Install new
+        if let Err(e) = tokio::fs::rename(&binary_path, &current_exe).await {
+            // Restore backup on failure
+            tokio::fs::rename(&backup_path, &current_exe).await?;
+            return Err(Error::UpdateFailed(format!("Installation failed: {}", e)));
+        }
+
+        // 5. Set executable permissions (Unix)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = tokio::fs::metadata(&current_exe).await?.permissions();
+            perms.set_mode(0o755);
+            tokio::fs::set_permissions(&current_exe, perms).await?;
+        }
+
+        // 6. Cleanup
+        let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+
+        tracing::info!("Update installed successfully: {} -> {}", self.current_version, update.latest);
+        Ok(())
+    }
+}
+```
+
+### 12.6 Hook Sandboxing
+
+```rust
+use std::process::Stdio;
+
+/// Secure execution of lifecycle hook scripts
+pub struct HookExecutor {
+    allowed_hooks_dir: PathBuf,
+    timeout: Duration,
+}
+
+impl HookExecutor {
+    pub fn new(config_dir: &Path) -> Self {
+        Self {
+            allowed_hooks_dir: config_dir.join("hooks"),
+            timeout: Duration::from_secs(30),
+        }
+    }
+
+    /// Execute a hook script with sandboxing
+    pub async fn run_script_handler(&self, script_path: &Path, context: &HookContext) -> Result<String> {
+        // 1. Validate script is in allowed directory
+        let canonical_script = script_path.canonicalize()
+            .map_err(|e| Error::HookError(format!("Cannot resolve script path: {}", e)))?;
+
+        let canonical_allowed = self.allowed_hooks_dir.canonicalize()
+            .map_err(|e| Error::HookError(format!("Cannot resolve hooks directory: {}", e)))?;
+
+        if !canonical_script.starts_with(&canonical_allowed) {
+            return Err(Error::SecurityViolation(
+                format!("Hook script must be in {}", self.allowed_hooks_dir.display())
+            ));
+        }
+
+        // 2. Check script permissions and ownership (Unix)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let metadata = tokio::fs::metadata(&canonical_script).await?;
+
+            // Script must be owned by current user or root
+            let current_uid = unsafe { libc::getuid() };
+            if metadata.uid() != current_uid && metadata.uid() != 0 {
+                return Err(Error::SecurityViolation(
+                    "Hook script must be owned by current user".to_string()
+                ));
+            }
+
+            // Script must not be world-writable
+            if metadata.mode() & 0o002 != 0 {
+                return Err(Error::SecurityViolation(
+                    "Hook script must not be world-writable".to_string()
+                ));
+            }
+        }
+
+        // 3. Prepare context as JSON (sanitized)
+        let context_json = serde_json::to_string(&context.sanitize())?;
+
+        // 4. Execute with restricted environment
+        let output = tokio::time::timeout(
+            self.timeout,
+            self.execute_sandboxed(&canonical_script, &context_json)
+        ).await
+        .map_err(|_| Error::HookTimeout(self.timeout.as_secs()))?
+        .map_err(|e| Error::HookError(format!("Hook execution failed: {}", e)))?;
+
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            Err(Error::HookError(String::from_utf8_lossy(&output.stderr).to_string()))
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    async fn execute_sandboxed(&self, script: &Path, context_json: &str) -> std::io::Result<std::process::Output> {
+        // Use bubblewrap for sandboxing on Linux
+        tokio::process::Command::new("bwrap")
+            .args([
+                "--ro-bind", "/usr", "/usr",
+                "--ro-bind", "/lib", "/lib",
+                "--ro-bind", "/lib64", "/lib64",
+                "--ro-bind", script.to_str().unwrap(), "/hook.sh",
+                "--proc", "/proc",
+                "--dev", "/dev",
+                "--unshare-net",  // No network access
+                "--unshare-pid",  // Isolated PID namespace
+                "--die-with-parent",
+                "/hook.sh",
+            ])
+            .env_clear()
+            .env("DEMIARCH_CONTEXT", context_json)
+            .env("PATH", "/usr/bin:/bin")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    async fn execute_sandboxed(&self, script: &Path, context_json: &str) -> std::io::Result<std::process::Output> {
+        // Fallback for non-Linux: restricted environment but no namespace isolation
+        tracing::warn!("Running hook without sandbox (not Linux) - reduced security");
+
+        tokio::process::Command::new(script)
+            .env_clear()
+            .env("DEMIARCH_CONTEXT", context_json)
+            .env("PATH", "/usr/bin:/bin:/usr/local/bin")
+            .env("HOME", std::env::var("HOME").unwrap_or_default())
+            .current_dir(&self.allowed_hooks_dir)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+    }
+}
+
+impl HookContext {
+    /// Sanitize context before passing to external scripts
+    fn sanitize(&self) -> SanitizedHookContext {
+        SanitizedHookContext {
+            session_id: self.session_id.clone(),
+            project_id: self.project_id.clone(),
+            agent_execution_id: self.agent_execution_id.clone(),
+            // Redact potentially sensitive event data
+            event_type: self.event_data.get("type").and_then(|v| v.as_str()).map(String::from),
+            timestamp: self.timestamp,
+            // Do not include: API keys, file contents, user data
+        }
+    }
+}
+```
+
+### 12.7 JSONL Import Validation
+
+```rust
+/// Secure JSONL import with validation
+pub struct JsonlImporter {
+    db: SqlitePool,
+}
+
+impl JsonlImporter {
+    /// Import JSONL with full validation
+    pub async fn import(&self, path: &Path) -> Result<ImportResult> {
+        let content = tokio::fs::read_to_string(path).await?;
+        let mut result = ImportResult::default();
+        let mut seen_ids: HashMap<String, String> = HashMap::new();  // id -> type
+
+        // First pass: validate all records
+        let mut records: Vec<JsonlRecord> = Vec::new();
+        for (line_num, line) in content.lines().enumerate() {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let record: JsonlRecord = serde_json::from_str(line)
+                .map_err(|e| Error::ImportError(format!("Line {}: {}", line_num + 1, e)))?;
+
+            // Validate record
+            self.validate_record(&record, &seen_ids, line_num)?;
+
+            // Track ID to detect duplicates
+            seen_ids.insert(record.id.clone(), record.record_type.clone());
+            records.push(record);
+        }
+
+        // Second pass: validate references
+        for record in &records {
+            self.validate_references(record, &seen_ids)?;
+        }
+
+        // Third pass: import in dependency order
+        let ordered = self.topological_sort(&records)?;
+
+        for record in ordered {
+            match self.import_record(&record).await {
+                Ok(_) => result.imported += 1,
+                Err(e) => {
+                    result.errors.push(format!("{}: {}", record.id, e));
+                    result.failed += 1;
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
+    fn validate_record(&self, record: &JsonlRecord, seen_ids: &HashMap<String, String>, line_num: usize) -> Result<()> {
+        // Check for duplicate IDs
+        if seen_ids.contains_key(&record.id) {
+            return Err(Error::ImportError(format!(
+                "Line {}: Duplicate ID '{}' (first seen as {})",
+                line_num + 1, record.id, seen_ids[&record.id]
+            )));
+        }
+
+        // Validate ID format (UUID)
+        if uuid::Uuid::parse_str(&record.id).is_err() {
+            return Err(Error::ImportError(format!(
+                "Line {}: Invalid ID format '{}'",
+                line_num + 1, record.id
+            )));
+        }
+
+        // Validate record type
+        let valid_types = [
+            "project", "phase", "feature", "generated_code", "chat_message",
+            "learned_skill", "context_summary", "model_routing_rule", "lifecycle_hook"
+        ];
+        if !valid_types.contains(&record.record_type.as_str()) {
+            return Err(Error::ImportError(format!(
+                "Line {}: Unknown record type '{}'",
+                line_num + 1, record.record_type
+            )));
+        }
+
+        // Scan for potentially malicious content
+        let json_str = serde_json::to_string(&record.data)?;
+        if json_str.contains("<script") || json_str.contains("javascript:") {
+            return Err(Error::ImportError(format!(
+                "Line {}: Record contains potentially malicious content",
+                line_num + 1
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn validate_references(&self, record: &JsonlRecord, seen_ids: &HashMap<String, String>) -> Result<()> {
+        // Check that referenced IDs exist
+        let references = record.extract_references();
+        for (ref_field, ref_id) in references {
+            if !seen_ids.contains_key(&ref_id) {
+                return Err(Error::ImportError(format!(
+                    "Record '{}' references non-existent {} '{}'",
+                    record.id, ref_field, ref_id
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+```
+
+### 12.8 Data Privacy
 
 ```yaml
 # Privacy guarantees:
-data_storage: local_only  # All data in local SQLite
-telemetry: opt_in_only    # No telemetry by default
-api_keys: encrypted       # AES-256-GCM encryption
+data_storage: local_only       # All data in local SQLite
+telemetry: opt_in_only         # No telemetry by default
+api_keys: encrypted            # AES-256-GCM with Argon2id key derivation
 network_calls:
-  - openrouter_api         # Only for LLM calls
-  - plugin_registry        # Only when installing plugins (optional)
-no_tracking: true          # No analytics, no user tracking
-user_data_export: full     # User can export all data anytime
-user_data_delete: complete # User can delete all data anytime
+  - openrouter_api             # Only for LLM calls
+  - plugin_registry            # Only when installing plugins (optional)
+  - update_check               # Check for updates (can be disabled)
+no_tracking: true              # No analytics, no user tracking
+user_data_export: full         # User can export all data anytime
+user_data_delete: complete     # User can delete all data anytime
+
+# Security measures:
+key_derivation: argon2id       # Memory-hard KDF for encryption keys
+nonce_tracking: enabled        # Prevent nonce reuse in AES-GCM
+path_validation: canonical     # Canonicalize + symlink resolution
+hook_sandboxing: bubblewrap    # Linux namespace isolation for hooks
+update_verification: ed25519   # Signature verification for updates
+import_validation: full        # Reference + schema validation for JSONL
+
+# Audit logging:
+audit_events:
+  - api_key_access             # Log when API key is decrypted
+  - plugin_install             # Log plugin installations
+  - export_import              # Log data exports/imports
+  - config_changes             # Log configuration changes
+```
+
+### 12.9 Generated Code Secrets Scanning
+
+```rust
+/// Scan generated code for accidentally included secrets
+pub struct SecretsScanner {
+    patterns: Vec<SecretPattern>,
+}
+
+#[derive(Clone)]
+struct SecretPattern {
+    name: &'static str,
+    regex: regex::Regex,
+    severity: Severity,
+}
+
+impl Default for SecretsScanner {
+    fn default() -> Self {
+        let patterns = vec![
+            SecretPattern {
+                name: "AWS Access Key",
+                regex: regex::Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
+                severity: Severity::Critical,
+            },
+            SecretPattern {
+                name: "AWS Secret Key",
+                regex: regex::Regex::new(r"(?i)aws_secret_access_key\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}").unwrap(),
+                severity: Severity::Critical,
+            },
+            SecretPattern {
+                name: "GitHub Token",
+                regex: regex::Regex::new(r"gh[pousr]_[A-Za-z0-9_]{36,}").unwrap(),
+                severity: Severity::Critical,
+            },
+            SecretPattern {
+                name: "OpenAI API Key",
+                regex: regex::Regex::new(r"sk-[A-Za-z0-9]{48,}").unwrap(),
+                severity: Severity::Critical,
+            },
+            SecretPattern {
+                name: "Anthropic API Key",
+                regex: regex::Regex::new(r"sk-ant-[A-Za-z0-9-]{80,}").unwrap(),
+                severity: Severity::Critical,
+            },
+            SecretPattern {
+                name: "Private Key",
+                regex: regex::Regex::new(r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----").unwrap(),
+                severity: Severity::Critical,
+            },
+            SecretPattern {
+                name: "Generic Secret",
+                regex: regex::Regex::new(r#"(?i)(password|secret|token|api_key)\s*[=:]\s*['"][^'"]{8,}['"]"#).unwrap(),
+                severity: Severity::High,
+            },
+            SecretPattern {
+                name: "Connection String",
+                regex: regex::Regex::new(r"(?i)(mongodb|postgres|mysql|redis)://[^'\"\s]+").unwrap(),
+                severity: Severity::High,
+            },
+        ];
+
+        Self { patterns }
+    }
+}
+
+impl SecretsScanner {
+    /// Scan code for secrets before writing to disk
+    pub fn scan(&self, content: &str, file_path: &str) -> Vec<SecretFinding> {
+        let mut findings = Vec::new();
+
+        for pattern in &self.patterns {
+            for mat in pattern.regex.find_iter(content) {
+                findings.push(SecretFinding {
+                    pattern_name: pattern.name,
+                    severity: pattern.severity,
+                    file_path: file_path.to_string(),
+                    line: content[..mat.start()].lines().count(),
+                    matched: Self::redact_secret(mat.as_str()),
+                });
+            }
+        }
+
+        findings
+    }
+
+    /// Redact the middle portion of a secret for logging
+    fn redact_secret(secret: &str) -> String {
+        if secret.len() <= 8 {
+            return "*".repeat(secret.len());
+        }
+        let visible = 4;
+        format!(
+            "{}{}{}",
+            &secret[..visible],
+            "*".repeat(secret.len() - visible * 2),
+            &secret[secret.len() - visible..]
+        )
+    }
+
+    /// Block generation if critical secrets found
+    pub fn check_and_warn(&self, content: &str, file_path: &str) -> Result<Vec<SecretFinding>> {
+        let findings = self.scan(content, file_path);
+
+        let critical: Vec<_> = findings.iter()
+            .filter(|f| f.severity == Severity::Critical)
+            .collect();
+
+        if !critical.is_empty() {
+            tracing::error!(
+                "SECURITY: Found {} critical secrets in generated code for {}",
+                critical.len(),
+                file_path
+            );
+            return Err(Error::SecurityViolation(format!(
+                "Generated code contains {} secrets - generation blocked. Review and remove secrets.",
+                critical.len()
+            )));
+        }
+
+        if !findings.is_empty() {
+            tracing::warn!(
+                "SECURITY: Found {} potential secrets in generated code for {}",
+                findings.len(),
+                file_path
+            );
+        }
+
+        Ok(findings)
+    }
+}
 ```
 
 ---
@@ -3131,7 +4570,293 @@ user_data_delete: complete # User can delete all data anytime
 | Performance Tests | Criterion | Key operations |
 | Fuzz Tests | cargo-fuzz | Parser/validators |
 
-### 13.2 Unit Test Example
+### 13.2 Test Helpers
+
+```rust
+//! Test utilities and helpers for Demiarch tests
+//! Located in: tests/common/mod.rs
+
+use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
+use tempfile::{TempDir, tempdir};
+use uuid::Uuid;
+
+/// Create an in-memory SQLite database for testing
+pub async fn test_db() -> SqlitePool {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect("sqlite::memory:")
+        .await
+        .expect("Failed to create test database");
+
+    // Run migrations
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Failed to run migrations");
+
+    // Insert default metadata
+    sqlx::query("INSERT OR IGNORE INTO metadata (key, value) VALUES ('dirty', '0')")
+        .execute(&pool)
+        .await
+        .ok();
+
+    pool
+}
+
+/// Create a test database with a temporary file (for tests that need persistence)
+pub async fn test_db_persistent() -> (SqlitePool, TempDir) {
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
+        .await
+        .expect("Failed to create test database");
+
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Failed to run migrations");
+
+    (pool, temp_dir)
+}
+
+/// Test context with common utilities for integration tests
+pub struct TestContext {
+    pub db: SqlitePool,
+    pub temp_dir: TempDir,
+    pub project_root: std::path::PathBuf,
+}
+
+impl TestContext {
+    /// Create a new test context with empty database
+    pub async fn new() -> Self {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let project_root = temp_dir.path().to_path_buf();
+
+        // Create project directory structure
+        std::fs::create_dir_all(project_root.join("src")).ok();
+        std::fs::create_dir_all(project_root.join(".demiarch")).ok();
+
+        let db_path = project_root.join(".demiarch/demiarch.db");
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
+            .await
+            .expect("Failed to create test database");
+
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("Failed to run migrations");
+
+        Self {
+            db: pool,
+            temp_dir,
+            project_root,
+        }
+    }
+
+    /// Create a test context with N pre-existing features
+    pub async fn with_features(count: usize) -> Self {
+        let ctx = Self::new().await;
+
+        // Create a project first
+        let project_id = Uuid::new_v4().to_string();
+        sqlx::query!(
+            "INSERT INTO projects (id, name, framework, status, repo_path) VALUES (?, ?, ?, ?, ?)",
+            project_id, "test-project", "nextjs", "building", "/tmp/test"
+        )
+        .execute(&ctx.db)
+        .await
+        .expect("Failed to create test project");
+
+        // Create features
+        for i in 0..count {
+            let feature_id = Uuid::new_v4().to_string();
+            sqlx::query!(
+                "INSERT INTO features (id, project_id, title, status, priority) VALUES (?, ?, ?, ?, ?)",
+                feature_id, project_id, format!("Test Feature {}", i), "pending", 3
+            )
+            .execute(&ctx.db)
+            .await
+            .expect("Failed to create test feature");
+        }
+
+        ctx
+    }
+
+    /// Create a test project
+    pub async fn create_project(&self, name: &str, framework: Framework) -> Project {
+        let id = Uuid::new_v4().to_string();
+        sqlx::query!(
+            "INSERT INTO projects (id, name, framework, status, repo_path) VALUES (?, ?, ?, ?, ?)",
+            id, name, framework.as_str(), "building", self.project_root.to_str().unwrap()
+        )
+        .execute(&self.db)
+        .await
+        .expect("Failed to create project");
+
+        Project {
+            id,
+            name: name.to_string(),
+            framework,
+            status: ProjectStatus::Building,
+        }
+    }
+
+    /// Create a test feature
+    pub async fn create_feature(&self, project_id: &str, title: &str) -> Feature {
+        let id = Uuid::new_v4().to_string();
+        sqlx::query!(
+            "INSERT INTO features (id, project_id, title, status, priority) VALUES (?, ?, ?, ?, ?)",
+            id, project_id, title, "pending", 3
+        )
+        .execute(&self.db)
+        .await
+        .expect("Failed to create feature");
+
+        Feature {
+            id,
+            project_id: project_id.to_string(),
+            title: title.to_string(),
+            status: "pending".to_string(),
+            priority: 3,
+        }
+    }
+
+    /// Get a feature by ID
+    pub async fn get_feature(&self, feature_id: &str) -> Feature {
+        sqlx::query_as!(
+            Feature,
+            "SELECT id, project_id, title, status, priority FROM features WHERE id = ?",
+            feature_id
+        )
+        .fetch_one(&self.db)
+        .await
+        .expect("Feature not found")
+    }
+
+    /// Get generated code for a feature
+    pub async fn get_generated_code(&self, feature_id: &str, path: &str) -> GeneratedCode {
+        sqlx::query_as!(
+            GeneratedCode,
+            "SELECT id, feature_id, file_path as path, content, version FROM generated_code WHERE feature_id = ? AND file_path = ?",
+            feature_id, path
+        )
+        .fetch_one(&self.db)
+        .await
+        .expect("Generated code not found")
+    }
+
+    /// List features with optional filters
+    pub async fn list_features(&self, status: Option<&str>, limit: Option<i64>) -> Vec<Feature> {
+        let limit = limit.unwrap_or(100);
+        match status {
+            Some(s) => {
+                sqlx::query_as!(
+                    Feature,
+                    "SELECT id, project_id, title, status, priority FROM features WHERE status = ? LIMIT ?",
+                    s, limit
+                )
+                .fetch_all(&self.db)
+                .await
+                .expect("Failed to list features")
+            }
+            None => {
+                sqlx::query_as!(
+                    Feature,
+                    "SELECT id, project_id, title, status, priority FROM features LIMIT ?",
+                    limit
+                )
+                .fetch_all(&self.db)
+                .await
+                .expect("Failed to list features")
+            }
+        }
+    }
+
+    /// Simulate generating a feature (for testing)
+    pub async fn generate_feature(&self, feature_id: &str) -> GenerationResult {
+        // Update feature status
+        sqlx::query!("UPDATE features SET status = 'in_progress' WHERE id = ?", feature_id)
+            .execute(&self.db)
+            .await
+            .ok();
+
+        // Create some generated files
+        let files = vec![
+            ("src/components/Login.tsx", "export default function Login() { return <div>Login</div>; }"),
+            ("src/lib/auth.ts", "export function authenticate() { /* ... */ }"),
+        ];
+
+        for (path, content) in &files {
+            let id = Uuid::new_v4().to_string();
+            sqlx::query!(
+                "INSERT INTO generated_code (id, feature_id, file_path, content, version) VALUES (?, ?, ?, ?, ?)",
+                id, feature_id, path, content, 1
+            )
+            .execute(&self.db)
+            .await
+            .ok();
+        }
+
+        // Mark complete
+        sqlx::query!("UPDATE features SET status = 'complete' WHERE id = ?", feature_id)
+            .execute(&self.db)
+            .await
+            .ok();
+
+        GenerationResult {
+            files_created: files.len() as u32,
+            files: files.iter().map(|(p, _)| GeneratedFile { path: p.to_string() }).collect(),
+        }
+    }
+}
+
+/// Set up LLM usage for budget testing
+pub async fn setup_usage(db: &SqlitePool, cost: f64) {
+    let id = Uuid::new_v4().to_string();
+    sqlx::query!(
+        "INSERT INTO llm_usage (id, project_id, model, prompt_tokens, completion_tokens, cost_usd, request_timestamp)
+         VALUES (?, 'proj-1', 'claude-sonnet-4', 1000, 500, ?, datetime('now'))",
+        id, cost
+    )
+    .execute(db)
+    .await
+    .expect("Failed to insert usage");
+}
+
+/// Test fixtures for common test scenarios
+pub mod fixtures {
+    use super::*;
+
+    pub fn sample_project() -> Project {
+        Project {
+            id: "proj-test-123".to_string(),
+            name: "Test Project".to_string(),
+            framework: Framework::NextJS,
+            status: ProjectStatus::Building,
+        }
+    }
+
+    pub fn sample_feature() -> Feature {
+        Feature {
+            id: "feat-test-456".to_string(),
+            project_id: "proj-test-123".to_string(),
+            title: "Add user authentication".to_string(),
+            status: "pending".to_string(),
+            priority: 2,
+        }
+    }
+}
+
+// Re-export for test modules
+pub use fixtures::*;
+```
+
+### 13.3 Unit Test Example
 
 ```rust
 #[cfg(test)]
@@ -3609,31 +5334,119 @@ hooks:
 
 ## Appendix B: Error Codes
 
+### Core Errors (E001-E099)
+
 | Code | Error | Solution |
 |------|-------|----------|
 | E001 | Feature not found | `demiarch features list` |
 | E002 | Project not found | `demiarch projects list` |
+
+### Network Errors (E100-E199)
+
+| Code | Error | Solution |
+|------|-------|----------|
 | E100 | Network error | Check internet connection |
-| E101 | LLM API error | Check API key |
-| E102 | Rate limited | Wait and retry |
-| E200 | Budget exceeded | Increase limit or wait |
-| E300 | Lock timeout | Retry later |
+| E101 | LLM API error | Check API key with `demiarch config get openrouter_api_key` |
+| E102 | Rate limited | Wait and retry automatically |
+
+### Budget Errors (E200-E299)
+
+| Code | Error | Solution |
+|------|-------|----------|
+| E200 | Budget exceeded | `demiarch config set cost_daily_limit_usd <amount>` |
+
+### Lock Errors (E300-E399)
+
+| Code | Error | Solution |
+|------|-------|----------|
+| E300 | Lock timeout | Retry later or check for stuck agents |
+
+### Database Errors (E400-E499)
+
+| Code | Error | Solution |
+|------|-------|----------|
 | E400 | Database error | Run `demiarch doctor` |
+
+### Plugin Errors (E500-E599)
+
+| Code | Error | Solution |
+|------|-------|----------|
 | E500 | Plugin not found | `demiarch plugin install <name>` |
 | E501 | Plugin validation failed | Check plugin compatibility |
 | E502 | License expired | Renew license |
+| E503 | License error | Verify license signature |
+| E504 | Plugin execution failed | Check plugin logs |
+| E505 | Plugin timeout | Increase timeout or optimize plugin |
+
+### Configuration Errors (E600-E699)
+
+| Code | Error | Solution |
+|------|-------|----------|
 | E600 | Config error | `demiarch config reset` |
+
+### User Action Errors (E700-E799)
+
+| Code | Error | Solution |
+|------|-------|----------|
 | E700 | User cancelled | N/A |
-| E800 | Invalid input | Check input format |
+
+### Input Validation Errors (E800-E899)
+
+| Code | Error | Solution |
+|------|-------|----------|
+| E800 | Invalid input | Check input format and constraints |
+
+### Skill Errors (E900-E999)
+
+| Code | Error | Solution |
+|------|-------|----------|
 | E900 | Skill not found | `demiarch skills list` |
-| E901 | Skill extraction failed | Check agent context |
+| E901 | Skill extraction failed | Check agent context has sufficient depth |
 | E902 | No matching skills | Manual debugging required |
-| E1000 | Hook execution failed | Check hook configuration |
+
+### Hook Errors (E1000-E1099)
+
+| Code | Error | Solution |
+|------|-------|----------|
+| E1000 | Hook execution failed | `demiarch hooks list --check` |
 | E1001 | Hook timeout | Increase timeout or optimize script |
+
+### Model Routing Errors (E1100-E1199)
+
+| Code | Error | Solution |
+|------|-------|----------|
 | E1100 | Model routing failed | Check routing configuration |
 | E1101 | No suitable model | Add models to registry |
+
+### Context/Memory Errors (E1200-E1299)
+
+| Code | Error | Solution |
+|------|-------|----------|
 | E1200 | Context retrieval failed | Run `demiarch context rebuild` |
-| E1201 | Embedding generation failed | Check embedding API |
+| E1201 | Embedding generation failed | Check embedding API key |
+
+### Security Errors (E1300-E1399)
+
+| Code | Error | Solution |
+|------|-------|----------|
+| E1300 | Security violation | Review attempted action - may indicate attack |
+| E1301 | Cryptographic error | Check encryption settings |
+| E1302 | Update verification failed | Download update again from official source |
+| E1303 | Update failed | Check disk space and permissions |
+
+### Import/Export Errors (E1400-E1499)
+
+| Code | Error | Solution |
+|------|-------|----------|
+| E1400 | Import error | Validate JSONL file format |
+| E1401 | Export error | Check disk space and permissions |
+
+### Generation Errors (E1500-E1599)
+
+| Code | Error | Solution |
+|------|-------|----------|
+| E1500 | Generation rolled back | Check error logs for cause |
+| E1501 | Agent cancelled | Retry generation |
 
 ---
 

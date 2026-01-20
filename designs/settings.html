@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demiarch - Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --panel-bg: #1a1d23;
+            --panel-surface: #252a33;
+            --panel-raised: #2d333d;
+            --bezel: #0d0f12;
+            --amber: #ffb000;
+            --amber-dim: #ffb00030;
+            --amber-glow: #ffb00060;
+            --green: #00ff88;
+            --green-dim: #00ff8830;
+            --red: #ff4444;
+            --red-dim: #ff444430;
+            --text: #c8ccd4;
+            --text-dim: #6b7280;
+            --screw: #3a3f4a;
+        }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background: var(--bezel);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 40px;
+        }
+
+        /* Main panel - looks like hardware */
+        .control-panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            box-shadow:
+                inset 0 1px 0 rgba(255,255,255,0.05),
+                0 20px 60px rgba(0,0,0,0.5),
+                0 0 0 4px var(--bezel),
+                0 0 0 6px #2a2d33;
+            position: relative;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Corner screws */
+        .screw {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: var(--screw);
+            border-radius: 50%;
+            box-shadow:
+                inset 0 2px 4px rgba(0,0,0,0.5),
+                0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .screw::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+            width: 10px;
+            height: 2px;
+            background: #1a1d23;
+        }
+
+        .screw.tl { top: 12px; left: 12px; }
+        .screw.tr { top: 12px; right: 12px; }
+        .screw.bl { bottom: 12px; left: 12px; }
+        .screw.br { bottom: 12px; right: 12px; }
+
+        /* Panel header */
+        .panel-header {
+            padding: 32px 48px;
+            border-bottom: 1px solid #333840;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title {
+            font-family: 'Chakra Petch', sans-serif;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: 4px;
+            color: var(--amber);
+            text-shadow: 0 0 20px var(--amber-dim);
+        }
+
+        .panel-status {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .status-light {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+
+        .light {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .light.on {
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green), 0 0 16px var(--green-dim);
+        }
+
+        .light.warning {
+            background: var(--amber);
+            box-shadow: 0 0 8px var(--amber);
+            animation: blink 1s ease-in-out infinite;
+        }
+
+        .light.off {
+            background: #333;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Panel body */
+        .panel-body {
+            padding: 48px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+        }
+
+        /* Control groups */
+        .control-group {
+            background: var(--panel-surface);
+            border-radius: 6px;
+            padding: 24px;
+            border: 1px solid #333840;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+        }
+
+        .group-label {
+            font-family: 'Chakra Petch', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            color: var(--text-dim);
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #333840;
+        }
+
+        /* Toggle switch */
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #2a2f38;
+        }
+
+        .toggle-row:last-child {
+            border-bottom: none;
+        }
+
+        .toggle-label {
+            font-size: 13px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 56px;
+            height: 28px;
+            background: var(--panel-raised);
+            border-radius: 14px;
+            cursor: pointer;
+            border: 2px solid #3a3f4a;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-switch::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: #555;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .toggle-switch.active {
+            background: var(--green-dim);
+            border-color: var(--green);
+        }
+
+        .toggle-switch.active::before {
+            left: calc(100% - 22px);
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+        }
+
+        /* Dial control */
+        .dial-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+        }
+
+        .dial {
+            width: 80px;
+            height: 80px;
+            background: conic-gradient(from 135deg, #2a2f38 0%, #3a4048 50%, #2a2f38 100%);
+            border-radius: 50%;
+            position: relative;
+            cursor: pointer;
+            border: 3px solid #444;
+            box-shadow:
+                0 4px 12px rgba(0,0,0,0.4),
+                inset 0 -2px 4px rgba(0,0,0,0.3),
+                inset 0 2px 4px rgba(255,255,255,0.05);
+        }
+
+        .dial::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 30px;
+            background: var(--amber);
+            transform-origin: bottom center;
+            transform: translate(-50%, -100%) rotate(var(--rotation, 0deg));
+            border-radius: 2px;
+            box-shadow: 0 0 8px var(--amber-glow);
+        }
+
+        .dial::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 16px;
+            height: 16px;
+            background: #1a1d23;
+            border-radius: 50%;
+            border: 2px solid #333;
+        }
+
+        .dial-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 12px;
+            letter-spacing: 1px;
+        }
+
+        .dial-value {
+            font-family: 'Chakra Petch', sans-serif;
+            font-size: 18px;
+            color: var(--amber);
+            margin-top: 4px;
+        }
+
+        /* Digital display */
+        .digital-display {
+            background: #0a0c0e;
+            border: 2px solid #333;
+            border-radius: 4px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+        }
+
+        .display-value {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 28px;
+            color: var(--amber);
+            text-shadow: 0 0 10px var(--amber-glow);
+            text-align: center;
+        }
+
+        .display-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-align: center;
+            margin-top: 4px;
+            letter-spacing: 2px;
+        }
+
+        /* Slider control */
+        .slider-control {
+            padding: 16px 0;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .slider-label {
+            font-size: 12px;
+        }
+
+        .slider-value {
+            font-size: 12px;
+            color: var(--amber);
+        }
+
+        .slider-track {
+            position: relative;
+            height: 8px;
+            background: var(--panel-raised);
+            border-radius: 4px;
+            border: 1px solid #333;
+            overflow: hidden;
+        }
+
+        .slider-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--green), var(--amber));
+            border-radius: 4px;
+            transition: width 0.2s ease;
+        }
+
+        .slider-marks {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 9px;
+            color: var(--text-dim);
+        }
+
+        /* Button */
+        .control-btn {
+            background: var(--panel-raised);
+            border: 2px solid #444;
+            border-radius: 6px;
+            padding: 12px 24px;
+            color: var(--text);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow:
+                0 4px 8px rgba(0,0,0,0.3),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        .control-btn:hover {
+            background: #3a4048;
+            transform: translateY(-1px);
+        }
+
+        .control-btn:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .control-btn.primary {
+            background: var(--amber);
+            color: #000;
+            border-color: var(--amber);
+        }
+
+        .control-btn.primary:hover {
+            background: #ffc030;
+        }
+
+        .control-btn.danger {
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .control-btn.danger:hover {
+            background: var(--red-dim);
+        }
+
+        /* Meter display */
+        .meter {
+            background: #0a0c0e;
+            border: 2px solid #333;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .meter-bar {
+            height: 24px;
+            background: #1a1d23;
+            border-radius: 2px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .meter-segment {
+            flex: 1;
+            margin: 2px;
+            border-radius: 1px;
+            transition: background 0.2s ease;
+        }
+
+        .meter-segment.active.low { background: var(--green); box-shadow: 0 0 4px var(--green); }
+        .meter-segment.active.mid { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+        .meter-segment.active.high { background: var(--red); box-shadow: 0 0 4px var(--red); }
+        .meter-segment:not(.active) { background: #2a2f38; }
+
+        .meter-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 9px;
+            color: var(--text-dim);
+        }
+
+        /* Full width section */
+        .control-group.full {
+            grid-column: span 3;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
+            padding-top: 16px;
+            border-top: 1px solid #333840;
+            margin-top: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .panel-body {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .control-group.full {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+            }
+            .panel-body {
+                grid-template-columns: 1fr;
+                padding: 24px;
+            }
+            .control-group.full {
+                grid-column: span 1;
+            }
+            .panel-header {
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="control-panel">
+        <div class="screw tl"></div>
+        <div class="screw tr"></div>
+        <div class="screw bl"></div>
+        <div class="screw br"></div>
+
+        <header class="panel-header">
+            <h1 class="panel-title">SYSTEM CONFIGURATION</h1>
+            <div class="panel-status">
+                <div class="status-light">
+                    <div class="light on"></div>
+                    <span>SYSTEM OK</span>
+                </div>
+                <div class="status-light">
+                    <div class="light warning"></div>
+                    <span>SYNC PENDING</span>
+                </div>
+                <div class="status-light">
+                    <div class="light off"></div>
+                    <span>MAINTENANCE</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="panel-body">
+            <div class="control-group">
+                <div class="group-label">MODEL SELECTION</div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Use Claude Opus</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Use Claude Sonnet</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Use Claude Haiku</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Auto Model Routing</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-label">TEMPERATURE CONTROL</div>
+                <div style="display: flex; justify-content: space-around;">
+                    <div class="dial-control">
+                        <div class="dial" style="--rotation: -30deg;"></div>
+                        <div class="dial-label">ORCHESTRATOR</div>
+                        <div class="dial-value">0.3</div>
+                    </div>
+                    <div class="dial-control">
+                        <div class="dial" style="--rotation: 15deg;"></div>
+                        <div class="dial-label">PLANNERS</div>
+                        <div class="dial-value">0.7</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-label">TOKEN BUDGET</div>
+                <div class="digital-display">
+                    <div class="display-value">$50.00</div>
+                    <div class="display-label">DAILY LIMIT</div>
+                </div>
+                <div class="slider-control">
+                    <div class="slider-header">
+                        <span class="slider-label">Current Usage</span>
+                        <span class="slider-value">$23.40 (47%)</span>
+                    </div>
+                    <div class="slider-track">
+                        <div class="slider-fill" style="width: 47%"></div>
+                    </div>
+                    <div class="slider-marks">
+                        <span>$0</span>
+                        <span>$25</span>
+                        <span>$50</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-label">AGENT BEHAVIOR</div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Verbose Logging</span>
+                    <div class="toggle-switch"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Auto-Retry on Failure</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Parallel Execution</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Cost Alerts</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-label">MEMORY USAGE</div>
+                <div class="meter">
+                    <div class="meter-bar">
+                        <div class="meter-segment active low"></div>
+                        <div class="meter-segment active low"></div>
+                        <div class="meter-segment active low"></div>
+                        <div class="meter-segment active low"></div>
+                        <div class="meter-segment active mid"></div>
+                        <div class="meter-segment active mid"></div>
+                        <div class="meter-segment"></div>
+                        <div class="meter-segment"></div>
+                        <div class="meter-segment"></div>
+                        <div class="meter-segment"></div>
+                    </div>
+                    <div class="meter-labels">
+                        <span>0%</span>
+                        <span>CONTEXT: 64K / 128K</span>
+                        <span>100%</span>
+                    </div>
+                </div>
+                <div class="slider-control">
+                    <div class="slider-header">
+                        <span class="slider-label">Max Context Window</span>
+                        <span class="slider-value">128K tokens</span>
+                    </div>
+                    <div class="slider-track">
+                        <div class="slider-fill" style="width: 100%; background: var(--green);"></div>
+                    </div>
+                    <div class="slider-marks">
+                        <span>32K</span>
+                        <span>64K</span>
+                        <span>128K</span>
+                        <span>200K</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="group-label">WORKER ALLOCATION</div>
+                <div class="digital-display">
+                    <div class="display-value">8</div>
+                    <div class="display-label">MAX CONCURRENT WORKERS</div>
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: center;">
+                    <button class="control-btn">−</button>
+                    <button class="control-btn">+</button>
+                </div>
+            </div>
+
+            <div class="control-group full">
+                <div class="group-label">API CONFIGURATION</div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Enable Streaming Responses</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Cache Tool Results</span>
+                    <div class="toggle-switch active"></div>
+                </div>
+                <div class="toggle-row">
+                    <span class="toggle-label">Extended Thinking Mode</span>
+                    <div class="toggle-switch"></div>
+                </div>
+                <div class="button-row">
+                    <button class="control-btn danger">Reset Defaults</button>
+                    <button class="control-btn">Export Config</button>
+                    <button class="control-btn primary">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Toggle switches
+        document.querySelectorAll('.toggle-switch').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                toggle.classList.toggle('active');
+            });
+        });
+
+        // Dial rotation on drag (simplified)
+        document.querySelectorAll('.dial').forEach(dial => {
+            let isDragging = false;
+            let startY;
+            let startRotation;
+
+            dial.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startY = e.clientY;
+                const transform = dial.style.getPropertyValue('--rotation') || '0deg';
+                startRotation = parseInt(transform);
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const deltaY = startY - e.clientY;
+                const newRotation = Math.min(135, Math.max(-135, startRotation + deltaY));
+                dial.style.setProperty('--rotation', `${newRotation}deg`);
+
+                // Update value display
+                const value = ((newRotation + 135) / 270).toFixed(1);
+                dial.parentElement.querySelector('.dial-value').textContent = value;
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+        });
+
+        // Animate meter segments
+        function animateMeter() {
+            const segments = document.querySelectorAll('.meter-segment');
+            const activeCount = Math.floor(Math.random() * 3) + 5;
+
+            segments.forEach((seg, i) => {
+                if (i < activeCount) {
+                    seg.classList.add('active');
+                    if (i < 4) seg.classList.add('low');
+                    else if (i < 7) { seg.classList.remove('low'); seg.classList.add('mid'); }
+                    else { seg.classList.remove('mid'); seg.classList.add('high'); }
+                } else {
+                    seg.classList.remove('active', 'low', 'mid', 'high');
+                }
+            });
+        }
+
+        setInterval(animateMeter, 1000);
+    </script>
+</body>
+</html>

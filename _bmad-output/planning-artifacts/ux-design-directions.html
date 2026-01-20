@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demiarch - Design Direction Explorations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-deep: #0d1b2a;
+            --bg-mid: #1b263b;
+            --bg-surface: #253346;
+            --teal: #00f5d4;
+            --teal-dim: #00f5d430;
+            --magenta: #f72585;
+            --magenta-dim: #f7258530;
+            --amber: #ffc300;
+            --amber-dim: #ffc30030;
+            --text-primary: #e8f4f8;
+            --text-muted: #6b8a9a;
+        }
+
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--teal);
+            letter-spacing: 2px;
+        }
+
+        h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 24px 0 12px 0;
+            color: var(--text-primary);
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+
+        .directions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+
+        .direction-card {
+            background: var(--bg-mid);
+            border: 1px solid var(--teal-dim);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: border-color 0.2s ease;
+        }
+
+        .direction-card:hover {
+            border-color: var(--teal);
+        }
+
+        .direction-header {
+            padding: 16px;
+            background: var(--bg-deep);
+            border-bottom: 1px solid var(--teal-dim);
+        }
+
+        .direction-number {
+            font-size: 10px;
+            color: var(--teal);
+            font-weight: 600;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+
+        .direction-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .direction-mockup {
+            height: 300px;
+            background: var(--bg-deep);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mockup-nav {
+            height: 40px;
+            background: rgba(13, 27, 42, 0.9);
+            border-bottom: 1px solid var(--teal-dim);
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            gap: 12px;
+        }
+
+        .mockup-brand {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--teal);
+            letter-spacing: 2px;
+        }
+
+        .mockup-content {
+            height: calc(100% - 40px);
+            display: flex;
+        }
+
+        /* Direction A: Three-Column Split */
+        .mockup-a .mockup-content {
+            flex-direction: row;
+        }
+
+        .mockup-a .col-neural {
+            width: 30%;
+            border-right: 1px solid var(--teal-dim);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .mockup-a .neural-circle {
+            width: 120px;
+            height: 120px;
+            border: 2px solid var(--teal-dim);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .mockup-a .neural-circle::before {
+            content: '';
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border: 2px dashed var(--magenta-dim);
+            border-radius: 50%;
+        }
+
+        .mockup-a .neural-dot {
+            width: 16px;
+            height: 16px;
+            background: var(--teal);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--teal-dim);
+        }
+
+        .mockup-a .col-chat {
+            width: 35%;
+            border-right: 1px solid var(--teal-dim);
+            padding: 12px;
+        }
+
+        .mockup-a .chat-bubble {
+            background: var(--bg-surface);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+
+        .mockup-a .col-kanban {
+            width: 35%;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .mockup-a .kanban-col {
+            flex: 1;
+            background: var(--bg-surface);
+            border-radius: 6px;
+            padding: 8px;
+        }
+
+        .mockup-a .kanban-col-header {
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--magenta);
+            margin-bottom: 6px;
+            letter-spacing: 1px;
+        }
+
+        .mockup-a .kanban-card {
+            background: var(--bg-deep);
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 9px;
+            margin-bottom: 4px;
+            border-left: 2px solid var(--teal);
+        }
+
+        /* Direction B: Vertical Stack */
+        .mockup-b .mockup-content {
+            flex-direction: column;
+        }
+
+        .mockup-b .top-section {
+            height: 40%;
+            border-bottom: 1px solid var(--teal-dim);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, var(--teal-dim) 0%, transparent 70%);
+        }
+
+        .mockup-b .neural-viz {
+            width: 150px;
+            height: 150px;
+            border: 2px dashed var(--magenta-dim);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mockup-b .neural-viz-dot {
+            width: 20px;
+            height: 20px;
+            background: var(--magenta);
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .mockup-b .bottom-section {
+            height: 60%;
+            display: flex;
+        }
+
+        .mockup-b .bottom-chat {
+            width: 50%;
+            border-right: 1px solid var(--teal-dim);
+            padding: 12px;
+        }
+
+        .mockup-b .bottom-kanban {
+            width: 50%;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .mockup-b .kanban-row {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+        }
+
+        /* Direction C: Focus Mode */
+        .mockup-c .mockup-content {
+            flex-direction: row;
+        }
+
+        .mockup-c .main-panel {
+            width: 80%;
+            border-right: 1px solid var(--teal-dim);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mockup-c .main-chat {
+            height: 55%;
+            border-bottom: 1px solid var(--teal-dim);
+            padding: 16px;
+        }
+
+        .mockup-c .chat-input {
+            height: 40px;
+            background: var(--bg-surface);
+            border: 1px solid var(--teal-dim);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .mockup-c .main-kanban {
+            height: 45%;
+            padding: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .mockup-c .side-drawer {
+            width: 20%;
+            background: var(--bg-mid);
+            border-left: 1px solid var(--teal-dim);
+            padding: 12px;
+        }
+
+        .mockup-c .drawer-handle {
+            width: 100%;
+            height: 40px;
+            background: var(--bg-surface);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: var(--teal);
+            margin-bottom: 12px;
+            border: 1px solid var(--teal-dim);
+        }
+
+        .mockup-c .mini-neural {
+            width: 100%;
+            height: 120px;
+            border: 1px dashed var(--amber-dim);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: var(--amber);
+        }
+
+        /* Direction D: Dashboard Grid */
+        .mockup-d .mockup-content {
+            flex-direction: column;
+        }
+
+        .mockup-d .dashboard-top {
+            height: 45%;
+            padding: 12px;
+            border-bottom: 1px solid var(--teal-dim);
+            display: flex;
+            gap: 12px;
+        }
+
+        .mockup-d .stats-panel {
+            width: 25%;
+            background: var(--bg-surface);
+            border-radius: 6px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .mockup-d .stat-item {
+            text-align: center;
+            padding: 8px;
+            background: var(--bg-deep);
+            border-radius: 4px;
+        }
+
+        .mockup-d .stat-number {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--teal);
+        }
+
+        .mockup-d .stat-label {
+            font-size: 8px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        .mockup-d .neural-panel-d {
+            width: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at center, var(--teal-dim) 0%, transparent 60%);
+        }
+
+        .mockup-d .dashboard-bottom {
+            height: 55%;
+            display: flex;
+        }
+
+        .mockup-d .db-chat {
+            width: 40%;
+            border-right: 1px solid var(--teal-dim);
+            padding: 12px;
+        }
+
+        .mockup-d .db-kanban {
+            width: 60%;
+            padding: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Labels */
+        .direction-description {
+            padding: 12px 16px;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--teal-dim);
+        }
+
+        .direction-description h3 {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--teal);
+            margin-bottom: 6px;
+        }
+
+        .direction-description p {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 4px;
+        }
+
+        .direction-description ul {
+            font-size: 10px;
+            color: var(--text-muted);
+            padding-left: 16px;
+            margin-top: 4px;
+        }
+
+        .pros {
+            color: var(--teal);
+        }
+
+        .cons {
+            color: var(--magenta);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DEMIARCH DESIGN DIRECTIONS</h1>
+        <p class="subtitle">Exploring different visual approaches for Demiarch's core experience</p>
+
+        <h2>Layout Exploration</h2>
+        <div class="directions-grid">
+
+            <!-- Direction A: Three-Column Split -->
+            <div class="direction-card">
+                <div class="direction-header">
+                    <div class="direction-number">DIRECTION A</div>
+                    <div class="direction-title">Three-Column Split</div>
+                </div>
+                <div class="direction-mockup mockup-a">
+                    <div class="mockup-nav">
+                        <span class="mockup-brand">DEMIARCH</span>
+                    </div>
+                    <div class="mockup-content">
+                        <div class="col-neural">
+                            <div class="neural-circle">
+                                <div class="neural-dot"></div>
+                            </div>
+                        </div>
+                        <div class="col-chat">
+                            <div class="chat-bubble">Add user authentication with login and logout</div>
+                            <div class="chat-bubble" style="border-left: 2px solid var(--magenta);">I understand. Creating feature card now...</div>
+                            <div class="chat-bubble" style="border-left: 2px solid var(--teal);">✓ Card "User Auth" created</div>
+                        </div>
+                        <div class="col-kanban">
+                            <div class="kanban-col">
+                                <div class="kanban-col-header">PLANNING</div>
+                                <div class="kanban-card">User Auth System</div>
+                                <div class="kanban-card">Payment Integration</div>
+                            </div>
+                            <div class="kanban-col">
+                                <div class="kanban-col-header">BUILDING</div>
+                                <div class="kanban-card" style="border-left-color: var(--amber);">API Routes</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-description">
+                    <h3>Layout Concept</h3>
+                    <p>All three elements visible simultaneously at equal weight (30%-35%-35%). Neural viz on left, chat center, kanban right.</p>
+                    <h3>Pros</h3>
+                    <ul class="pros">
+                        <li>Max visibility into all systems</li>
+                        <li>Quick context switching between elements</li>
+                        <li>Efficient use of wide screens</li>
+                    </ul>
+                    <h3>Cons</h3>
+                    <ul class="cons">
+                        <li>Can feel crowded on smaller screens</li>
+                        <li>Less focus on any single element</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Direction B: Vertical Stack -->
+            <div class="direction-card">
+                <div class="direction-header">
+                    <div class="direction-number">DIRECTION B</div>
+                    <div class="direction-title">Vertical Stack</div>
+                </div>
+                <div class="direction-mockup mockup-b">
+                    <div class="mockup-nav">
+                        <span class="mockup-brand">DEMIARCH</span>
+                    </div>
+                    <div class="mockup-content">
+                        <div class="top-section">
+                            <div class="neural-viz">
+                                <div class="neural-viz-dot"></div>
+                            </div>
+                        </div>
+                        <div class="bottom-section">
+                            <div class="bottom-chat">
+                                <div class="chat-bubble">Add password reset flow</div>
+                                <div class="chat-bubble" style="border-left: 2px solid var(--magenta);">✓ Card "Password Reset" added to kanban</div>
+                            </div>
+                            <div class="bottom-kanban">
+                                <div class="kanban-row">
+                                    <div class="kanban-col">
+                                        <div class="kanban-col-header">TODO</div>
+                                        <div class="kanban-card">User Auth</div>
+                                    </div>
+                                    <div class="kanban-col">
+                                        <div class="kanban-col-header">IN PROGRESS</div>
+                                    </div>
+                                </div>
+                                <div class="kanban-row">
+                                    <div class="kanban-col">
+                                        <div class="kanban-col-header">REVIEW</div>
+                                    </div>
+                                    <div class="kanban-col">
+                                        <div class="kanban-col-header">DONE</div>
+                                        <div class="kanban-card">Login Page</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-description">
+                    <h3>Layout Concept</h3>
+                    <p>Neural visualization takes top 40%, chat and kanban share bottom 60% side-by-side.</p>
+                    <h3>Pros</h3>
+                    <ul class="pros">
+                        <li>Neural viz prominent as "hero" element</li>
+                        <li>Clear visual hierarchy (neural → work areas)</li>
+                        <li>More space for chat and kanban</li>
+                    </ul>
+                    <h3>Cons</h3>
+                    <ul class="cons">
+                        <li>Neural viz less accessible during work</li>
+                        <li>Vertical scrolling on both bottom sections</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Direction C: Focus Mode -->
+            <div class="direction-card">
+                <div class="direction-header">
+                    <div class="direction-number">DIRECTION C</div>
+                    <div class="direction-title">Focus Mode with Collapsible Neural</div>
+                </div>
+                <div class="direction-mockup mockup-c">
+                    <div class="mockup-nav">
+                        <span class="mockup-brand">DEMIARCH</span>
+                    </div>
+                    <div class="mockup-content">
+                        <div class="main-panel">
+                            <div class="main-chat">
+                                <div class="chat-input">Type your message here...</div>
+                                <div class="chat-bubble">Implement dashboard with stats</div>
+                                <div class="chat-bubble" style="border-left: 2px solid var(--teal);">✓ Dashboard card added</div>
+                            </div>
+                            <div class="main-kanban">
+                                <div class="kanban-col">
+                                    <div class="kanban-col-header">PLANNING</div>
+                                    <div class="kanban-card">Dashboard UI</div>
+                                </div>
+                                <div class="kanban-col">
+                                    <div class="kanban-col-header">BUILDING</div>
+                                </div>
+                                <div class="kanban-col">
+                                    <div class="kanban-col-header">TESTING</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="side-drawer">
+                            <div class="drawer-handle">👁 Agents</div>
+                            <div class="mini-neural">COLLAPSED</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-description">
+                    <h3>Layout Concept</h3>
+                    <p>Primary focus on chat/kanban (80%), neural viz in collapsible drawer (20%). Click drawer to expand neural viz.</p>
+                    <h3>Pros</h3>
+                    <ul class="pros">
+                        <li>Max space for primary work (chat + kanban)</li>
+                        <li>Neural viz accessible on-demand</li>
+                        <li>Less visual distraction during work</li>
+                    </ul>
+                    <h3>Cons</h3>
+                    <ul class="cons">
+                        <li>Neural viz hidden by default</li>
+                        <li>Requires drawer interaction to see agents</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Direction D: Dashboard Grid -->
+            <div class="direction-card">
+                <div class="direction-header">
+                    <div class="direction-number">DIRECTION D</div>
+                    <div class="direction-title">Dashboard Grid</div>
+                </div>
+                <div class="direction-mockup mockup-d">
+                    <div class="mockup-nav">
+                        <span class="mockup-brand">DEMIARCH</span>
+                    </div>
+                    <div class="mockup-content">
+                        <div class="dashboard-top">
+                            <div class="stats-panel">
+                                <div class="stat-item">
+                                    <div class="stat-number">12</div>
+                                    <div class="stat-label">FEATURES</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-number">$4.23</div>
+                                    <div class="stat-label">COST</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-number">847ms</div>
+                                    <div class="stat-label">AVG TIME</div>
+                                </div>
+                            </div>
+                            <div class="neural-panel-d">
+                                <div class="neural-viz">
+                                    <div class="neural-viz-dot"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dashboard-bottom">
+                            <div class="db-chat">
+                                <div class="chat-bubble">Add cost tracking feature</div>
+                                <div class="chat-bubble" style="border-left: 2px solid var(--teal);">✓ Card created</div>
+                            </div>
+                            <div class="db-kanban">
+                                <div class="kanban-col">
+                                    <div class="kanban-col-header">PLANNING</div>
+                                    <div class="kanban-card">Cost Tracker</div>
+                                </div>
+                                <div class="kanban-col">
+                                    <div class="kanban-col-header">BUILDING</div>
+                                </div>
+                                <div class="kanban-col">
+                                    <div class="kanban-col-header">COMPLETE</div>
+                                    <div class="kanban-card">User Auth</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="direction-description">
+                    <h3>Layout Concept</h3>
+                    <p>Stats + neural viz in top 45% (grid), chat + kanban in bottom 55%.</p>
+                    <h3>Pros</h3>
+                    <ul class="pros">
+                        <li>Metrics always visible (cost, features, time)</li>
+                        <li>Neural viz prominent but not overwhelming</li>
+                        <li>Dashboard-style organization</li>
+                    </ul>
+                    <h3>Cons</h3>
+                    <ul class="cons">
+                        <li>Stats compete for attention with neural viz</li>
+                        <li>More complex layout to learn</li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+
+        <h2 style="margin-top: 48px;">Design Evaluation Framework</h2>
+        <p class="subtitle" style="margin-bottom: 24px;">As you explore these directions, consider:</p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+            <div style="background: var(--bg-surface); padding: 16px; border-radius: 6px; border: 1px solid var(--teal-dim);">
+                <h3 style="font-size: 12px; color: var(--teal); margin-bottom: 8px;">✅ Layout Intuitiveness</h3>
+                <p style="font-size: 10px; color: var(--text-muted);">Which information hierarchy matches your priorities? Does the layout feel natural for "Talk to Build, Drag to Track"?</p>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 16px; border-radius: 6px; border: 1px solid var(--teal-dim);">
+                <h3 style="font-size: 12px; color: var(--teal); margin-bottom: 8px;">✅ Interaction Style</h3>
+                <p style="font-size: 10px; color: var(--text-muted);">Which layout supports smooth chat-to-kanban integration? Does drag-and-drop have space to work?</p>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 16px; border-radius: 6px; border: 1px solid var(--teal-dim);">
+                <h3 style="font-size: 12px; color: var(--teal); margin-bottom: 8px;">✅ Visual Weight</h3>
+                <p style="font-size: 10px; color: var(--text-muted);">Which density feels right? Too dense vs. too spacious?</p>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 16px; border-radius: 6px; border: 1px solid var(--teal-dim);">
+                <h3 style="font-size: 12px; color: var(--teal); margin-bottom: 8px;">✅ Brand Alignment</h3>
+                <p style="font-size: 10px; color: var(--text-muted);">Which approach best supports the agents.html aesthetic? Which feels most "AI-powered"?</p>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 16px; border-radius: 6px; border: 1px solid var(--teal-dim);">
+                <h3 style="font-size: 12px; color: var(--teal); margin-bottom: 8px;">✅ Multi-Project Support</h3>
+                <p style="font-size: 10px; color: var(--text-muted);">How well does each direction handle switching between 3-5 projects?</p>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 16px; border-radius: 6px; border: 1px solid var(--teal-dim);">
+                <h3 style="font-size: 12px; color: var(--teal); margin-bottom: 8px;">✅ Agent Visibility</h3>
+                <p style="font-size: 10px; color: var(--text-muted);">How prominently should neural visualization appear? Always visible vs. on-demand?</p>
+            </div>
+        </div>
+
+        <p class="subtitle" style="margin-top: 32px; margin-bottom: 16px;">
+            <strong>Open the HTML file in your browser to explore all four design directions with interactive hover states!</strong>
+        </p>
+    </div>
+</body>
+</html>

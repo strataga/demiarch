@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demiarch - Feature Planning</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Overpass+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --blueprint-bg: #e8f4fc;
+            --blueprint-blue: #1e3a5f;
+            --blueprint-line: #b8d4e8;
+            --blueprint-dark: #0f1d2f;
+            --neon-green: #39ff14;
+            --neon-orange: #ff9500;
+            --neon-red: #ff3b3b;
+            --text-light: #4a7090;
+        }
+
+        body {
+            font-family: 'Overpass Mono', monospace;
+            background: var(--blueprint-bg);
+            color: var(--blueprint-blue);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Grid paper background */
+        .grid-paper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                linear-gradient(var(--blueprint-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--blueprint-line) 1px, transparent 1px),
+                linear-gradient(rgba(30, 58, 95, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(30, 58, 95, 0.05) 1px, transparent 1px);
+            background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+        }
+
+        /* Axis markers */
+        .axis-marker {
+            position: fixed;
+            font-size: 9px;
+            color: var(--text-light);
+            z-index: 5;
+        }
+
+        .axis-marker.x {
+            top: 8px;
+        }
+
+        .axis-marker.y {
+            left: 8px;
+            writing-mode: vertical-lr;
+            transform: rotate(180deg);
+        }
+
+        /* Main container */
+        .container {
+            position: relative;
+            z-index: 10;
+            padding: 40px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 60px;
+            padding-bottom: 24px;
+            border-bottom: 2px solid var(--blueprint-blue);
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: var(--blueprint-blue);
+        }
+
+        .logo-divider {
+            width: 2px;
+            height: 40px;
+            background: var(--blueprint-blue);
+        }
+
+        .page-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            letter-spacing: 3px;
+            color: var(--text-light);
+        }
+
+        .header-meta {
+            text-align: right;
+            font-size: 11px;
+            color: var(--text-light);
+        }
+
+        .header-meta div {
+            margin-bottom: 4px;
+        }
+
+        /* Phase timeline track */
+        .timeline-section {
+            margin-bottom: 60px;
+        }
+
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            letter-spacing: 3px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--blueprint-blue);
+        }
+
+        .timeline-track {
+            position: relative;
+            padding: 40px 0;
+        }
+
+        .timeline-line {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--blueprint-blue);
+            transform: translateY(-50%);
+        }
+
+        .timeline-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--neon-green);
+            box-shadow: 0 0 10px var(--neon-green), 0 0 20px var(--neon-green);
+        }
+
+        .timeline-phases {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .phase-marker {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .phase-marker:hover {
+            transform: translateY(-4px);
+        }
+
+        .phase-node {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--blueprint-blue);
+            background: var(--blueprint-bg);
+            position: relative;
+            z-index: 2;
+        }
+
+        .phase-marker.completed .phase-node {
+            background: var(--neon-green);
+            border-color: var(--neon-green);
+            box-shadow: 0 0 10px var(--neon-green);
+        }
+
+        .phase-marker.active .phase-node {
+            background: var(--neon-orange);
+            border-color: var(--neon-orange);
+            box-shadow: 0 0 10px var(--neon-orange);
+            animation: pulse-node 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-node {
+            0%, 100% { box-shadow: 0 0 10px var(--neon-orange); }
+            50% { box-shadow: 0 0 20px var(--neon-orange), 0 0 30px var(--neon-orange); }
+        }
+
+        .phase-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 11px;
+            letter-spacing: 2px;
+            margin-top: 16px;
+            text-align: center;
+        }
+
+        .phase-sublabel {
+            font-size: 9px;
+            color: var(--text-light);
+            margin-top: 4px;
+        }
+
+        /* Feature schematic grid */
+        .schematic-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            margin-bottom: 60px;
+        }
+
+        .schematic-block {
+            background: var(--blueprint-bg);
+            border: 2px solid var(--blueprint-blue);
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .schematic-block::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: -8px;
+            right: 8px;
+            bottom: 8px;
+            border: 1px dashed var(--blueprint-line);
+            pointer-events: none;
+        }
+
+        .schematic-block:hover {
+            transform: translate(-4px, -4px);
+            box-shadow: 8px 8px 0 var(--blueprint-blue);
+        }
+
+        .schematic-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--blueprint-blue);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .schematic-id {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 10px;
+            color: var(--text-light);
+        }
+
+        .schematic-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .schematic-status.complete { background: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); }
+        .schematic-status.progress { background: var(--neon-orange); box-shadow: 0 0 8px var(--neon-orange); }
+        .schematic-status.pending { background: var(--blueprint-line); }
+
+        .schematic-body {
+            padding: 20px;
+        }
+
+        .schematic-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .schematic-desc {
+            font-size: 12px;
+            color: var(--text-light);
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .schematic-specs {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--blueprint-line);
+        }
+
+        .spec-item {
+            font-size: 10px;
+        }
+
+        .spec-label {
+            color: var(--text-light);
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .spec-value {
+            font-weight: 500;
+        }
+
+        /* Connection lines between blocks */
+        .connection-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .connection-line {
+            stroke: var(--blueprint-blue);
+            stroke-width: 2;
+            stroke-dasharray: 8 4;
+            fill: none;
+            opacity: 0.5;
+        }
+
+        /* Dependency lines */
+        .dependency-marker {
+            position: absolute;
+            font-size: 8px;
+            color: var(--text-light);
+            background: var(--blueprint-bg);
+            padding: 2px 6px;
+        }
+
+        /* Corner annotations */
+        .corner-annotation {
+            position: absolute;
+            font-size: 9px;
+            color: var(--text-light);
+            padding: 4px 8px;
+            border: 1px solid var(--blueprint-line);
+            background: var(--blueprint-bg);
+        }
+
+        .corner-annotation.top-right {
+            top: -12px;
+            right: -12px;
+        }
+
+        .corner-annotation.bottom-left {
+            bottom: -12px;
+            left: -12px;
+        }
+
+        /* Specifications panel */
+        .specs-panel {
+            position: fixed;
+            right: -400px;
+            top: 0;
+            width: 400px;
+            height: 100vh;
+            background: var(--blueprint-dark);
+            color: var(--blueprint-bg);
+            z-index: 100;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .specs-panel.active {
+            right: 0;
+        }
+
+        .specs-panel-header {
+            padding: 24px;
+            border-bottom: 1px solid rgba(232, 244, 252, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .specs-panel-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            letter-spacing: 2px;
+        }
+
+        .specs-close {
+            width: 32px;
+            height: 32px;
+            border: 1px solid var(--blueprint-bg);
+            background: transparent;
+            color: var(--blueprint-bg);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .specs-close:hover {
+            background: var(--blueprint-bg);
+            color: var(--blueprint-dark);
+        }
+
+        .specs-panel-body {
+            padding: 24px;
+        }
+
+        .specs-section {
+            margin-bottom: 32px;
+        }
+
+        .specs-section-title {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: var(--neon-green);
+            margin-bottom: 12px;
+        }
+
+        .specs-list {
+            list-style: none;
+        }
+
+        .specs-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(232, 244, 252, 0.1);
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .specs-list li::before {
+            content: '▸';
+            color: var(--neon-green);
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 32px;
+            padding: 20px;
+            border: 1px solid var(--blueprint-blue);
+            margin-bottom: 40px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+        }
+
+        .legend-color.green { background: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); }
+        .legend-color.orange { background: var(--neon-orange); box-shadow: 0 0 8px var(--neon-orange); }
+        .legend-color.gray { background: var(--blueprint-line); }
+
+        /* Footer */
+        .footer {
+            padding: 24px 0;
+            border-top: 2px solid var(--blueprint-blue);
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--text-light);
+            letter-spacing: 1px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .schematic-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .schematic-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .timeline-phases {
+                flex-wrap: wrap;
+                gap: 24px;
+            }
+
+            .logo-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .logo-divider {
+                display: none;
+            }
+
+            .specs-panel {
+                width: 100%;
+                right: -100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-paper"></div>
+
+    <!-- Axis markers -->
+    <div class="axis-marker x" style="left: 100px;">100</div>
+    <div class="axis-marker x" style="left: 200px;">200</div>
+    <div class="axis-marker x" style="left: 300px;">300</div>
+    <div class="axis-marker x" style="left: 400px;">400</div>
+    <div class="axis-marker y" style="top: 100px;">100</div>
+    <div class="axis-marker y" style="top: 200px;">200</div>
+    <div class="axis-marker y" style="top: 300px;">300</div>
+
+    <div class="container">
+        <header class="header">
+            <div class="logo-section">
+                <div class="logo">DEMIARCH</div>
+                <div class="logo-divider"></div>
+                <div class="page-title">FEATURE PLANNING</div>
+            </div>
+            <div class="header-meta">
+                <div>PROJECT: E-COMMERCE PLATFORM</div>
+                <div>REV: 2.4.1</div>
+                <div>DATE: 2026-01-19</div>
+            </div>
+        </header>
+
+        <section class="timeline-section">
+            <h2 class="section-title">PHASE TIMELINE</h2>
+            <div class="timeline-track">
+                <div class="timeline-line">
+                    <div class="timeline-progress" style="width: 55%"></div>
+                </div>
+                <div class="timeline-phases">
+                    <div class="phase-marker completed">
+                        <div class="phase-node"></div>
+                        <div class="phase-label">PHASE 1</div>
+                        <div class="phase-sublabel">FOUNDATION</div>
+                    </div>
+                    <div class="phase-marker completed">
+                        <div class="phase-node"></div>
+                        <div class="phase-label">PHASE 2</div>
+                        <div class="phase-sublabel">CORE API</div>
+                    </div>
+                    <div class="phase-marker active">
+                        <div class="phase-node"></div>
+                        <div class="phase-label">PHASE 3</div>
+                        <div class="phase-sublabel">PAYMENTS</div>
+                    </div>
+                    <div class="phase-marker">
+                        <div class="phase-node"></div>
+                        <div class="phase-label">PHASE 4</div>
+                        <div class="phase-sublabel">CHECKOUT</div>
+                    </div>
+                    <div class="phase-marker">
+                        <div class="phase-node"></div>
+                        <div class="phase-label">PHASE 5</div>
+                        <div class="phase-sublabel">DEPLOY</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color green"></div>
+                <span>COMPLETED</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color orange"></div>
+                <span>IN PROGRESS</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color gray"></div>
+                <span>PENDING</span>
+            </div>
+            <div class="legend-item">
+                <span style="border-bottom: 2px dashed var(--blueprint-blue); padding-bottom: 2px;">- - -</span>
+                <span>DEPENDENCY</span>
+            </div>
+        </div>
+
+        <section>
+            <h2 class="section-title">FEATURE SCHEMATIC</h2>
+            <div class="schematic-grid">
+                <div class="schematic-block" data-feature="auth">
+                    <div class="corner-annotation top-right">REQ: AUTH-001</div>
+                    <div class="schematic-header">
+                        <span class="schematic-id">FTR-001</span>
+                        <div class="schematic-status complete"></div>
+                    </div>
+                    <div class="schematic-body">
+                        <h3 class="schematic-title">USER AUTHENTICATION</h3>
+                        <p class="schematic-desc">JWT-based auth with OAuth2 providers, session management, and MFA support.</p>
+                        <div class="schematic-specs">
+                            <div class="spec-item">
+                                <span class="spec-label">AGENTS</span>
+                                <span class="spec-value">12</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">TOKENS</span>
+                                <span class="spec-value">847K</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">COST</span>
+                                <span class="spec-value">$6.80</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">FILES</span>
+                                <span class="spec-value">24</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schematic-block" data-feature="products">
+                    <div class="corner-annotation top-right">REQ: PRD-001</div>
+                    <div class="schematic-header">
+                        <span class="schematic-id">FTR-002</span>
+                        <div class="schematic-status complete"></div>
+                    </div>
+                    <div class="schematic-body">
+                        <h3 class="schematic-title">PRODUCT CATALOG</h3>
+                        <p class="schematic-desc">Full product CRUD, category management, search indexing, and image handling.</p>
+                        <div class="schematic-specs">
+                            <div class="spec-item">
+                                <span class="spec-label">AGENTS</span>
+                                <span class="spec-value">18</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">TOKENS</span>
+                                <span class="spec-value">1.2M</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">COST</span>
+                                <span class="spec-value">$9.40</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">FILES</span>
+                                <span class="spec-value">31</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schematic-block" data-feature="cart">
+                    <div class="corner-annotation top-right">REQ: CRT-001</div>
+                    <div class="corner-annotation bottom-left">DEP: FTR-002</div>
+                    <div class="schematic-header">
+                        <span class="schematic-id">FTR-003</span>
+                        <div class="schematic-status complete"></div>
+                    </div>
+                    <div class="schematic-body">
+                        <h3 class="schematic-title">SHOPPING CART</h3>
+                        <p class="schematic-desc">Persistent cart with guest support, inventory checks, and price calculations.</p>
+                        <div class="schematic-specs">
+                            <div class="spec-item">
+                                <span class="spec-label">AGENTS</span>
+                                <span class="spec-value">8</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">TOKENS</span>
+                                <span class="spec-value">542K</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">COST</span>
+                                <span class="spec-value">$4.20</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">FILES</span>
+                                <span class="spec-value">16</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schematic-block" data-feature="payments">
+                    <div class="corner-annotation top-right">REQ: PAY-001</div>
+                    <div class="corner-annotation bottom-left">DEP: FTR-001</div>
+                    <div class="schematic-header">
+                        <span class="schematic-id">FTR-004</span>
+                        <div class="schematic-status progress"></div>
+                    </div>
+                    <div class="schematic-body">
+                        <h3 class="schematic-title">PAYMENT PROCESSING</h3>
+                        <p class="schematic-desc">Stripe integration with webhooks, refunds, and subscription billing support.</p>
+                        <div class="schematic-specs">
+                            <div class="spec-item">
+                                <span class="spec-label">AGENTS</span>
+                                <span class="spec-value">24</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">TOKENS</span>
+                                <span class="spec-value">890K</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">COST</span>
+                                <span class="spec-value">$12.40</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">FILES</span>
+                                <span class="spec-value">28</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schematic-block" data-feature="checkout">
+                    <div class="corner-annotation top-right">REQ: CHK-001</div>
+                    <div class="corner-annotation bottom-left">DEP: FTR-003, FTR-004</div>
+                    <div class="schematic-header">
+                        <span class="schematic-id">FTR-005</span>
+                        <div class="schematic-status pending"></div>
+                    </div>
+                    <div class="schematic-body">
+                        <h3 class="schematic-title">CHECKOUT FLOW</h3>
+                        <p class="schematic-desc">Multi-step checkout with address validation, shipping options, and order confirmation.</p>
+                        <div class="schematic-specs">
+                            <div class="spec-item">
+                                <span class="spec-label">AGENTS</span>
+                                <span class="spec-value">—</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">TOKENS</span>
+                                <span class="spec-value">EST 1.1M</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">COST</span>
+                                <span class="spec-value">EST $8.50</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">FILES</span>
+                                <span class="spec-value">EST 22</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schematic-block" data-feature="orders">
+                    <div class="corner-annotation top-right">REQ: ORD-001</div>
+                    <div class="corner-annotation bottom-left">DEP: FTR-005</div>
+                    <div class="schematic-header">
+                        <span class="schematic-id">FTR-006</span>
+                        <div class="schematic-status pending"></div>
+                    </div>
+                    <div class="schematic-body">
+                        <h3 class="schematic-title">ORDER MANAGEMENT</h3>
+                        <p class="schematic-desc">Order tracking, status updates, fulfillment integration, and email notifications.</p>
+                        <div class="schematic-specs">
+                            <div class="spec-item">
+                                <span class="spec-label">AGENTS</span>
+                                <span class="spec-value">—</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">TOKENS</span>
+                                <span class="spec-value">EST 780K</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">COST</span>
+                                <span class="spec-value">EST $6.20</span>
+                            </div>
+                            <div class="spec-item">
+                                <span class="spec-label">FILES</span>
+                                <span class="spec-value">EST 18</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <span>DEMIARCH BLUEPRINT SYSTEM v2.4.1</span>
+            <span>CONFIDENTIAL — COMPOUND ENGINEERING</span>
+            <span>GENERATED: 2026-01-19 14:32:00 UTC</span>
+        </footer>
+    </div>
+
+    <!-- Specifications panel -->
+    <aside class="specs-panel" id="specsPanel">
+        <div class="specs-panel-header">
+            <span class="specs-panel-title">SPECIFICATIONS</span>
+            <button class="specs-close" id="specsClose">×</button>
+        </div>
+        <div class="specs-panel-body">
+            <div class="specs-section">
+                <h4 class="specs-section-title">REQUIREMENTS</h4>
+                <ul class="specs-list">
+                    <li>JWT token generation and validation</li>
+                    <li>OAuth2 provider integration (Google, GitHub)</li>
+                    <li>Session management with Redis</li>
+                    <li>Multi-factor authentication support</li>
+                    <li>Password reset flow with email</li>
+                </ul>
+            </div>
+            <div class="specs-section">
+                <h4 class="specs-section-title">DEPENDENCIES</h4>
+                <ul class="specs-list">
+                    <li>Database schema (FTR-000)</li>
+                    <li>Email service configuration</li>
+                    <li>Redis cache setup</li>
+                </ul>
+            </div>
+            <div class="specs-section">
+                <h4 class="specs-section-title">AGENTS ASSIGNED</h4>
+                <ul class="specs-list">
+                    <li>Orchestrator: Auth-Main</li>
+                    <li>Planner: Security-Analysis</li>
+                    <li>Workers: JWT-Gen, OAuth-Int, Session-Mgr</li>
+                </ul>
+            </div>
+        </div>
+    </aside>
+
+    <script>
+        // Schematic block hover/click for specs panel
+        const specsPanel = document.getElementById('specsPanel');
+        const specsClose = document.getElementById('specsClose');
+
+        document.querySelectorAll('.schematic-block').forEach(block => {
+            block.addEventListener('click', () => {
+                specsPanel.classList.add('active');
+            });
+        });
+
+        specsClose.addEventListener('click', () => {
+            specsPanel.classList.remove('active');
+        });
+
+        // Close panel on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                specsPanel.classList.remove('active');
+            }
+        });
+
+        // Phase marker click
+        document.querySelectorAll('.phase-marker').forEach((marker, index) => {
+            marker.addEventListener('click', () => {
+                console.log(`Phase ${index + 1} selected`);
+            });
+        });
+
+        // Animate timeline progress on load
+        window.addEventListener('load', () => {
+            const progress = document.querySelector('.timeline-progress');
+            progress.style.width = '0%';
+            setTimeout(() => {
+                progress.style.transition = 'width 1.5s ease-out';
+                progress.style.width = '55%';
+            }, 300);
+        });
+    </script>
+</body>
+</html>

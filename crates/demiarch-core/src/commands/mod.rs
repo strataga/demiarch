@@ -2,8 +2,8 @@
 //!
 //! These commands are used by CLI, TUI, and GUI interfaces.
 
-pub mod project;
+pub mod chat;
 pub mod feature;
 pub mod generate;
+pub mod project;
 pub mod sync;
-pub mod chat;
