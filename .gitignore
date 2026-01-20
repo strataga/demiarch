@@ -1,7 +1,6 @@
 # Rust
 **/target/
 **/*.rs.bk
-Cargo.lock
 
 # Database
 *.db
@@ -15,7 +14,8 @@ Cargo.lock
 
 # IDE
 .idea/
-.vscode/
+.vscode/settings.json
+.vscode/launch.json
 *.swp
 *.swo
 *~
@@ -31,9 +31,11 @@ logs/
 dist/
 build/
 
+# Node
+**/node_modules/
+
 # Tauri
 gui/src-tauri/target/
-gui/node_modules/
 
 # Test artifacts
 *.profraw
