@@ -3,12 +3,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { ProjectProvider, useProjects } from "./contexts/ProjectContext";
 import { AgentProvider } from "./contexts/AgentContext";
+import { ConflictProvider, useConflicts } from "./contexts/ConflictContext";
 import { ProjectSelector } from "./components/ProjectSelector";
 import { AgentStatusPanel } from "./components/AgentStatus";
+import { ConflictPanel } from "./components/ConflictPanel";
 import { SAMPLE_PROJECTS } from "./data/sampleProjects";
 import { SAMPLE_AGENTS } from "./data/sampleAgents";
 import "./App.css";
 import "./components/AgentStatus/AgentStatus.css";
+import "./components/ConflictPanel/ConflictPanel.css";
 
 interface AppInfo {
   name: string;
@@ -28,6 +31,7 @@ function AppContent() {
   const [name, setName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const { currentProject, updateProjectBoard } = useProjects();
+  const { checkForConflicts, isPanelVisible, setPanelVisible, summary } = useConflicts();
 
   useEffect(() => {
     async function initialize() {
@@ -80,11 +84,36 @@ function AppContent() {
       </header>
 
       <section className="status-section">
-        <div className={`status-indicator ${healthStatus?.status}`}>
-          <span className="status-dot" />
-          <span>{healthStatus?.message}</span>
+        <div className="status-section__row">
+          <div className={`status-indicator ${healthStatus?.status}`}>
+            <span className="status-dot" />
+            <span>{healthStatus?.message}</span>
+          </div>
+          <button
+            className="conflict-check-btn"
+            onClick={() => {
+              if (isPanelVisible) {
+                setPanelVisible(false);
+              } else {
+                checkForConflicts('current-project');
+              }
+            }}
+          >
+            {isPanelVisible ? 'Hide Conflicts' : 'Check for Conflicts'}
+            {summary && (summary.modifiedFiles.length > 0 || summary.deletedFiles.length > 0) && (
+              <span className="conflict-check-btn__badge">
+                {summary.modifiedFiles.length + summary.deletedFiles.length}
+              </span>
+            )}
+          </button>
         </div>
       </section>
+
+      {isPanelVisible && (
+        <section className="conflict-section">
+          <ConflictPanel />
+        </section>
+      )}
 
       <section className="interaction-section">
         <h2>Test IPC Communication</h2>
@@ -142,7 +171,9 @@ function App() {
   return (
     <ProjectProvider initialProjects={SAMPLE_PROJECTS}>
       <AgentProvider initialAgents={SAMPLE_AGENTS}>
-        <AppContent />
+        <ConflictProvider>
+          <AppContent />
+        </ConflictProvider>
       </AgentProvider>
     </ProjectProvider>
   );

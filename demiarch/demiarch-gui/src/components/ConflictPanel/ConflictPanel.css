@@ -1,0 +1,618 @@
+/* Conflict Panel Styles */
+
+.conflict-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 600px;
+}
+
+.conflict-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.conflict-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.conflict-panel__title h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.conflict-panel__count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border-radius: 9999px;
+}
+
+.conflict-panel__close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.conflict-panel__close:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.conflict-panel__error {
+  padding: 0.75rem 1.25rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  font-size: 0.875rem;
+}
+
+.conflict-panel__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.conflict-panel__spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.conflict-panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+  text-align: center;
+}
+
+.conflict-panel__empty-icon {
+  font-size: 2.5rem;
+  color: var(--success);
+  margin-bottom: 0.75rem;
+}
+
+.conflict-panel__empty p {
+  color: var(--text-primary);
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.conflict-panel__empty-hint {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.conflict-panel__refresh {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.conflict-panel__refresh:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.conflict-panel__summary {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.conflict-panel__summary-item {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.conflict-panel__summary-item--modified {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.conflict-panel__summary-item--deleted {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.conflict-panel__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.conflict-panel__file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  overflow-y: auto;
+  max-height: 200px;
+}
+
+/* Conflict File Item */
+.conflict-file {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.conflict-file:hover {
+  border-color: var(--accent);
+}
+
+.conflict-file--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.conflict-file__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+}
+
+.conflict-file__status-icon {
+  width: 18px;
+  font-family: monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.conflict-file--modified .conflict-file__status-icon {
+  color: #f59e0b;
+}
+
+.conflict-file--deleted .conflict-file__status-icon {
+  color: #ef4444;
+}
+
+.conflict-file__path {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conflict-file__status-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+}
+
+.conflict-file__status-badge--modified {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.conflict-file__status-badge--deleted {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.conflict-file__actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.conflict-file__action {
+  flex: 1;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.conflict-file__action--keep-user {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.conflict-file__action--keep-user:hover {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.conflict-file__action--keep-generated {
+  background: rgba(100, 108, 255, 0.15);
+  color: var(--accent);
+}
+
+.conflict-file__action--keep-generated:hover {
+  background: rgba(100, 108, 255, 0.25);
+}
+
+/* Diff Container */
+.conflict-panel__diff-container {
+  flex: 1;
+  min-height: 200px;
+  border-top: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+/* Bulk Actions */
+.conflict-panel__bulk-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+}
+
+.conflict-panel__bulk-action {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.conflict-panel__bulk-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.conflict-panel__bulk-action--acknowledge {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.conflict-panel__bulk-action--acknowledge:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.conflict-panel__bulk-action--restore {
+  background: rgba(100, 108, 255, 0.15);
+  color: var(--accent);
+}
+
+.conflict-panel__bulk-action--restore:hover:not(:disabled) {
+  background: rgba(100, 108, 255, 0.25);
+}
+
+/* Diff Viewer Styles */
+.diff-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.diff-viewer__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.diff-viewer__file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.diff-viewer__file-name {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.diff-viewer__stats {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.diff-viewer__stat {
+  font-family: monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+}
+
+.diff-viewer__stat--added {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.diff-viewer__stat--removed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.diff-viewer__controls {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.diff-viewer__mode-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.diff-viewer__mode-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.diff-viewer__mode-btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.diff-viewer__legend {
+  display: flex;
+  gap: 1rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.65rem;
+}
+
+.diff-viewer__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--text-secondary);
+}
+
+.diff-viewer__legend-marker {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  font-weight: 600;
+  border-radius: 2px;
+}
+
+.diff-viewer__legend-item--removed .diff-viewer__legend-marker {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.diff-viewer__legend-item--added .diff-viewer__legend-marker {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.diff-viewer__content {
+  flex: 1;
+  overflow: auto;
+}
+
+.diff-viewer__code {
+  margin: 0;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+/* Unified Diff View */
+.diff-viewer__content--unified .diff-line {
+  display: flex;
+  min-width: max-content;
+}
+
+.diff-line__gutter {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.diff-line__num {
+  width: 40px;
+  padding: 0 0.5rem;
+  text-align: right;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+}
+
+.diff-line__num--original {
+  border-right: 1px solid var(--border-color);
+}
+
+.diff-line__marker {
+  width: 20px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.diff-line__content {
+  flex: 1;
+  padding: 0 0.75rem;
+  white-space: pre;
+}
+
+/* Line type colors */
+.diff-line--unchanged {
+  background: var(--bg-primary);
+}
+
+.diff-line--added {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.diff-line--added .diff-line__marker {
+  color: #22c55e;
+}
+
+.diff-line--added .diff-line__content {
+  color: #22c55e;
+}
+
+.diff-line--removed {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.diff-line--removed .diff-line__marker {
+  color: #ef4444;
+}
+
+.diff-line--removed .diff-line__content {
+  color: #ef4444;
+}
+
+.diff-line--empty {
+  background: var(--bg-secondary);
+}
+
+.diff-line--empty .diff-line__content {
+  min-height: 1.5em;
+}
+
+/* Split Diff View */
+.diff-viewer__content--split {
+  display: flex;
+  height: 100%;
+}
+
+.diff-viewer__split-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.diff-viewer__split-pane--left {
+  border-right: 1px solid var(--border-color);
+}
+
+.diff-viewer__pane-header {
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.diff-viewer__split-pane--left .diff-viewer__pane-header {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.diff-viewer__split-pane--right .diff-viewer__pane-header {
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.diff-viewer__split-pane .diff-viewer__code {
+  flex: 1;
+  overflow: auto;
+}
+
+.diff-viewer__split-pane .diff-line__gutter {
+  gap: 0;
+}
+
+.diff-viewer__split-pane .diff-line__num {
+  width: 35px;
+}
+
+/* Scrollbar styling */
+.diff-viewer__content::-webkit-scrollbar,
+.diff-viewer__code::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.diff-viewer__content::-webkit-scrollbar-track,
+.diff-viewer__code::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+.diff-viewer__content::-webkit-scrollbar-thumb,
+.diff-viewer__code::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.diff-viewer__content::-webkit-scrollbar-thumb:hover,
+.diff-viewer__code::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
