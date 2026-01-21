@@ -172,10 +172,7 @@ async fn get_conflict_details(_project_id: String) -> Result<Vec<ConflictFile>, 
 
 /// Resolve a single conflict with the specified strategy
 #[tauri::command]
-async fn resolve_conflict(
-    file_path: String,
-    strategy: String,
-) -> Result<ResolutionResult, String> {
+async fn resolve_conflict(file_path: String, strategy: String) -> Result<ResolutionResult, String> {
     // TODO: Integrate with demiarch_core::domain::recovery
     // - "keep-user": Acknowledge user edits as new baseline
     // - "keep-generated": Restore from checkpoint
@@ -191,20 +188,14 @@ async fn resolve_conflict(
 
 /// Acknowledge user edits (accept as new baseline without restoring)
 #[tauri::command]
-async fn acknowledge_edits(
-    _project_id: String,
-    file_paths: Vec<String>,
-) -> Result<usize, String> {
+async fn acknowledge_edits(_project_id: String, file_paths: Vec<String>) -> Result<usize, String> {
     // TODO: Integrate with demiarch_core::domain::recovery::EditDetectionService::acknowledge_edits
     Ok(file_paths.len())
 }
 
 /// Get diff between original and current content for a specific file
 #[tauri::command]
-async fn get_file_diff(
-    _project_id: String,
-    _file_path: String,
-) -> Result<ConflictFile, String> {
+async fn get_file_diff(_project_id: String, _file_path: String) -> Result<ConflictFile, String> {
     // TODO: Integrate with demiarch_core to read actual file content
     // and compare with tracked original hash
 
