@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Demiarch configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub llm: LlmConfig,
     pub cost: CostConfig,
@@ -36,27 +36,35 @@ pub struct RoutingConfig {
     pub preference: String,
 }
 
-impl Default for Config {
+impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            llm: LlmConfig {
-                api_key: None,
-                default_model: "anthropic/claude-sonnet-4-20250514".to_string(),
-                fallback_models: vec![
-                    "anthropic/claude-3-5-haiku-latest".to_string(),
-                    "openai/gpt-4o".to_string(),
-                ],
-                temperature: 0.7,
-                max_tokens: 8192,
-                timeout_secs: 120,
-            },
-            cost: CostConfig {
-                daily_limit_usd: 10.0,
-                alert_threshold: 0.8,
-            },
-            routing: RoutingConfig {
-                preference: "balanced".to_string(),
-            },
+            api_key: None,
+            default_model: "anthropic/claude-sonnet-4-20250514".to_string(),
+            fallback_models: vec![
+                "anthropic/claude-3-5-haiku-latest".to_string(),
+                "openai/gpt-4o".to_string(),
+            ],
+            temperature: 0.7,
+            max_tokens: 8192,
+            timeout_secs: 120,
+        }
+    }
+}
+
+impl Default for CostConfig {
+    fn default() -> Self {
+        Self {
+            daily_limit_usd: 10.0,
+            alert_threshold: 0.8,
+        }
+    }
+}
+
+impl Default for RoutingConfig {
+    fn default() -> Self {
+        Self {
+            preference: "balanced".to_string(),
         }
     }
 }

@@ -52,3 +52,5 @@ mod commands_tests;
 mod config_tests;
 #[cfg(test)]
 mod error_tests;
+#[cfg(test)]
+mod llm_tests;

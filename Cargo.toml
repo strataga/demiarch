@@ -35,7 +35,12 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # HTTP client
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
+
+# Async streams
+futures-core = "0.3"
+futures-util = "0.3"
+async-stream = "0.3"
 
 # Utilities
 uuid = { version = "1.11", features = ["v4", "serde"] }

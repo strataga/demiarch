@@ -285,6 +285,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-stream"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5a71a6f37880a80d1d7f19efd781e4b5de42c88f0722cc13bcb6cc2cfe8476"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
 name = "async-task"
 version = "4.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -922,11 +944,14 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
+ "async-stream",
  "async-trait",
  "base64",
  "chrono",
  "dirs",
  "ed25519-dalek",
+ "futures-core",
+ "futures-util",
  "git2",
  "hex",
  "keyring",
@@ -2922,6 +2947,7 @@ dependencies = [
  "bytes",
  "encoding_rs",
  "futures-core",
+ "futures-util",
  "h2",
  "http",
  "http-body",
@@ -2946,12 +2972,14 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls",
+ "tokio-util",
  "tower",
  "tower-http",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "webpki-roots 1.0.5",
 ]
@@ -4287,6 +4315,19 @@ checksum = "990065f2fe63003fe337b932cfb5e3b80e0b4d0f5ff650e6985b1048f62c8319"
 dependencies = [
  "leb128fmt",
  "wasmparser 0.244.0",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
