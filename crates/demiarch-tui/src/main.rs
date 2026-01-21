@@ -13,6 +13,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use demiarch_core::agents::events::read_current_session_events;
 use demiarch_core::visualization::{
     AgentStatusBar, HierarchyTreeWidget, RenderOptions, TreeBuilder, TreeColors,
 };
@@ -73,6 +74,9 @@ impl App {
 }
 
 fn main() -> anyhow::Result<()> {
+    // Load .env file if present (silently ignore if not found)
+    let _ = dotenvy::dotenv();
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -186,8 +190,8 @@ fn render_agents_tab(frame: &mut ratatui::Frame, area: Rect, app: &App) {
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(area);
 
-    // Build demo tree for visualization
-    let tree = TreeBuilder::demo_tree();
+    // Build tree from live events (falls back to placeholder if no events)
+    let tree = TreeBuilder::from_live_events();
 
     // Configure options based on app state
     let options = if app.ascii_mode {
@@ -249,14 +253,29 @@ fn render_stats_tab(frame: &mut ratatui::Frame, area: Rect) {
         ])
         .split(area);
 
+    // Get real data from live events
+    let tree = TreeBuilder::from_live_events();
+    let events = read_current_session_events();
+
+    let total_agents = tree.count();
+    let active_agents = tree.count_active();
+    let completed = tree.count_completed();
+    let failed = tree.count_failed();
+    let total_tokens = tree.tree_tokens();
+
     // Session stats
-    let session_stats = Paragraph::new(
-        "Session Duration: 00:00:00\n\
-         Total Agents: 0\n\
-         Active Agents: 0\n\
-         Completed: 0\n\
-         Failed: 0",
-    )
+    let session_stats = Paragraph::new(format!(
+        "Total Agents: {}\n\
+         Active Agents: {}\n\
+         Completed: {}\n\
+         Failed: {}\n\
+         Events: {}",
+        total_agents,
+        active_agents,
+        completed,
+        failed,
+        events.len()
+    ))
     .block(
         Block::default()
             .borders(Borders::ALL)
@@ -265,26 +284,51 @@ fn render_stats_tab(frame: &mut ratatui::Frame, area: Rect) {
     frame.render_widget(session_stats, chunks[0]);
 
     // Token usage
-    let token_stats = Paragraph::new(
-        "Input Tokens: 0\n\
-         Output Tokens: 0\n\
-         Total Tokens: 0\n\
-         Estimated Cost: $0.00\n\
-         Budget Remaining: $10.00",
-    )
+    // Rough cost estimate: $3/million input, $15/million output (Claude pricing)
+    let estimated_cost = (total_tokens as f64 / 1_000_000.0) * 10.0; // rough average
+    let token_stats = Paragraph::new(format!(
+        "Total Tokens: {}\n\
+         Estimated Cost: ${:.4}\n\
+         \n\
+         (Token breakdown per agent\n\
+         shown in agent tree)",
+        total_tokens, estimated_cost
+    ))
     .block(Block::default().borders(Borders::ALL).title("Token Usage"));
     frame.render_widget(token_stats, chunks[1]);
 
-    // Recent activity
-    let activity = Paragraph::new(
+    // Recent activity - show last few events
+    let recent_events: Vec<String> = events
+        .iter()
+        .rev()
+        .take(8)
+        .map(|e| {
+            let time = e.timestamp.format("%H:%M:%S");
+            let event_type = match e.event_type {
+                demiarch_core::agents::events::AgentEventType::Spawned => "🆕 Spawned",
+                demiarch_core::agents::events::AgentEventType::Started => "▶️  Started",
+                demiarch_core::agents::events::AgentEventType::StatusUpdate => "📊 Status",
+                demiarch_core::agents::events::AgentEventType::Completed => "✓  Done",
+                demiarch_core::agents::events::AgentEventType::Failed => "✗  Failed",
+                demiarch_core::agents::events::AgentEventType::Cancelled => "⊘  Cancel",
+                demiarch_core::agents::events::AgentEventType::TokenUpdate => "🎫 Tokens",
+            };
+            format!("[{}] {} {}", time, event_type, e.agent.name)
+        })
+        .collect();
+
+    let activity_text = if recent_events.is_empty() {
         "No recent activity\n\n\
          Events will appear here during code generation:\n\
          • Agent spawned\n\
          • Agent completed\n\
-         • File created\n\
-         • Skill applied",
-    )
-    .block(
+         • File created"
+            .to_string()
+    } else {
+        recent_events.join("\n")
+    };
+
+    let activity = Paragraph::new(activity_text).block(
         Block::default()
             .borders(Borders::ALL)
             .title("Recent Activity"),
@@ -342,8 +386,8 @@ For more information, visit:
 }
 
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &App) {
-    // Build tree for status bar
-    let tree = TreeBuilder::demo_tree();
+    // Build tree from live events for status bar
+    let tree = TreeBuilder::from_live_events();
 
     // Split status bar into agent status and key hints
     let chunks = Layout::default()

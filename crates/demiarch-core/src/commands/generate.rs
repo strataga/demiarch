@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use tracing::{debug, info};
 
+use crate::agents::events::AgentEventWriter;
+use crate::agents::{AgentId, AgentType};
 use crate::config::Config;
 use crate::cost::CostTracker;
 use crate::error::{Error, Result};
@@ -47,6 +49,8 @@ pub struct CodeGenerator {
     llm_client: LlmClient,
     #[allow(dead_code)]
     config: Config,
+    /// Event writer for TUI monitoring
+    event_writer: AgentEventWriter,
 }
 
 impl CodeGenerator {
@@ -72,18 +76,54 @@ impl CodeGenerator {
 
         let llm_client = builder.build()?;
 
-        Ok(Self { llm_client, config })
+        Ok(Self {
+            llm_client,
+            config,
+            event_writer: AgentEventWriter::new(),
+        })
     }
 
     /// Generate code from a natural language description
     pub async fn generate(&self, description: &str, dry_run: bool) -> Result<GenerationResult> {
         info!(description = %description, dry_run = %dry_run, "Starting code generation");
 
+        // Create agent IDs for Russian Doll hierarchy
+        let orchestrator_id = AgentId::new();
+        let coder_id = AgentId::new();
+
+        // Emit orchestrator spawned event (root of hierarchy)
+        self.event_writer.emit_spawned(
+            &orchestrator_id,
+            AgentType::Orchestrator,
+            "orchestrator-0",
+            None,
+            "/orchestrator-0",
+            Some(description),
+        );
+
+        // Emit coder spawned event (child of orchestrator)
+        self.event_writer.emit_spawned(
+            &coder_id,
+            AgentType::Coder,
+            "coder-0",
+            Some(&orchestrator_id),
+            "/orchestrator-0/coder-0",
+            Some(description),
+        );
+
         let messages = self.build_messages(description);
 
         debug!(message_count = messages.len(), "Sending request to LLM");
 
-        let response = self.llm_client.complete_with_fallback(messages).await?;
+        let response = match self.llm_client.complete_with_fallback(messages).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                // Emit failed events for both agents
+                self.event_writer.emit_failed(&coder_id, &e.to_string());
+                self.event_writer.emit_failed(&orchestrator_id, &e.to_string());
+                return Err(e);
+            }
+        };
 
         info!(
             tokens = response.tokens_used,
@@ -91,7 +131,14 @@ impl CodeGenerator {
             "Received LLM response"
         );
 
-        let files = self.parse_generated_files(&response.content)?;
+        let files = match self.parse_generated_files(&response.content) {
+            Ok(f) => f,
+            Err(e) => {
+                self.event_writer.emit_failed(&coder_id, &e.to_string());
+                self.event_writer.emit_failed(&orchestrator_id, &e.to_string());
+                return Err(e);
+            }
+        };
 
         let files_created = files.iter().filter(|f| f.is_new).count();
         let files_modified = files.len() - files_created;
@@ -113,10 +160,20 @@ impl CodeGenerator {
         };
 
         if !dry_run {
-            self.write_files(&result.files)?;
+            if let Err(e) = self.write_files(&result.files) {
+                self.event_writer.emit_failed(&coder_id, &e.to_string());
+                self.event_writer.emit_failed(&orchestrator_id, &e.to_string());
+                return Err(e);
+            }
         } else {
             debug!("Dry run mode - skipping file writes");
         }
+
+        // Emit completed events for both agents (coder first, then orchestrator)
+        self.event_writer
+            .emit_completed(&coder_id, response.tokens_used as u64);
+        self.event_writer
+            .emit_completed(&orchestrator_id, response.tokens_used as u64);
 
         Ok(result)
     }

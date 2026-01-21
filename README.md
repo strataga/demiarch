@@ -22,6 +22,7 @@ A local-first, open-source AI app builder that generates code into your local re
 | Multi-Framework | Next.js, React, Vue, Flutter, iOS, Android, FastAPI, Go, and more |
 | Russian Doll Agents | 3-level hierarchical agent delegation (Orchestrator → Planner → Coder/Reviewer/Tester) |
 | Learned Skills | Auto-extract debugging knowledge as reusable, persistent skills |
+| Knowledge Graph | GraphRAG-powered skill discovery with entity extraction and multi-hop traversal |
 | Progressive Disclosure | Token-efficient context retrieval (~10x savings via layered summaries) |
 | Dynamic Model Routing | RL-optimized selection of specialized vs generalist models per task |
 | Lifecycle Hooks | Extensible event handlers for session, generation, and error events |
@@ -140,6 +141,7 @@ demiarch routing      # Model routing config
 demiarch hooks        # Lifecycle hooks management
 demiarch context      # Context memory management
 demiarch image        # Image generation and manipulation
+demiarch graph        # Explore knowledge graph (entities, relationships)
 demiarch costs        # View usage & costs
 demiarch sync         # Export/import for git
 demiarch doctor       # Health check
@@ -162,6 +164,25 @@ demiarch image inpaint photo.png mask.png "Replace with a sunset"
 
 # List available models
 demiarch image models
+```
+
+### Knowledge Graph Commands
+
+```bash
+# Show graph statistics
+demiarch graph stats
+
+# Search for entities
+demiarch graph search "async runtime"
+
+# Explore an entity's neighborhood
+demiarch graph explore "tokio" --depth 2
+
+# List entities by type
+demiarch graph list --type library
+
+# Show detailed view with relationships
+demiarch graph explore "error handling" --tree
 ```
 
 ## Tech Stack

@@ -45,6 +45,11 @@ pub use reviewer::ReviewerAgent;
 pub use tester::TesterAgent;
 pub use tool::{AgentTool, AgentToolResult};
 pub use traits::{Agent, AgentCapability, AgentResult, AgentStatus};
+pub use message_builder::{
+    build_agent_messages, build_enriched_agent_messages, build_enriched_messages_from_input,
+    build_messages_from_input, build_messages_with_enrichment, EnrichedMessageBuilder,
+    EnrichedMessageConfig,
+};
 
 use serde::{Deserialize, Serialize};
 

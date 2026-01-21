@@ -4,6 +4,7 @@
 
 pub mod events;
 pub mod feature_decomposition;
+pub mod knowledge;
 pub mod locking;
 pub mod recovery;
 pub mod search;

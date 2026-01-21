@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 
 use crate::agents::context::{ChildAgentInfo, SharedAgentState};
+use crate::agents::events::{AgentEvent, AgentEventType, read_current_session_events};
 use crate::agents::{AgentContext, AgentId, AgentPath, AgentStatus, AgentType};
 
 /// Style configuration for tree rendering
@@ -390,6 +391,90 @@ impl TreeBuilder {
         }
     }
 
+    /// Build a tree from live agent events (reads from JSONL file)
+    ///
+    /// This method reads the current session's events and reconstructs
+    /// the agent tree from spawned/completed/failed events.
+    pub fn from_live_events() -> AgentTreeNode {
+        let events = read_current_session_events();
+        Self::build_from_events(&events)
+    }
+
+    /// Build a tree from a list of agent events
+    pub fn build_from_events(events: &[AgentEvent]) -> AgentTreeNode {
+        if events.is_empty() {
+            return AgentTreeNode::placeholder_root();
+        }
+
+        // Build a map of agent data from events
+        let mut agents: HashMap<String, EventAgentInfo> = HashMap::new();
+
+        for event in events {
+            let id = &event.agent.id;
+
+            match event.event_type {
+                AgentEventType::Spawned => {
+                    agents.insert(
+                        id.clone(),
+                        EventAgentInfo {
+                            id: id.clone(),
+                            agent_type: event.agent.agent_type.clone(),
+                            name: event.agent.name.clone(),
+                            parent_id: event.agent.parent_id.clone(),
+                            path: event.agent.path.clone(),
+                            status: AgentStatus::Running,
+                            tokens: event.agent.tokens,
+                            task: event.agent.task.clone(),
+                        },
+                    );
+                }
+                AgentEventType::StatusUpdate | AgentEventType::TokenUpdate => {
+                    if let Some(info) = agents.get_mut(id) {
+                        info.status = parse_status(&event.agent.status);
+                        if event.agent.tokens > 0 {
+                            info.tokens = event.agent.tokens;
+                        }
+                    }
+                }
+                AgentEventType::Completed => {
+                    if let Some(info) = agents.get_mut(id) {
+                        info.status = AgentStatus::Completed;
+                        if event.agent.tokens > 0 {
+                            info.tokens = event.agent.tokens;
+                        }
+                    }
+                }
+                AgentEventType::Failed => {
+                    if let Some(info) = agents.get_mut(id) {
+                        info.status = AgentStatus::Failed;
+                    }
+                }
+                AgentEventType::Cancelled => {
+                    if let Some(info) = agents.get_mut(id) {
+                        info.status = AgentStatus::Cancelled;
+                    }
+                }
+                AgentEventType::Started => {
+                    if let Some(info) = agents.get_mut(id) {
+                        info.status = AgentStatus::Running;
+                    }
+                }
+            }
+        }
+
+        // Find root (orchestrator)
+        let root_id = agents
+            .values()
+            .find(|a| a.parent_id.is_none())
+            .map(|a| a.id.clone());
+
+        if let Some(root_id) = root_id {
+            build_tree_from_events_map(&agents, &root_id)
+        } else {
+            AgentTreeNode::placeholder_root()
+        }
+    }
+
     /// Build a demo/example tree for testing
     pub fn demo_tree() -> AgentTreeNode {
         let mut orchestrator = AgentTreeNode {
@@ -669,6 +754,121 @@ impl std::fmt::Display for HierarchyTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.render())
     }
+}
+
+/// Helper struct for building trees from events
+#[derive(Debug, Clone)]
+struct EventAgentInfo {
+    id: String,
+    agent_type: String,
+    name: String,
+    parent_id: Option<String>,
+    path: String,
+    status: AgentStatus,
+    tokens: u64,
+    #[allow(dead_code)]
+    task: Option<String>,
+}
+
+/// Parse status string to AgentStatus enum
+fn parse_status(s: &str) -> AgentStatus {
+    match s.to_lowercase().as_str() {
+        "ready" | "spawned" => AgentStatus::Ready,
+        "running" => AgentStatus::Running,
+        "waiting" | "waiting_for_children" => AgentStatus::WaitingForChildren,
+        "completed" => AgentStatus::Completed,
+        "failed" => AgentStatus::Failed,
+        "cancelled" => AgentStatus::Cancelled,
+        _ => AgentStatus::Running,
+    }
+}
+
+/// Parse agent type string to AgentType enum
+fn parse_agent_type(s: &str) -> AgentType {
+    match s.to_lowercase().as_str() {
+        "orchestrator" => AgentType::Orchestrator,
+        "planner" => AgentType::Planner,
+        "coder" => AgentType::Coder,
+        "reviewer" => AgentType::Reviewer,
+        "tester" => AgentType::Tester,
+        _ => AgentType::Orchestrator,
+    }
+}
+
+/// Build tree recursively from events map
+fn build_tree_from_events_map(agents: &HashMap<String, EventAgentInfo>, id: &str) -> AgentTreeNode {
+    let info = match agents.get(id) {
+        Some(i) => i,
+        None => return AgentTreeNode::placeholder_root(),
+    };
+
+    // Parse path into AgentPath
+    let path = if info.path.is_empty() || info.path == "/" {
+        AgentPath::new(&info.name)
+    } else {
+        // Path is like "/orchestrator/planner-0", need to build AgentPath
+        let segments: Vec<&str> = info.path.trim_start_matches('/').split('/').collect();
+        let mut path = AgentPath::root();
+        for seg in segments {
+            if !seg.is_empty() {
+                path = path.child(seg);
+            }
+        }
+        path
+    };
+
+    let depth = path.depth().saturating_sub(1);
+
+    // Parse the agent ID from the string, or create a deterministic one from the string
+    // Use a simple hash-based approach to create a stable UUID from the string ID
+    let agent_id = AgentId::parse(&info.id).unwrap_or_else(|| {
+        // Create a deterministic UUID from the string ID using a hash
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        info.id.hash(&mut hasher);
+        let hash = hasher.finish();
+        // Use the hash to create a stable UUID (version 4 format but deterministic)
+        let bytes = [
+            (hash >> 56) as u8, (hash >> 48) as u8, (hash >> 40) as u8, (hash >> 32) as u8,
+            (hash >> 24) as u8, (hash >> 16) as u8, (hash >> 8) as u8, hash as u8,
+            (hash >> 56) as u8, (hash >> 48) as u8, (hash >> 40) as u8, (hash >> 32) as u8,
+            (hash >> 24) as u8, (hash >> 16) as u8, (hash >> 8) as u8, hash as u8,
+        ];
+        AgentId::from_uuid(uuid::Uuid::from_bytes(bytes))
+    });
+
+    let mut node = AgentTreeNode {
+        id: agent_id,
+        agent_type: parse_agent_type(&info.agent_type),
+        status: info.status,
+        path,
+        depth,
+        tokens_used: if info.tokens > 0 {
+            Some(info.tokens as u32)
+        } else {
+            None
+        },
+        total_tokens: None,
+        success: match info.status {
+            AgentStatus::Completed => Some(true),
+            AgentStatus::Failed => Some(false),
+            _ => None,
+        },
+        children: Vec::new(),
+    };
+
+    // Find and add children
+    for child_info in agents.values() {
+        if child_info.parent_id.as_deref() == Some(id) {
+            let child_node = build_tree_from_events_map(agents, &child_info.id);
+            node.children.push(child_node);
+        }
+    }
+
+    // Calculate total tokens
+    node.total_tokens = Some(node.tree_tokens());
+
+    node
 }
 
 #[cfg(test)]

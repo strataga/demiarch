@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 10;
+pub const CURRENT_VERSION: i32 = 11;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -614,6 +614,127 @@ const MIGRATION_V10: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_session_events_created_at ON session_events(created_at);
 "#;
 
+/// Migration 11: Knowledge graph for GraphRAG
+///
+/// Adds knowledge entities, relationships, and skill-entity links for
+/// cognee-inspired knowledge graph retrieval. Enables multi-hop search
+/// and relationship-aware skill discovery.
+const MIGRATION_V11: &str = r#"
+    -- Knowledge entities table (nodes in the graph)
+    CREATE TABLE IF NOT EXISTS knowledge_entities (
+        id TEXT PRIMARY KEY NOT NULL,
+        entity_type TEXT NOT NULL CHECK (entity_type IN (
+            'concept', 'technique', 'library', 'framework', 'pattern',
+            'language', 'tool', 'domain', 'api', 'data_structure', 'algorithm'
+        )),
+        name TEXT NOT NULL,
+        canonical_name TEXT NOT NULL,           -- Normalized for deduplication
+        description TEXT,
+        aliases TEXT,                           -- JSON array
+        source_skill_ids TEXT,                  -- JSON array of skill IDs
+        confidence REAL NOT NULL DEFAULT 0.5,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Indexes for efficient entity queries
+    CREATE INDEX IF NOT EXISTS idx_knowledge_entities_type ON knowledge_entities(entity_type);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_entities_canonical_name ON knowledge_entities(canonical_name);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_entities_confidence ON knowledge_entities(confidence);
+
+    -- Full-text search for entities
+    CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_entities_fts USING fts5(
+        name, description, aliases,
+        content='knowledge_entities',
+        content_rowid='rowid'
+    );
+
+    -- Triggers to keep FTS index in sync
+    CREATE TRIGGER IF NOT EXISTS knowledge_entities_ai AFTER INSERT ON knowledge_entities BEGIN
+        INSERT INTO knowledge_entities_fts(rowid, name, description, aliases)
+        VALUES (NEW.rowid, NEW.name, NEW.description, NEW.aliases);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS knowledge_entities_ad AFTER DELETE ON knowledge_entities BEGIN
+        INSERT INTO knowledge_entities_fts(knowledge_entities_fts, rowid, name, description, aliases)
+        VALUES ('delete', OLD.rowid, OLD.name, OLD.description, OLD.aliases);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS knowledge_entities_au AFTER UPDATE ON knowledge_entities BEGIN
+        INSERT INTO knowledge_entities_fts(knowledge_entities_fts, rowid, name, description, aliases)
+        VALUES ('delete', OLD.rowid, OLD.name, OLD.description, OLD.aliases);
+        INSERT INTO knowledge_entities_fts(rowid, name, description, aliases)
+        VALUES (NEW.rowid, NEW.name, NEW.description, NEW.aliases);
+    END;
+
+    -- Knowledge relationships table (edges in the graph)
+    CREATE TABLE IF NOT EXISTS knowledge_relationships (
+        id TEXT PRIMARY KEY NOT NULL,
+        source_entity_id TEXT NOT NULL REFERENCES knowledge_entities(id) ON DELETE CASCADE,
+        target_entity_id TEXT NOT NULL REFERENCES knowledge_entities(id) ON DELETE CASCADE,
+        relationship_type TEXT NOT NULL CHECK (relationship_type IN (
+            'uses', 'used_by', 'depends_on', 'dependency_of', 'similar_to',
+            'prerequisite_for', 'requires', 'applies_to', 'part_of', 'contains',
+            'implemented_by', 'implements', 'conflicts_with', 'related_to'
+        )),
+        weight REAL NOT NULL DEFAULT 0.5,
+        evidence TEXT,                          -- JSON array of evidence objects
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(source_entity_id, target_entity_id, relationship_type)
+    );
+
+    -- Indexes for efficient relationship queries
+    CREATE INDEX IF NOT EXISTS idx_knowledge_relationships_source ON knowledge_relationships(source_entity_id);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_relationships_target ON knowledge_relationships(target_entity_id);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_relationships_type ON knowledge_relationships(relationship_type);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_relationships_weight ON knowledge_relationships(weight);
+
+    -- Entity embeddings table for semantic search
+    CREATE TABLE IF NOT EXISTS entity_embeddings (
+        id TEXT PRIMARY KEY NOT NULL,
+        entity_id TEXT NOT NULL REFERENCES knowledge_entities(id) ON DELETE CASCADE,
+        embedding_model TEXT NOT NULL,
+        embedding BLOB NOT NULL,                -- Binary f32 array
+        dimensions INTEGER NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(entity_id, embedding_model)
+    );
+
+    -- Indexes for embedding queries
+    CREATE INDEX IF NOT EXISTS idx_entity_embeddings_entity ON entity_embeddings(entity_id);
+    CREATE INDEX IF NOT EXISTS idx_entity_embeddings_model ON entity_embeddings(embedding_model);
+
+    -- Skill-entity links table (connects skills to their entities)
+    CREATE TABLE IF NOT EXISTS skill_entity_links (
+        skill_id TEXT NOT NULL REFERENCES learned_skills(id) ON DELETE CASCADE,
+        entity_id TEXT NOT NULL REFERENCES knowledge_entities(id) ON DELETE CASCADE,
+        relevance REAL NOT NULL DEFAULT 0.5,    -- How relevant the entity is to the skill
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (skill_id, entity_id)
+    );
+
+    -- Indexes for skill-entity link queries
+    CREATE INDEX IF NOT EXISTS idx_skill_entity_links_skill ON skill_entity_links(skill_id);
+    CREATE INDEX IF NOT EXISTS idx_skill_entity_links_entity ON skill_entity_links(entity_id);
+    CREATE INDEX IF NOT EXISTS idx_skill_entity_links_relevance ON skill_entity_links(relevance);
+
+    -- Knowledge events table for audit trail
+    CREATE TABLE IF NOT EXISTS knowledge_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        event_type TEXT NOT NULL,
+        aggregate_id TEXT,                      -- Entity ID, relationship ID, or skill ID
+        data TEXT NOT NULL,                     -- JSON event data
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Indexes for event queries
+    CREATE INDEX IF NOT EXISTS idx_knowledge_events_type ON knowledge_events(event_type);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_events_aggregate ON knowledge_events(aggregate_id);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_events_created ON knowledge_events(created_at);
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -710,6 +831,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v10: Add 'recovered' event type for session recovery");
         sqlx::raw_sql(MIGRATION_V10).execute(pool).await?;
         record_migration(pool, 10).await?;
+    }
+
+    if current_version < 11 {
+        tracing::info!("Applying migration v11: Knowledge graph for GraphRAG");
+        sqlx::raw_sql(MIGRATION_V11).execute(pool).await?;
+        record_migration(pool, 11).await?;
     }
 
     tracing::info!("Database migrations completed");
@@ -814,6 +941,11 @@ mod tests {
             "session_events",
             "project_search_settings",
             "cross_project_search_log",
+            "knowledge_entities",
+            "knowledge_relationships",
+            "entity_embeddings",
+            "skill_entity_links",
+            "knowledge_events",
         ];
 
         for table in tables {
