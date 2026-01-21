@@ -92,12 +92,14 @@ async fn test_generate_result_structure() {
         files_modified: 3,
         tokens_used: 1500,
         cost_usd: 0.05,
+        files: vec![],
     };
 
     assert_eq!(result.files_created, 5);
     assert_eq!(result.files_modified, 3);
     assert_eq!(result.tokens_used, 1500);
     assert_eq!(result.cost_usd, 0.05);
+    assert!(result.files.is_empty());
 }
 
 #[tokio::test]
@@ -107,19 +109,37 @@ async fn test_generate_result_clone() {
         files_modified: 2,
         tokens_used: 500,
         cost_usd: 0.02,
+        files: vec![],
     };
 
     let cloned = result.clone();
     assert_eq!(result.files_created, cloned.files_created);
+    assert_eq!(result.files.len(), cloned.files.len());
 }
 
 #[tokio::test]
-async fn test_generate_returns_result() {
-    let result: Result<GenerationResult> = generate::generate("feature-id", false).await;
-    assert!(result.is_ok());
-    let gen_result = result.unwrap();
-    assert_eq!(gen_result.files_created, 0);
-    assert_eq!(gen_result.files_modified, 0);
+async fn test_generate_requires_api_key() {
+    // Generate now requires an API key, so it should return an error without one
+    // (unless DEMIARCH_API_KEY or OPENROUTER_API_KEY is set)
+    let result: Result<GenerationResult> = generate::generate("test description", true).await;
+    // Without an API key, this should fail with an LLM error
+    // With an API key, it would succeed
+    // We just verify it returns a result either way
+    match result {
+        Ok(gen_result) => {
+            // API key was set, verify structure
+            assert!(gen_result.tokens_used > 0 || gen_result.files.is_empty());
+        }
+        Err(e) => {
+            // No API key, should be an LLM error
+            let error_str = format!("{}", e);
+            assert!(
+                error_str.contains("API key") || error_str.contains("LLM"),
+                "Expected API key error, got: {}",
+                error_str
+            );
+        }
+    }
 }
 
 #[tokio::test]

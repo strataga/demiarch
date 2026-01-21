@@ -1,7 +1,7 @@
 //! Demiarch CLI - local-first AI app builder
 
 use clap::{Parser, Subcommand};
-use demiarch_core::commands::{feature, project};
+use demiarch_core::commands::{feature, generate, project};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
 use demiarch_core::storage::{Database, DatabaseManager};
@@ -59,11 +59,11 @@ enum Commands {
         action: FeatureAction,
     },
 
-    /// Generate code for a feature
+    /// Generate code from a natural language description
     Generate {
-        /// Feature ID
-        feature_id: String,
-        /// Dry run (don't write files)
+        /// Natural language description of what to generate
+        description: String,
+        /// Dry run (preview without writing files)
         #[arg(short, long)]
         dry_run: bool,
     },
@@ -381,9 +381,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Features { action } => cmd_features(action, cli.quiet).await,
 
         Commands::Generate {
-            feature_id,
+            description,
             dry_run,
-        } => cmd_generate(&feature_id, dry_run, cli.quiet).await,
+        } => cmd_generate(&description, dry_run, cli.quiet).await,
 
         Commands::Skills { action } => cmd_skills(action, cli.quiet).await,
 
@@ -588,15 +588,53 @@ async fn cmd_features(action: FeatureAction, quiet: bool) -> anyhow::Result<()> 
     Ok(())
 }
 
-async fn cmd_generate(feature_id: &str, dry_run: bool, quiet: bool) -> anyhow::Result<()> {
+async fn cmd_generate(description: &str, dry_run: bool, quiet: bool) -> anyhow::Result<()> {
     if !quiet {
         if dry_run {
-            println!("Dry run: Would generate code for feature '{}'", feature_id);
+            println!("Dry run: Generating code for: {}", description);
         } else {
-            println!("Generating code for feature '{}'...", feature_id);
+            println!("Generating code for: {}", description);
         }
-        println!("(Code generation not yet implemented)");
+        println!();
     }
+
+    let result = generate::generate(description, dry_run)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    if !quiet {
+        println!("Generation complete!");
+        println!();
+        println!("  Files created: {}", result.files_created);
+        println!("  Files modified: {}", result.files_modified);
+        println!("  Tokens used: {}", result.tokens_used);
+        println!("  Estimated cost: ${:.4}", result.cost_usd);
+
+        if !result.files.is_empty() {
+            println!();
+            println!("Generated files:");
+            for file in &result.files {
+                let status = if file.is_new { "new" } else { "modified" };
+                let lang = file
+                    .language
+                    .as_ref()
+                    .map(|l| format!(" ({})", l))
+                    .unwrap_or_default();
+                if dry_run {
+                    println!("  [would create] {}{}", file.path.display(), lang);
+                } else {
+                    println!("  [{}] {}{}", status, file.path.display(), lang);
+                }
+            }
+        }
+
+        if dry_run {
+            println!();
+            println!("Dry run complete. No files were written.");
+            println!("Run without --dry-run to create the files.");
+        }
+    }
+
     Ok(())
 }
 
