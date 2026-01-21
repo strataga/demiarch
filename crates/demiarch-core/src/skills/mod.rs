@@ -10,6 +10,7 @@
 //! - **LearnedSkill**: The core data model representing extracted knowledge
 //! - **SkillExtractor**: LLM-assisted pattern recognition from agent results
 //! - **SkillStore**: Persistent storage and retrieval of skills
+//! - **SemanticSearch**: Vector-based similarity search for skill matching
 //!
 //! # Example
 //!
@@ -25,6 +26,10 @@
 //! for skill in skills {
 //!     store.save(&skill).await?;
 //! }
+//!
+//! // Semantic search for relevant skills
+//! let query_embedding = llm_client.embed("error handling in async code", None).await?;
+//! let results = store.semantic_search(&query_embedding.vector, "openai/text-embedding-3-small", 10, 0.5).await?;
 //! ```
 
 mod extractor;
@@ -32,7 +37,7 @@ mod store;
 mod types;
 
 pub use extractor::{ExtractionContext, SkillExtractor};
-pub use store::{SkillStats, SkillStore};
+pub use store::{EmbeddingStats, SemanticSearchResult, SkillEmbedding, SkillStats, SkillStore};
 pub use types::{
     LearnedSkill, PatternType, PatternVariable, SkillCategory, SkillConfidence, SkillMetadata,
     SkillPattern, SkillSource, SkillUsageStats,

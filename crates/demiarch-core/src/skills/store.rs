@@ -349,6 +349,318 @@ impl SkillStore {
                 .collect(),
         })
     }
+
+    /// Save an embedding for a skill
+    ///
+    /// Stores the vector embedding for semantic search. If an embedding already exists
+    /// for this skill and model, it will be updated.
+    pub async fn save_embedding(
+        &self,
+        skill_id: &str,
+        embedding: &[f32],
+        model: &str,
+        text_hash: &str,
+    ) -> Result<()> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let embedding_bytes: Vec<u8> = embedding
+            .iter()
+            .flat_map(|f| f.to_le_bytes())
+            .collect();
+        let dimensions = embedding.len() as i32;
+        let now = Utc::now().to_rfc3339();
+
+        sqlx::query(
+            r#"
+            INSERT INTO skill_embeddings (
+                id, skill_id, embedding_model, embedding_version, embedding,
+                dimensions, text_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)
+            ON CONFLICT(skill_id, embedding_model) DO UPDATE SET
+                embedding = excluded.embedding,
+                dimensions = excluded.dimensions,
+                text_hash = excluded.text_hash,
+                embedding_version = embedding_version + 1,
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(&id)
+        .bind(skill_id)
+        .bind(model)
+        .bind(&embedding_bytes)
+        .bind(dimensions)
+        .bind(text_hash)
+        .bind(&now)
+        .bind(&now)
+        .execute(&self.pool)
+        .await?;
+
+        debug!(skill_id = %skill_id, model = %model, dimensions = dimensions, "Skill embedding saved");
+        Ok(())
+    }
+
+    /// Get the embedding for a skill
+    pub async fn get_embedding(&self, skill_id: &str, model: &str) -> Result<Option<SkillEmbedding>> {
+        let row: Option<EmbeddingRow> = sqlx::query_as(
+            r#"
+            SELECT * FROM skill_embeddings
+            WHERE skill_id = ? AND embedding_model = ?
+            "#,
+        )
+        .bind(skill_id)
+        .bind(model)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| r.into_skill_embedding()))
+    }
+
+    /// Check if a skill has an embedding that matches the current text
+    pub async fn has_valid_embedding(&self, skill_id: &str, model: &str, text_hash: &str) -> Result<bool> {
+        let row: Option<(String,)> = sqlx::query_as(
+            r#"
+            SELECT text_hash FROM skill_embeddings
+            WHERE skill_id = ? AND embedding_model = ? AND text_hash = ?
+            "#,
+        )
+        .bind(skill_id)
+        .bind(model)
+        .bind(text_hash)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.is_some())
+    }
+
+    /// Perform semantic search using vector similarity
+    ///
+    /// Searches skills by computing cosine similarity between the query embedding
+    /// and stored skill embeddings. Returns skills ranked by similarity score.
+    pub async fn semantic_search(
+        &self,
+        query_embedding: &[f32],
+        model: &str,
+        limit: usize,
+        min_similarity: f32,
+    ) -> Result<Vec<SemanticSearchResult>> {
+        // Fetch all embeddings for the given model
+        let rows: Vec<EmbeddingRow> = sqlx::query_as(
+            r#"
+            SELECT * FROM skill_embeddings
+            WHERE embedding_model = ?
+            "#,
+        )
+        .bind(model)
+        .fetch_all(&self.pool)
+        .await?;
+
+        if rows.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Compute similarities and collect results
+        let mut results: Vec<(String, f32)> = rows
+            .into_iter()
+            .filter_map(|row| {
+                let embedding = row.into_skill_embedding();
+                let similarity = cosine_similarity(query_embedding, &embedding.embedding);
+                if similarity >= min_similarity {
+                    Some((embedding.skill_id, similarity))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by similarity (descending)
+        results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Take top results
+        results.truncate(limit);
+
+        // Fetch the actual skills
+        let mut search_results = Vec::with_capacity(results.len());
+        for (skill_id, similarity) in results {
+            if let Some(skill) = self.get(&skill_id).await? {
+                search_results.push(SemanticSearchResult { skill, similarity });
+            }
+        }
+
+        Ok(search_results)
+    }
+
+    /// Get skills that need embeddings generated
+    ///
+    /// Returns skills that either have no embedding or have outdated embeddings
+    /// (text has changed since embedding was generated).
+    pub async fn get_skills_needing_embeddings(&self, model: &str, limit: u32) -> Result<Vec<LearnedSkill>> {
+        let rows: Vec<SkillRow> = sqlx::query_as(
+            r#"
+            SELECT ls.* FROM learned_skills ls
+            LEFT JOIN skill_embeddings se ON ls.id = se.skill_id AND se.embedding_model = ?
+            WHERE se.id IS NULL
+            LIMIT ?
+            "#,
+        )
+        .bind(model)
+        .bind(limit as i32)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|r| r.into_learned_skill())
+            .collect()
+    }
+
+    /// Delete embedding for a skill
+    pub async fn delete_embedding(&self, skill_id: &str, model: &str) -> Result<bool> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM skill_embeddings
+            WHERE skill_id = ? AND embedding_model = ?
+            "#,
+        )
+        .bind(skill_id)
+        .bind(model)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Get embedding statistics
+    pub async fn embedding_stats(&self) -> Result<EmbeddingStats> {
+        let (total,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM skill_embeddings")
+            .fetch_one(&self.pool)
+            .await?;
+
+        let (skills_with_embeddings,): (i64,) =
+            sqlx::query_as("SELECT COUNT(DISTINCT skill_id) FROM skill_embeddings")
+                .fetch_one(&self.pool)
+                .await?;
+
+        let (total_skills,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM learned_skills")
+            .fetch_one(&self.pool)
+            .await?;
+
+        let models: Vec<(String, i64)> = sqlx::query_as(
+            r#"
+            SELECT embedding_model, COUNT(*) as count
+            FROM skill_embeddings
+            GROUP BY embedding_model
+            ORDER BY count DESC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(EmbeddingStats {
+            total_embeddings: total as u64,
+            skills_with_embeddings: skills_with_embeddings as u64,
+            total_skills: total_skills as u64,
+            coverage_percent: if total_skills > 0 {
+                (skills_with_embeddings as f64 / total_skills as f64) * 100.0
+            } else {
+                0.0
+            },
+            embeddings_by_model: models
+                .into_iter()
+                .map(|(model, count)| (model, count as u64))
+                .collect(),
+        })
+    }
+}
+
+/// Compute cosine similarity between two vectors
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() {
+        return 0.0;
+    }
+
+    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let magnitude_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let magnitude_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+    if magnitude_a == 0.0 || magnitude_b == 0.0 {
+        return 0.0;
+    }
+
+    dot_product / (magnitude_a * magnitude_b)
+}
+
+/// Result from semantic search
+#[derive(Debug, Clone)]
+pub struct SemanticSearchResult {
+    /// The matched skill
+    pub skill: LearnedSkill,
+    /// Similarity score (0.0 to 1.0)
+    pub similarity: f32,
+}
+
+/// Stored embedding for a skill
+#[derive(Debug, Clone)]
+pub struct SkillEmbedding {
+    /// ID of the skill this embedding belongs to
+    pub skill_id: String,
+    /// Model used to generate the embedding
+    pub model: String,
+    /// The embedding vector
+    pub embedding: Vec<f32>,
+    /// Dimensionality of the embedding
+    pub dimensions: usize,
+    /// Hash of the text that was embedded
+    pub text_hash: String,
+    /// Version number (incremented on updates)
+    pub version: u32,
+}
+
+/// Statistics about skill embeddings
+#[derive(Debug, Clone)]
+pub struct EmbeddingStats {
+    /// Total number of embeddings stored
+    pub total_embeddings: u64,
+    /// Number of skills that have at least one embedding
+    pub skills_with_embeddings: u64,
+    /// Total number of skills
+    pub total_skills: u64,
+    /// Percentage of skills with embeddings
+    pub coverage_percent: f64,
+    /// Embeddings grouped by model
+    pub embeddings_by_model: Vec<(String, u64)>,
+}
+
+/// Database row for skill_embeddings table
+#[derive(Debug, sqlx::FromRow)]
+#[allow(dead_code)]
+struct EmbeddingRow {
+    id: String,
+    skill_id: String,
+    embedding_model: String,
+    embedding_version: i32,
+    embedding: Vec<u8>,
+    dimensions: i32,
+    text_hash: String,
+    created_at: String,
+    updated_at: String,
+}
+
+impl EmbeddingRow {
+    fn into_skill_embedding(self) -> SkillEmbedding {
+        // Convert bytes back to f32 vector
+        let embedding: Vec<f32> = self
+            .embedding
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+
+        SkillEmbedding {
+            skill_id: self.skill_id,
+            model: self.embedding_model,
+            embedding,
+            dimensions: self.dimensions as usize,
+            text_hash: self.text_hash,
+            version: self.embedding_version as u32,
+        }
+    }
 }
 
 /// Statistics about stored skills
@@ -656,5 +968,262 @@ mod tests {
         assert_eq!(retrieved.description, "Updated description");
 
         assert_eq!(store.count().await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_save_and_get_embedding() {
+        let store = setup_test_db().await;
+        let skill = create_test_skill("Embedding Test");
+        let id = skill.id.clone();
+        store.save(&skill).await.unwrap();
+
+        // Create a test embedding
+        let embedding = vec![0.1, 0.2, 0.3, 0.4, 0.5];
+        let model = "test-model";
+        let text_hash = "abc123";
+
+        store
+            .save_embedding(&id, &embedding, model, text_hash)
+            .await
+            .unwrap();
+
+        let retrieved = store.get_embedding(&id, model).await.unwrap();
+        assert!(retrieved.is_some());
+
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.skill_id, id);
+        assert_eq!(retrieved.model, model);
+        assert_eq!(retrieved.embedding.len(), 5);
+        assert!((retrieved.embedding[0] - 0.1).abs() < 0.001);
+        assert_eq!(retrieved.text_hash, text_hash);
+    }
+
+    #[tokio::test]
+    async fn test_embedding_upsert() {
+        let store = setup_test_db().await;
+        let skill = create_test_skill("Embedding Upsert Test");
+        let id = skill.id.clone();
+        store.save(&skill).await.unwrap();
+
+        let model = "test-model";
+
+        // Save initial embedding
+        let embedding1 = vec![0.1, 0.2, 0.3];
+        store
+            .save_embedding(&id, &embedding1, model, "hash1")
+            .await
+            .unwrap();
+
+        // Update embedding
+        let embedding2 = vec![0.4, 0.5, 0.6];
+        store
+            .save_embedding(&id, &embedding2, model, "hash2")
+            .await
+            .unwrap();
+
+        let retrieved = store.get_embedding(&id, model).await.unwrap().unwrap();
+        assert!((retrieved.embedding[0] - 0.4).abs() < 0.001);
+        assert_eq!(retrieved.text_hash, "hash2");
+        assert!(retrieved.version >= 2);
+    }
+
+    #[tokio::test]
+    async fn test_has_valid_embedding() {
+        let store = setup_test_db().await;
+        let skill = create_test_skill("Valid Embedding Test");
+        let id = skill.id.clone();
+        store.save(&skill).await.unwrap();
+
+        let model = "test-model";
+        let embedding = vec![0.1, 0.2, 0.3];
+
+        store
+            .save_embedding(&id, &embedding, model, "correct_hash")
+            .await
+            .unwrap();
+
+        assert!(store.has_valid_embedding(&id, model, "correct_hash").await.unwrap());
+        assert!(!store.has_valid_embedding(&id, model, "wrong_hash").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_semantic_search() {
+        let store = setup_test_db().await;
+        let model = "test-model";
+
+        // Create skills with embeddings
+        let skill1 = create_test_skill("Error Handling");
+        let skill2 = create_test_skill("Async Patterns");
+        let skill3 = create_test_skill("Database Queries");
+
+        store.save(&skill1).await.unwrap();
+        store.save(&skill2).await.unwrap();
+        store.save(&skill3).await.unwrap();
+
+        // Create embeddings - skill1 and query will be similar
+        // skill2 will be somewhat similar, skill3 will be different
+        let emb1 = vec![1.0, 0.0, 0.0]; // Points along x-axis
+        let emb2 = vec![0.7, 0.7, 0.0]; // 45 degrees from x-axis
+        let emb3 = vec![0.0, 0.0, 1.0]; // Points along z-axis (orthogonal)
+
+        store.save_embedding(&skill1.id, &emb1, model, "h1").await.unwrap();
+        store.save_embedding(&skill2.id, &emb2, model, "h2").await.unwrap();
+        store.save_embedding(&skill3.id, &emb3, model, "h3").await.unwrap();
+
+        // Query similar to skill1
+        let query = vec![0.9, 0.1, 0.0];
+
+        let results = store
+            .semantic_search(&query, model, 10, 0.0)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 3);
+
+        // skill1 should be most similar
+        assert_eq!(results[0].skill.id, skill1.id);
+        assert!(results[0].similarity > 0.9);
+
+        // skill2 should be second
+        assert_eq!(results[1].skill.id, skill2.id);
+
+        // skill3 should be least similar (near 0)
+        assert_eq!(results[2].skill.id, skill3.id);
+        assert!(results[2].similarity < 0.2);
+    }
+
+    #[tokio::test]
+    async fn test_semantic_search_with_min_similarity() {
+        let store = setup_test_db().await;
+        let model = "test-model";
+
+        let skill1 = create_test_skill("Similar Skill");
+        let skill2 = create_test_skill("Different Skill");
+
+        store.save(&skill1).await.unwrap();
+        store.save(&skill2).await.unwrap();
+
+        let emb1 = vec![1.0, 0.0, 0.0];
+        let emb2 = vec![0.0, 1.0, 0.0]; // Orthogonal
+
+        store.save_embedding(&skill1.id, &emb1, model, "h1").await.unwrap();
+        store.save_embedding(&skill2.id, &emb2, model, "h2").await.unwrap();
+
+        let query = vec![1.0, 0.0, 0.0];
+
+        // With high min_similarity, only skill1 should match
+        let results = store
+            .semantic_search(&query, model, 10, 0.5)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].skill.id, skill1.id);
+    }
+
+    #[tokio::test]
+    async fn test_get_skills_needing_embeddings() {
+        let store = setup_test_db().await;
+        let model = "test-model";
+
+        let skill1 = create_test_skill("With Embedding");
+        let skill2 = create_test_skill("Without Embedding");
+
+        store.save(&skill1).await.unwrap();
+        store.save(&skill2).await.unwrap();
+
+        // Only skill1 has an embedding
+        let embedding = vec![0.1, 0.2, 0.3];
+        store
+            .save_embedding(&skill1.id, &embedding, model, "hash")
+            .await
+            .unwrap();
+
+        let needing = store.get_skills_needing_embeddings(model, 10).await.unwrap();
+
+        assert_eq!(needing.len(), 1);
+        assert_eq!(needing[0].id, skill2.id);
+    }
+
+    #[tokio::test]
+    async fn test_delete_embedding() {
+        let store = setup_test_db().await;
+        let skill = create_test_skill("Delete Embedding Test");
+        let id = skill.id.clone();
+        store.save(&skill).await.unwrap();
+
+        let model = "test-model";
+        let embedding = vec![0.1, 0.2, 0.3];
+        store
+            .save_embedding(&id, &embedding, model, "hash")
+            .await
+            .unwrap();
+
+        assert!(store.get_embedding(&id, model).await.unwrap().is_some());
+
+        let deleted = store.delete_embedding(&id, model).await.unwrap();
+        assert!(deleted);
+
+        assert!(store.get_embedding(&id, model).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_embedding_stats() {
+        let store = setup_test_db().await;
+
+        // Create skills
+        let skill1 = create_test_skill("Skill 1");
+        let skill2 = create_test_skill("Skill 2");
+        let skill3 = create_test_skill("Skill 3");
+
+        store.save(&skill1).await.unwrap();
+        store.save(&skill2).await.unwrap();
+        store.save(&skill3).await.unwrap();
+
+        // Add embeddings for 2 skills
+        let embedding = vec![0.1, 0.2, 0.3];
+        store
+            .save_embedding(&skill1.id, &embedding, "model-a", "hash")
+            .await
+            .unwrap();
+        store
+            .save_embedding(&skill2.id, &embedding, "model-a", "hash")
+            .await
+            .unwrap();
+        store
+            .save_embedding(&skill1.id, &embedding, "model-b", "hash")
+            .await
+            .unwrap();
+
+        let stats = store.embedding_stats().await.unwrap();
+
+        assert_eq!(stats.total_embeddings, 3);
+        assert_eq!(stats.skills_with_embeddings, 2);
+        assert_eq!(stats.total_skills, 3);
+        assert!((stats.coverage_percent - 66.666).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_cosine_similarity() {
+        // Identical vectors
+        let a = vec![1.0, 0.0, 0.0];
+        let b = vec![1.0, 0.0, 0.0];
+        assert!((cosine_similarity(&a, &b) - 1.0).abs() < 0.001);
+
+        // Orthogonal vectors
+        let c = vec![0.0, 1.0, 0.0];
+        assert!(cosine_similarity(&a, &c).abs() < 0.001);
+
+        // Opposite vectors
+        let d = vec![-1.0, 0.0, 0.0];
+        assert!((cosine_similarity(&a, &d) + 1.0).abs() < 0.001);
+
+        // Different lengths
+        let e = vec![1.0, 0.0];
+        assert_eq!(cosine_similarity(&a, &e), 0.0);
+
+        // Zero vectors
+        let f = vec![0.0, 0.0, 0.0];
+        assert_eq!(cosine_similarity(&a, &f), 0.0);
     }
 }

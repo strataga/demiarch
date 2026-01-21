@@ -218,6 +218,155 @@ impl LlmResponse {
     }
 }
 
+/// Request body for embeddings
+#[derive(Debug, Clone, Serialize)]
+pub struct EmbeddingRequest {
+    /// Model identifier for embeddings (e.g., "openai/text-embedding-3-small")
+    pub model: String,
+    /// Input text(s) to embed
+    pub input: EmbeddingInput,
+    /// Output dimensions (if model supports it)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dimensions: Option<usize>,
+}
+
+/// Input for embedding requests (single or batch)
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+pub enum EmbeddingInput {
+    /// Single text input
+    Single(String),
+    /// Batch of text inputs
+    Batch(Vec<String>),
+}
+
+impl EmbeddingRequest {
+    /// Create a new embedding request for a single text
+    pub fn new(model: impl Into<String>, input: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            input: EmbeddingInput::Single(input.into()),
+            dimensions: None,
+        }
+    }
+
+    /// Create a batch embedding request
+    pub fn batch(model: impl Into<String>, inputs: Vec<String>) -> Self {
+        Self {
+            model: model.into(),
+            input: EmbeddingInput::Batch(inputs),
+            dimensions: None,
+        }
+    }
+
+    /// Set output dimensions
+    pub fn with_dimensions(mut self, dimensions: usize) -> Self {
+        self.dimensions = Some(dimensions);
+        self
+    }
+}
+
+/// A single embedding from the API response
+#[derive(Debug, Clone, Deserialize)]
+pub struct EmbeddingData {
+    /// Index of this embedding in the batch
+    pub index: usize,
+    /// The embedding vector
+    pub embedding: Vec<f32>,
+    /// Object type (always "embedding")
+    pub object: String,
+}
+
+/// Usage information for embeddings
+#[derive(Debug, Clone, Deserialize)]
+pub struct EmbeddingUsage {
+    /// Number of tokens in the prompt
+    pub prompt_tokens: u32,
+    /// Total tokens (same as prompt for embeddings)
+    #[serde(default)]
+    pub total_tokens: u32,
+}
+
+/// Response from the embeddings API
+#[derive(Debug, Clone, Deserialize)]
+pub struct EmbeddingResponse {
+    /// Object type (always "list")
+    pub object: String,
+    /// List of embeddings
+    pub data: Vec<EmbeddingData>,
+    /// Model used for the embeddings
+    pub model: String,
+    /// Token usage information
+    pub usage: Option<EmbeddingUsage>,
+}
+
+/// Simplified embedding result returned by the LLM client
+#[derive(Debug, Clone)]
+pub struct Embedding {
+    /// The embedding vector
+    pub vector: Vec<f32>,
+    /// Model that generated the embedding
+    pub model: String,
+    /// Tokens used
+    pub tokens_used: u32,
+}
+
+impl Embedding {
+    /// Get the dimensionality of the embedding
+    pub fn dimensions(&self) -> usize {
+        self.vector.len()
+    }
+
+    /// Compute cosine similarity with another embedding
+    pub fn cosine_similarity(&self, other: &Embedding) -> f32 {
+        if self.vector.len() != other.vector.len() {
+            return 0.0;
+        }
+
+        let dot_product: f32 = self
+            .vector
+            .iter()
+            .zip(other.vector.iter())
+            .map(|(a, b)| a * b)
+            .sum();
+
+        let magnitude_a: f32 = self.vector.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let magnitude_b: f32 = other.vector.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+        if magnitude_a == 0.0 || magnitude_b == 0.0 {
+            return 0.0;
+        }
+
+        dot_product / (magnitude_a * magnitude_b)
+    }
+
+    /// Serialize embedding vector to bytes for storage
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.vector
+            .iter()
+            .flat_map(|f| f.to_le_bytes())
+            .collect()
+    }
+
+    /// Deserialize embedding vector from bytes
+    pub fn from_bytes(bytes: &[u8], model: String) -> Option<Self> {
+        if bytes.len() % 4 != 0 {
+            return None;
+        }
+
+        let vector: Vec<f32> = bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+
+        Some(Self {
+            vector,
+            model,
+            tokens_used: 0,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,5 +481,118 @@ mod tests {
         assert_eq!(llm_response.input_tokens, 10);
         assert_eq!(llm_response.output_tokens, 5);
         assert_eq!(llm_response.finish_reason, FinishReason::Stop);
+    }
+
+    #[test]
+    fn test_embedding_request_creation() {
+        let request = EmbeddingRequest::new("openai/text-embedding-3-small", "Hello, world!");
+
+        assert_eq!(request.model, "openai/text-embedding-3-small");
+        match request.input {
+            EmbeddingInput::Single(text) => assert_eq!(text, "Hello, world!"),
+            _ => panic!("Expected single input"),
+        }
+    }
+
+    #[test]
+    fn test_embedding_batch_request() {
+        let inputs = vec!["Hello".to_string(), "World".to_string()];
+        let request = EmbeddingRequest::batch("openai/text-embedding-3-small", inputs);
+
+        match request.input {
+            EmbeddingInput::Batch(texts) => {
+                assert_eq!(texts.len(), 2);
+                assert_eq!(texts[0], "Hello");
+                assert_eq!(texts[1], "World");
+            }
+            _ => panic!("Expected batch input"),
+        }
+    }
+
+    #[test]
+    fn test_embedding_cosine_similarity() {
+        let emb1 = Embedding {
+            vector: vec![1.0, 0.0, 0.0],
+            model: "test".to_string(),
+            tokens_used: 0,
+        };
+
+        let emb2 = Embedding {
+            vector: vec![1.0, 0.0, 0.0],
+            model: "test".to_string(),
+            tokens_used: 0,
+        };
+
+        // Identical vectors should have similarity 1.0
+        let sim = emb1.cosine_similarity(&emb2);
+        assert!((sim - 1.0).abs() < 0.001);
+
+        let emb3 = Embedding {
+            vector: vec![0.0, 1.0, 0.0],
+            model: "test".to_string(),
+            tokens_used: 0,
+        };
+
+        // Orthogonal vectors should have similarity 0.0
+        let sim = emb1.cosine_similarity(&emb3);
+        assert!(sim.abs() < 0.001);
+
+        let emb4 = Embedding {
+            vector: vec![-1.0, 0.0, 0.0],
+            model: "test".to_string(),
+            tokens_used: 0,
+        };
+
+        // Opposite vectors should have similarity -1.0
+        let sim = emb1.cosine_similarity(&emb4);
+        assert!((sim + 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_embedding_serialization() {
+        let emb = Embedding {
+            vector: vec![1.0, 2.0, 3.0, 4.0],
+            model: "test".to_string(),
+            tokens_used: 0,
+        };
+
+        let bytes = emb.to_bytes();
+        assert_eq!(bytes.len(), 16); // 4 floats * 4 bytes each
+
+        let restored = Embedding::from_bytes(&bytes, "test".to_string()).unwrap();
+        assert_eq!(restored.vector, emb.vector);
+    }
+
+    #[test]
+    fn test_embedding_dimensions() {
+        let emb = Embedding {
+            vector: vec![0.0; 1536],
+            model: "test".to_string(),
+            tokens_used: 0,
+        };
+
+        assert_eq!(emb.dimensions(), 1536);
+    }
+
+    #[test]
+    fn test_embedding_response_deserialization() {
+        let json = r#"{
+            "object": "list",
+            "data": [{
+                "index": 0,
+                "embedding": [0.1, 0.2, 0.3],
+                "object": "embedding"
+            }],
+            "model": "text-embedding-3-small",
+            "usage": {
+                "prompt_tokens": 5,
+                "total_tokens": 5
+            }
+        }"#;
+
+        let response: EmbeddingResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].embedding, vec![0.1, 0.2, 0.3]);
+        assert_eq!(response.model, "text-embedding-3-small");
     }
 }

@@ -446,7 +446,162 @@ impl LlmClient {
 
         total_chars / 4
     }
+
+    /// Generate an embedding for a single text
+    ///
+    /// Uses the embeddings API to generate a vector representation of the input text.
+    /// This is useful for semantic search and similarity comparisons.
+    pub async fn embed(&self, text: &str, model: Option<&str>) -> Result<super::types::Embedding> {
+        let model = model.unwrap_or(DEFAULT_EMBEDDING_MODEL);
+
+        let request = super::types::EmbeddingRequest::new(model, text);
+        self.execute_embedding_request(&request).await
+    }
+
+    /// Generate embeddings for multiple texts in a batch
+    ///
+    /// More efficient than calling embed() multiple times for related texts.
+    pub async fn embed_batch(
+        &self,
+        texts: Vec<String>,
+        model: Option<&str>,
+    ) -> Result<Vec<super::types::Embedding>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let model = model.unwrap_or(DEFAULT_EMBEDDING_MODEL);
+
+        let request = super::types::EmbeddingRequest::batch(model, texts);
+        self.execute_batch_embedding_request(&request).await
+    }
+
+    /// Execute an embedding request
+    async fn execute_embedding_request(
+        &self,
+        request: &super::types::EmbeddingRequest,
+    ) -> Result<super::types::Embedding> {
+        let url = format!("{}/embeddings", self.base_url);
+
+        debug!(
+            model = %request.model,
+            "Sending embedding request"
+        );
+
+        let response = self
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .header("HTTP-Referer", "https://github.com/jasonjmcghee/demiarch")
+            .header("X-Title", "Demiarch")
+            .json(request)
+            .send()
+            .await
+            .map_err(Error::NetworkError)?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            return self.handle_error_response(status, response).await;
+        }
+
+        let embedding_response: super::types::EmbeddingResponse = response
+            .json()
+            .await
+            .map_err(|e| Error::EmbeddingFailed(format!("Failed to parse response: {}", e)))?;
+
+        let data = embedding_response
+            .data
+            .into_iter()
+            .next()
+            .ok_or_else(|| Error::EmbeddingFailed("Empty embedding response".to_string()))?;
+
+        let tokens_used = embedding_response
+            .usage
+            .map(|u| u.prompt_tokens)
+            .unwrap_or(0);
+
+        // Record cost if tracker is configured
+        if let Some(tracker) = &self.cost_tracker {
+            tracker.record(
+                &embedding_response.model,
+                crate::cost::TokenUsage::new(tokens_used, 0),
+                None,
+            );
+        }
+
+        Ok(super::types::Embedding {
+            vector: data.embedding,
+            model: embedding_response.model,
+            tokens_used,
+        })
+    }
+
+    /// Execute a batch embedding request
+    async fn execute_batch_embedding_request(
+        &self,
+        request: &super::types::EmbeddingRequest,
+    ) -> Result<Vec<super::types::Embedding>> {
+        let url = format!("{}/embeddings", self.base_url);
+
+        debug!(
+            model = %request.model,
+            "Sending batch embedding request"
+        );
+
+        let response = self
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .header("HTTP-Referer", "https://github.com/jasonjmcghee/demiarch")
+            .header("X-Title", "Demiarch")
+            .json(request)
+            .send()
+            .await
+            .map_err(Error::NetworkError)?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            return self.handle_error_response(status, response).await;
+        }
+
+        let embedding_response: super::types::EmbeddingResponse = response
+            .json()
+            .await
+            .map_err(|e| Error::EmbeddingFailed(format!("Failed to parse response: {}", e)))?;
+
+        let tokens_used = embedding_response
+            .usage
+            .map(|u| u.prompt_tokens)
+            .unwrap_or(0);
+
+        // Record cost if tracker is configured
+        if let Some(tracker) = &self.cost_tracker {
+            tracker.record(
+                &embedding_response.model,
+                crate::cost::TokenUsage::new(tokens_used, 0),
+                None,
+            );
+        }
+
+        // Sort by index to maintain order
+        let mut data = embedding_response.data;
+        data.sort_by_key(|d| d.index);
+
+        Ok(data
+            .into_iter()
+            .map(|d| super::types::Embedding {
+                vector: d.embedding,
+                model: embedding_response.model.clone(),
+                tokens_used: 0, // Individual token count not available
+            })
+            .collect())
+    }
 }
+
+/// Default embedding model (cost-effective with good quality)
+const DEFAULT_EMBEDDING_MODEL: &str = "openai/text-embedding-3-small";
 
 /// Check if an error message indicates a model-specific error
 fn is_model_error(msg: &str) -> bool {

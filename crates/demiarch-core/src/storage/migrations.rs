@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 6;
+pub const CURRENT_VERSION: i32 = 7;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -367,6 +367,54 @@ const MIGRATION_V6: &str = r#"
     END;
 "#;
 
+/// Migration 7: Semantic search embeddings for skills
+///
+/// Adds vector embeddings to learned skills for semantic similarity search.
+/// Embeddings are stored as BLOB (binary float arrays) for compact storage.
+/// A separate embeddings table allows for multiple embedding types/models.
+const MIGRATION_V7: &str = r#"
+    -- Skill embeddings table for semantic search
+    CREATE TABLE IF NOT EXISTS skill_embeddings (
+        id TEXT PRIMARY KEY NOT NULL,
+        skill_id TEXT NOT NULL REFERENCES learned_skills(id) ON DELETE CASCADE,
+        embedding_model TEXT NOT NULL,           -- Model used (e.g., "openai/text-embedding-3-small")
+        embedding_version INTEGER NOT NULL DEFAULT 1,  -- Version for model updates
+        embedding BLOB NOT NULL,                 -- Binary float array (f32 little-endian)
+        dimensions INTEGER NOT NULL,             -- Vector dimensions (e.g., 1536)
+        text_hash TEXT NOT NULL,                 -- Hash of embedded text for cache invalidation
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(skill_id, embedding_model)
+    );
+
+    -- Indexes for efficient querying
+    CREATE INDEX IF NOT EXISTS idx_skill_embeddings_skill_id ON skill_embeddings(skill_id);
+    CREATE INDEX IF NOT EXISTS idx_skill_embeddings_model ON skill_embeddings(embedding_model);
+    CREATE INDEX IF NOT EXISTS idx_skill_embeddings_text_hash ON skill_embeddings(text_hash);
+
+    -- Add embedding_text column to learned_skills for caching the searchable text
+    -- This combines name + description + tags for embedding generation
+    ALTER TABLE learned_skills ADD COLUMN embedding_text TEXT;
+
+    -- Trigger to regenerate embedding_text when skill is updated
+    CREATE TRIGGER IF NOT EXISTS learned_skills_embedding_text_update
+    AFTER UPDATE OF name, description, tags ON learned_skills
+    BEGIN
+        UPDATE learned_skills
+        SET embedding_text = NEW.name || ' ' || NEW.description || ' ' || COALESCE(NEW.tags, '')
+        WHERE id = NEW.id;
+    END;
+
+    -- Trigger to set embedding_text on insert
+    CREATE TRIGGER IF NOT EXISTS learned_skills_embedding_text_insert
+    AFTER INSERT ON learned_skills
+    BEGIN
+        UPDATE learned_skills
+        SET embedding_text = NEW.name || ' ' || NEW.description || ' ' || COALESCE(NEW.tags, '')
+        WHERE id = NEW.id;
+    END;
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -439,6 +487,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v6: Learned skills system");
         sqlx::raw_sql(MIGRATION_V6).execute(pool).await?;
         record_migration(pool, 6).await?;
+    }
+
+    if current_version < 7 {
+        tracing::info!("Applying migration v7: Semantic search embeddings");
+        sqlx::raw_sql(MIGRATION_V7).execute(pool).await?;
+        record_migration(pool, 7).await?;
     }
 
     tracing::info!("Database migrations completed");
@@ -538,6 +592,7 @@ mod tests {
             "feature_extraction_history",
             "generated_files",
             "learned_skills",
+            "skill_embeddings",
         ];
 
         for table in tables {
