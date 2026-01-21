@@ -5,7 +5,9 @@ use demiarch_core::commands::{checkpoint, document, feature, generate, project};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
 use demiarch_core::domain::locking::{LockConfig, LockManager};
-use demiarch_core::domain::session::{SessionManager, SessionStatus, ShutdownConfig, ShutdownHandler};
+use demiarch_core::domain::session::{
+    SessionManager, SessionStatus, ShutdownConfig, ShutdownHandler,
+};
 use demiarch_core::storage::{Database, DatabaseManager};
 use demiarch_core::visualization::{HierarchyTree, NodeStyle, RenderOptions, TreeBuilder};
 use std::sync::Arc;
@@ -1908,8 +1910,12 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
     match action {
         SessionAction::List { status, limit } => {
             let sessions = if let Some(status_str) = status {
-                let status = SessionStatus::from_str(&status_str)
-                    .ok_or_else(|| anyhow::anyhow!("Invalid status: {}. Use: active, paused, completed, abandoned", status_str))?;
+                let status = SessionStatus::parse(&status_str).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Invalid status: {}. Use: active, paused, completed, abandoned",
+                        status_str
+                    )
+                })?;
                 manager.list_by_status(status).await?
             } else {
                 manager.list(limit).await?
@@ -1967,15 +1973,27 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
             if let Some(checkpoint_id) = session.last_checkpoint_id {
                 println!("  Last Checkpoint: {}", checkpoint_id);
             }
-            println!("  Created: {}", session.created_at.format("%Y-%m-%d %H:%M:%S"));
-            println!("  Last Activity: {}", session.last_activity.format("%Y-%m-%d %H:%M:%S"));
+            println!(
+                "  Created: {}",
+                session.created_at.format("%Y-%m-%d %H:%M:%S")
+            );
+            println!(
+                "  Last Activity: {}",
+                session.last_activity.format("%Y-%m-%d %H:%M:%S")
+            );
             let duration = format_duration(session.duration());
             println!("  Duration: {}", duration);
         }
 
-        SessionAction::Start { project, description } => {
+        SessionAction::Start {
+            project,
+            description,
+        } => {
             let project_id = if let Some(p) = project {
-                Some(Uuid::parse_str(&p).map_err(|_| anyhow::anyhow!("Invalid project ID: {}", p))?)
+                Some(
+                    Uuid::parse_str(&p)
+                        .map_err(|_| anyhow::anyhow!("Invalid project ID: {}", p))?,
+                )
             } else {
                 None
             };
@@ -2009,7 +2027,10 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
 
             if !quiet {
                 println!("Session paused: {}", session.id);
-                println!("\nResume with: demiarch sessions resume {}", &session.id.to_string()[..8]);
+                println!(
+                    "\nResume with: demiarch sessions resume {}",
+                    &session.id.to_string()[..8]
+                );
             }
         }
 
@@ -2060,29 +2081,27 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
             }
         }
 
-        SessionAction::Current => {
-            match manager.get_active().await? {
-                Some(session) => {
-                    println!("Current session: {}", session.id);
-                    println!("  Status: {}", session.status);
-                    println!("  Phase: {}", session.phase);
-                    if let Some(desc) = &session.description {
-                        println!("  Description: {}", desc);
-                    }
-                    if let Some(project_id) = session.current_project_id {
-                        println!("  Project: {}", project_id);
-                    }
-                    let duration = format_duration(session.duration());
-                    println!("  Duration: {}", duration);
+        SessionAction::Current => match manager.get_active().await? {
+            Some(session) => {
+                println!("Current session: {}", session.id);
+                println!("  Status: {}", session.status);
+                println!("  Phase: {}", session.phase);
+                if let Some(desc) = &session.description {
+                    println!("  Description: {}", desc);
                 }
-                None => {
-                    if !quiet {
-                        println!("No active session.");
-                        println!("\nStart one with: demiarch sessions start");
-                    }
+                if let Some(project_id) = session.current_project_id {
+                    println!("  Project: {}", project_id);
+                }
+                let duration = format_duration(session.duration());
+                println!("  Duration: {}", duration);
+            }
+            None => {
+                if !quiet {
+                    println!("No active session.");
+                    println!("\nStart one with: demiarch sessions start");
                 }
             }
-        }
+        },
 
         SessionAction::Stats => {
             let stats = manager.stats().await?;
@@ -2123,7 +2142,11 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
             }
         }
 
-        SessionAction::Cleanup { days, events, event_days } => {
+        SessionAction::Cleanup {
+            days,
+            events,
+            event_days,
+        } => {
             let summary = if events {
                 // Run full cleanup including events
                 manager.full_cleanup(days, event_days).await?
@@ -2147,7 +2170,11 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
             }
         }
 
-        SessionAction::End { abandon, cleanup, cleanup_days } => {
+        SessionAction::End {
+            abandon,
+            cleanup,
+            cleanup_days,
+        } => {
             // Create lock manager for shutdown handler
             let lock_dir = dirs::config_dir()
                 .unwrap_or_default()
@@ -2164,12 +2191,7 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
                 ShutdownConfig::quick()
             };
 
-            let handler = ShutdownHandler::new(
-                manager.clone(),
-                lock_manager,
-                db.clone(),
-                config,
-            );
+            let handler = ShutdownHandler::new(manager.clone(), lock_manager, db.clone(), config);
 
             // Perform shutdown
             let result = if abandon {
@@ -2191,7 +2213,10 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
                 }
 
                 if result.sessions_cleaned > 0 || result.events_cleaned > 0 {
-                    println!("  Cleaned up {} sessions, {} events", result.sessions_cleaned, result.events_cleaned);
+                    println!(
+                        "  Cleaned up {} sessions, {} events",
+                        result.sessions_cleaned, result.events_cleaned
+                    );
                 }
 
                 if result.has_warnings() {

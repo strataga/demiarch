@@ -6,7 +6,9 @@
 
 use super::event::SessionEvent;
 use super::manager::SessionManager;
-use super::session::{RecoveryInfo, RecoveryResult, Session, SessionInfo, SessionPhase, SessionStatus};
+use super::session::{
+    RecoveryInfo, RecoveryResult, Session, SessionInfo, SessionPhase, SessionStatus,
+};
 use crate::domain::locking::{LockConfig, LockManager, SessionLockGuard};
 use crate::error::{Error, Result};
 use sqlx::SqlitePool;
@@ -266,7 +268,9 @@ impl LockedSessionManager {
         let _lock = self
             .acquire_session_lock(session_id, "record-checkpoint")
             .await?;
-        self.inner.record_checkpoint(session_id, checkpoint_id).await
+        self.inner
+            .record_checkpoint(session_id, checkpoint_id)
+            .await
     }
 
     /// Record an error in the session (no lock needed for append-only)
@@ -387,7 +391,10 @@ impl LockedSessionManager {
         f: F,
     ) -> Result<T>
     where
-        F: FnOnce(&SessionManager) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + '_>>
+        F: FnOnce(
+                &SessionManager,
+            )
+                -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + '_>>
             + Send,
         T: Send,
     {
@@ -500,10 +507,7 @@ mod tests {
         let session = manager.create(None, None, None).await.unwrap();
 
         // Switch to no project (clearing) - doesn't require existing project
-        let updated = manager
-            .switch_project(session.id, None)
-            .await
-            .unwrap();
+        let updated = manager.switch_project(session.id, None).await.unwrap();
 
         assert_eq!(updated.current_project_id, None);
     }
@@ -535,7 +539,10 @@ mod tests {
         let all = manager.list(None).await.unwrap();
         assert_eq!(all.len(), 2);
 
-        let completed = manager.list_by_status(SessionStatus::Completed).await.unwrap();
+        let completed = manager
+            .list_by_status(SessionStatus::Completed)
+            .await
+            .unwrap();
         assert_eq!(completed.len(), 1);
     }
 

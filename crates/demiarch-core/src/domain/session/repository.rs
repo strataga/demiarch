@@ -195,7 +195,9 @@ impl SessionRepository {
         .await
         .map_err(Error::DatabaseError)?;
 
-        rows.into_iter().map(|row| row.into_session_info()).collect()
+        rows.into_iter()
+            .map(|row| row.into_session_info())
+            .collect()
     }
 
     /// List sessions by status
@@ -213,7 +215,9 @@ impl SessionRepository {
         .await
         .map_err(Error::DatabaseError)?;
 
-        rows.into_iter().map(|row| row.into_session_info()).collect()
+        rows.into_iter()
+            .map(|row| row.into_session_info())
+            .collect()
     }
 
     /// List sessions for a specific project
@@ -233,7 +237,9 @@ impl SessionRepository {
         .await
         .map_err(Error::DatabaseError)?;
 
-        rows.into_iter().map(|row| row.into_session_info()).collect()
+        rows.into_iter()
+            .map(|row| row.into_session_info())
+            .collect()
     }
 
     /// Delete a session by ID
@@ -310,7 +316,11 @@ impl SessionRepository {
     }
 
     /// Get events for a session
-    pub async fn get_events(&self, session_id: Uuid, limit: Option<i32>) -> Result<Vec<SessionEvent>> {
+    pub async fn get_events(
+        &self,
+        session_id: Uuid,
+        limit: Option<i32>,
+    ) -> Result<Vec<SessionEvent>> {
         let session_id_str = session_id.to_string();
         let limit = limit.unwrap_or(100);
 
@@ -486,9 +496,9 @@ impl SessionRow {
             .map(|c| Uuid::parse_str(&c))
             .transpose()
             .map_err(|e| Error::Parse(format!("Invalid checkpoint ID: {}", e)))?;
-        let status = SessionStatus::from_str(&self.status)
+        let status = SessionStatus::parse(&self.status)
             .ok_or_else(|| Error::Parse(format!("Invalid session status: {}", self.status)))?;
-        let phase = SessionPhase::from_str(&self.phase)
+        let phase = SessionPhase::parse(&self.phase)
             .ok_or_else(|| Error::Parse(format!("Invalid session phase: {}", self.phase)))?;
         let metadata = self
             .metadata
@@ -533,9 +543,9 @@ impl SessionInfoRow {
             .map(|p| Uuid::parse_str(&p))
             .transpose()
             .map_err(|e| Error::Parse(format!("Invalid project ID: {}", e)))?;
-        let status = SessionStatus::from_str(&self.status)
+        let status = SessionStatus::parse(&self.status)
             .ok_or_else(|| Error::Parse(format!("Invalid session status: {}", self.status)))?;
-        let phase = SessionPhase::from_str(&self.phase)
+        let phase = SessionPhase::parse(&self.phase)
             .ok_or_else(|| Error::Parse(format!("Invalid session phase: {}", self.phase)))?;
 
         Ok(SessionInfo {
@@ -566,7 +576,7 @@ impl SessionEventRow {
             .map_err(|e| Error::Parse(format!("Invalid event ID: {}", e)))?;
         let session_id = Uuid::parse_str(&self.session_id)
             .map_err(|e| Error::Parse(format!("Invalid session ID: {}", e)))?;
-        let event_type = SessionEventType::from_str(&self.event_type)
+        let event_type = SessionEventType::parse(&self.event_type)
             .ok_or_else(|| Error::Parse(format!("Invalid event type: {}", self.event_type)))?;
         let data = self
             .data
@@ -699,15 +709,25 @@ mod tests {
         // Create events
         let event1 = SessionEvent::started(session.id);
         let event2 = SessionEvent::paused(session.id);
-        repo.save_event(&event1).await.expect("Failed to save event");
-        repo.save_event(&event2).await.expect("Failed to save event");
+        repo.save_event(&event1)
+            .await
+            .expect("Failed to save event");
+        repo.save_event(&event2)
+            .await
+            .expect("Failed to save event");
 
         // Get events
-        let events = repo.get_events(session.id, None).await.expect("Failed to get events");
+        let events = repo
+            .get_events(session.id, None)
+            .await
+            .expect("Failed to get events");
         assert_eq!(events.len(), 2);
 
         // Count events
-        let count = repo.count_events(session.id).await.expect("Failed to count");
+        let count = repo
+            .count_events(session.id)
+            .await
+            .expect("Failed to count");
         assert_eq!(count, 2);
     }
 
@@ -720,10 +740,18 @@ mod tests {
         repo.save(&session).await.expect("Failed to save session");
 
         // Create events
-        repo.save_event(&SessionEvent::started(session.id)).await.unwrap();
-        repo.save_event(&SessionEvent::paused(session.id)).await.unwrap();
-        repo.save_event(&SessionEvent::resumed(session.id)).await.unwrap();
-        repo.save_event(&SessionEvent::paused(session.id)).await.unwrap();
+        repo.save_event(&SessionEvent::started(session.id))
+            .await
+            .unwrap();
+        repo.save_event(&SessionEvent::paused(session.id))
+            .await
+            .unwrap();
+        repo.save_event(&SessionEvent::resumed(session.id))
+            .await
+            .unwrap();
+        repo.save_event(&SessionEvent::paused(session.id))
+            .await
+            .unwrap();
 
         // Get only paused events
         let paused_events = repo
@@ -742,9 +770,15 @@ mod tests {
         repo.save(&session).await.expect("Failed to save session");
 
         // Create events
-        repo.save_event(&SessionEvent::started(session.id)).await.unwrap();
-        repo.save_event(&SessionEvent::paused(session.id)).await.unwrap();
-        repo.save_event(&SessionEvent::resumed(session.id)).await.unwrap();
+        repo.save_event(&SessionEvent::started(session.id))
+            .await
+            .unwrap();
+        repo.save_event(&SessionEvent::paused(session.id))
+            .await
+            .unwrap();
+        repo.save_event(&SessionEvent::resumed(session.id))
+            .await
+            .unwrap();
 
         // Verify events exist
         let count = repo.count_events(session.id).await.unwrap();
@@ -765,16 +799,22 @@ mod tests {
         let repo = SessionRepository::new(pool);
 
         // Create an active session
-        let mut active_session = Session::new(None, None, Some("Active".to_string()));
+        let active_session = Session::new(None, None, Some("Active".to_string()));
         repo.save(&active_session).await.unwrap();
-        repo.save_event(&SessionEvent::started(active_session.id)).await.unwrap();
+        repo.save_event(&SessionEvent::started(active_session.id))
+            .await
+            .unwrap();
 
         // Create a completed session
         let mut completed_session = Session::new(None, None, Some("Completed".to_string()));
         completed_session.complete();
         repo.save(&completed_session).await.unwrap();
-        repo.save_event(&SessionEvent::started(completed_session.id)).await.unwrap();
-        repo.save_event(&SessionEvent::completed(completed_session.id)).await.unwrap();
+        repo.save_event(&SessionEvent::started(completed_session.id))
+            .await
+            .unwrap();
+        repo.save_event(&SessionEvent::completed(completed_session.id))
+            .await
+            .unwrap();
 
         // Verify total event counts
         let active_count = repo.count_events(active_session.id).await.unwrap();
@@ -806,9 +846,15 @@ mod tests {
         repo.save(&session1).await.unwrap();
         repo.save(&session2).await.unwrap();
 
-        repo.save_event(&SessionEvent::started(session1.id)).await.unwrap();
-        repo.save_event(&SessionEvent::paused(session1.id)).await.unwrap();
-        repo.save_event(&SessionEvent::started(session2.id)).await.unwrap();
+        repo.save_event(&SessionEvent::started(session1.id))
+            .await
+            .unwrap();
+        repo.save_event(&SessionEvent::paused(session1.id))
+            .await
+            .unwrap();
+        repo.save_event(&SessionEvent::started(session2.id))
+            .await
+            .unwrap();
 
         // Count all events
         let count = repo.count_all_events().await.unwrap();

@@ -15,17 +15,11 @@ pub type LockResult<T> = std::result::Result<T, LockError>;
 pub enum LockError {
     /// Lock acquisition timed out
     #[error("Lock timeout: resource '{resource}' is held by {holder}")]
-    Timeout {
-        resource: String,
-        holder: String,
-    },
+    Timeout { resource: String, holder: String },
 
     /// Lock is already held by another process
     #[error("Lock contention: resource '{resource}' is held by process {holder_pid}")]
-    Contention {
-        resource: String,
-        holder_pid: u32,
-    },
+    Contention { resource: String, holder_pid: u32 },
 
     /// Lock was not found (for release operations)
     #[error("Lock not found: {0}")]
@@ -33,17 +27,11 @@ pub enum LockError {
 
     /// Lock is stale (holder process died)
     #[error("Stale lock detected: resource '{resource}' (holder pid {holder_pid} is not running)")]
-    StaleLock {
-        resource: String,
-        holder_pid: u32,
-    },
+    StaleLock { resource: String, holder_pid: u32 },
 
     /// Deadlock would occur
     #[error("Deadlock detected: acquiring {requested} while holding {held}")]
-    DeadlockDetected {
-        requested: String,
-        held: String,
-    },
+    DeadlockDetected { requested: String, held: String },
 
     /// Invalid lock state
     #[error("Invalid lock state: {0}")]
@@ -202,9 +190,7 @@ impl LockInfo {
             resource_id,
             status: LockStatus::HeldBySelf,
             holder_pid: std::process::id(),
-            holder_host: gethostname::gethostname()
-                .to_string_lossy()
-                .into_owned(),
+            holder_host: gethostname::gethostname().to_string_lossy().into_owned(),
             holder_description,
             acquired_at: now,
             expires_at: ttl.map(|d| now + chrono::Duration::from_std(d).unwrap_or_default()),
@@ -214,9 +200,7 @@ impl LockInfo {
 
     /// Check if the lock is expired
     pub fn is_expired(&self) -> bool {
-        self.expires_at
-            .map(|exp| Utc::now() > exp)
-            .unwrap_or(false)
+        self.expires_at.map(|exp| Utc::now() > exp).unwrap_or(false)
     }
 
     /// Check if the lock is held by the current process

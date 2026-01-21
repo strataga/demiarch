@@ -74,11 +74,9 @@ impl SearchService {
 
         // Execute searches for each entity type
         let mut all_results = Vec::new();
-        let entity_types = self.get_searchable_entity_types(
-            &query,
-            &searchable_projects,
-            searcher_project_id,
-        ).await?;
+        let entity_types = self
+            .get_searchable_entity_types(query, &searchable_projects, searcher_project_id)
+            .await?;
 
         // Distribute limit across entity types for balanced results
         let limit_per_type = (query.limit / entity_types.len().max(1) as u32).max(5);
@@ -87,7 +85,11 @@ impl SearchService {
             let results = match entity_type {
                 SearchEntityType::Feature => {
                     let feature_projects = self
-                        .filter_projects_by_entity_type(&searchable_projects, *entity_type, searcher_project_id)
+                        .filter_projects_by_entity_type(
+                            &searchable_projects,
+                            *entity_type,
+                            searcher_project_id,
+                        )
                         .await?;
                     self.repository
                         .search_features(&query.query, &feature_projects, limit_per_type, 0)
@@ -95,7 +97,11 @@ impl SearchService {
                 }
                 SearchEntityType::Document => {
                     let doc_projects = self
-                        .filter_projects_by_entity_type(&searchable_projects, *entity_type, searcher_project_id)
+                        .filter_projects_by_entity_type(
+                            &searchable_projects,
+                            *entity_type,
+                            searcher_project_id,
+                        )
                         .await?;
                     self.repository
                         .search_documents(&query.query, &doc_projects, limit_per_type, 0)
@@ -103,7 +109,11 @@ impl SearchService {
                 }
                 SearchEntityType::Message => {
                     let msg_projects = self
-                        .filter_projects_by_entity_type(&searchable_projects, *entity_type, searcher_project_id)
+                        .filter_projects_by_entity_type(
+                            &searchable_projects,
+                            *entity_type,
+                            searcher_project_id,
+                        )
                         .await?;
                     self.repository
                         .search_messages(&query.query, &msg_projects, limit_per_type, 0)
@@ -111,7 +121,11 @@ impl SearchService {
                 }
                 SearchEntityType::Skill => {
                     let skill_projects = self
-                        .filter_projects_by_entity_type(&searchable_projects, *entity_type, searcher_project_id)
+                        .filter_projects_by_entity_type(
+                            &searchable_projects,
+                            *entity_type,
+                            searcher_project_id,
+                        )
                         .await?;
                     self.repository
                         .search_skills(&query.query, &skill_projects, limit_per_type, 0)
@@ -126,7 +140,11 @@ impl SearchService {
         }
 
         // Sort by score (lower BM25 is better, so we sorted by score ascending)
-        all_results.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal));
+        all_results.sort_by(|a, b| {
+            a.score
+                .partial_cmp(&b.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Apply final limit
         all_results.truncate(query.limit as usize);
@@ -371,7 +389,10 @@ mod tests {
         let project_id = create_test_project(&pool, "test-project").await;
 
         // Disable cross-project search
-        service.disable_cross_project_search(project_id).await.unwrap();
+        service
+            .disable_cross_project_search(project_id)
+            .await
+            .unwrap();
 
         // Verify
         let settings = service.get_settings(project_id).await.unwrap();
@@ -405,14 +426,20 @@ mod tests {
         service.make_private(project_id).await.unwrap();
 
         // Allow specific searcher
-        service.allow_searcher(project_id, searcher_id).await.unwrap();
+        service
+            .allow_searcher(project_id, searcher_id)
+            .await
+            .unwrap();
 
         let settings = service.get_settings(project_id).await.unwrap();
         assert!(settings.allowed_searchers.contains(&searcher_id));
         assert!(settings.can_be_searched_by(searcher_id));
 
         // Block the searcher
-        service.block_searcher(project_id, searcher_id).await.unwrap();
+        service
+            .block_searcher(project_id, searcher_id)
+            .await
+            .unwrap();
 
         let settings = service.get_settings(project_id).await.unwrap();
         assert!(settings.excluded_searchers.contains(&searcher_id));
@@ -451,11 +478,13 @@ mod tests {
         let project_id = create_test_project(&pool, "test-project").await;
 
         // Disable cross-project search
-        service.disable_cross_project_search(project_id).await.unwrap();
+        service
+            .disable_cross_project_search(project_id)
+            .await
+            .unwrap();
 
         // Try to search across projects
-        let query = SearchQuery::new("test")
-            .with_scope(SearchScope::cross_project(project_id));
+        let query = SearchQuery::new("test").with_scope(SearchScope::cross_project(project_id));
 
         let result = service.search(&query).await;
         assert!(result.is_err());
@@ -469,11 +498,13 @@ mod tests {
         let project_id = create_test_project(&pool, "test-project").await;
 
         // Disable cross-project search
-        service.disable_cross_project_search(project_id).await.unwrap();
+        service
+            .disable_cross_project_search(project_id)
+            .await
+            .unwrap();
 
         // Current project search should still work
-        let query = SearchQuery::new("test")
-            .with_scope(SearchScope::current_project(project_id));
+        let query = SearchQuery::new("test").with_scope(SearchScope::current_project(project_id));
 
         let result = service.search(&query).await;
         assert!(result.is_ok());

@@ -230,7 +230,12 @@ impl ShutdownHandler {
         lock_manager: Arc<LockManager>,
         database: Database,
     ) -> Self {
-        Self::new(session_manager, lock_manager, database, ShutdownConfig::default())
+        Self::new(
+            session_manager,
+            lock_manager,
+            database,
+            ShutdownConfig::default(),
+        )
     }
 
     /// Perform graceful shutdown
@@ -288,11 +293,7 @@ impl ShutdownHandler {
                     result.sessions_cleaned = sessions;
                     result.events_cleaned = events;
                     if sessions > 0 || events > 0 {
-                        debug!(
-                            sessions = sessions,
-                            events = events,
-                            "Cleanup completed"
-                        );
+                        debug!(sessions = sessions, events = events, "Cleanup completed");
                     }
                 }
                 Err(e) => {
@@ -321,11 +322,11 @@ impl ShutdownHandler {
     async fn pause_active_session(&self) -> Result<Option<Uuid>> {
         let active = self.session_manager.get_active().await?;
 
-        if let Some(session) = active {
-            if session.status == SessionStatus::Active {
-                self.session_manager.pause(session.id).await?;
-                return Ok(Some(session.id));
-            }
+        if let Some(session) = active
+            && session.status == SessionStatus::Active
+        {
+            self.session_manager.pause(session.id).await?;
+            return Ok(Some(session.id));
         }
 
         Ok(None)
@@ -410,7 +411,9 @@ impl ShutdownHandler {
                 result.locks_released = count;
             }
             Err(e) => {
-                result.warnings.push(format!("Failed to release locks: {}", e));
+                result
+                    .warnings
+                    .push(format!("Failed to release locks: {}", e));
             }
         }
 
@@ -439,7 +442,9 @@ impl ShutdownHandler {
                 result.locks_released = count;
             }
             Err(e) => {
-                result.warnings.push(format!("Failed to release locks: {}", e));
+                result
+                    .warnings
+                    .push(format!("Failed to release locks: {}", e));
             }
         }
 
@@ -541,11 +546,16 @@ mod tests {
 
     async fn create_test_components() -> (SessionManager, Arc<LockManager>, Database, TempDir) {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
         let session_manager = SessionManager::new(db.pool().clone());
         let lock_config = LockConfig::default().with_lock_dir(temp_dir.path().join("locks"));
         let lock_manager = Arc::new(LockManager::new(lock_config));
-        lock_manager.initialize().await.expect("Failed to initialize lock manager");
+        lock_manager
+            .initialize()
+            .await
+            .expect("Failed to initialize lock manager");
 
         (session_manager, lock_manager, db, temp_dir)
     }
@@ -555,7 +565,10 @@ mod tests {
         let (session_manager, lock_manager, db, _temp) = create_test_components().await;
         let handler = ShutdownHandler::with_defaults(session_manager, lock_manager, db);
 
-        let result = handler.shutdown_gracefully().await.expect("Shutdown failed");
+        let result = handler
+            .shutdown_gracefully()
+            .await
+            .expect("Shutdown failed");
 
         assert!(!result.session_paused);
         assert!(result.session_id.is_none());
@@ -582,7 +595,10 @@ mod tests {
         assert!(initial.is_active());
 
         let handler = ShutdownHandler::with_defaults(session_manager, lock_manager, db);
-        let result = handler.shutdown_gracefully().await.expect("Shutdown failed");
+        let result = handler
+            .shutdown_gracefully()
+            .await
+            .expect("Shutdown failed");
 
         assert!(result.session_paused);
         assert_eq!(result.session_id, Some(session.id));
@@ -606,7 +622,10 @@ mod tests {
             .expect("Failed to acquire lock");
 
         let handler = ShutdownHandler::with_defaults(session_manager, lock_manager.clone(), db);
-        let result = handler.shutdown_gracefully().await.expect("Shutdown failed");
+        let result = handler
+            .shutdown_gracefully()
+            .await
+            .expect("Shutdown failed");
 
         // Locks should be released
         assert_eq!(result.locks_released, 2);
@@ -619,7 +638,10 @@ mod tests {
         let config = ShutdownConfig::with_cleanup(30, 30);
         let handler = ShutdownHandler::new(session_manager, lock_manager, db, config);
 
-        let result = handler.shutdown_gracefully().await.expect("Shutdown failed");
+        let result = handler
+            .shutdown_gracefully()
+            .await
+            .expect("Shutdown failed");
 
         // Cleanup should have run (even if nothing was cleaned)
         assert!(result.database_closed);
@@ -636,7 +658,10 @@ mod tests {
             .expect("Failed to create session");
 
         let handler = ShutdownHandler::with_defaults(session_manager, lock_manager, db);
-        let result = handler.shutdown_quick().await.expect("Quick shutdown failed");
+        let result = handler
+            .shutdown_quick()
+            .await
+            .expect("Quick shutdown failed");
 
         assert!(result.session_paused);
         assert!(result.database_closed);
@@ -689,7 +714,10 @@ mod tests {
         assert!(initial.is_active());
 
         let handler = ShutdownHandler::with_defaults(session_manager, lock_manager, db);
-        let result = handler.abandon_session().await.expect("Abandon session failed");
+        let result = handler
+            .abandon_session()
+            .await
+            .expect("Abandon session failed");
 
         assert_eq!(result.session_id, Some(session.id));
         // Note: Can't verify session state after shutdown since database is closed

@@ -23,7 +23,7 @@ pub enum SessionStatus {
 
 impl SessionStatus {
     /// Create from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "active" => Some(Self::Active),
             "paused" => Some(Self::Paused),
@@ -61,7 +61,7 @@ impl fmt::Display for SessionStatus {
 }
 
 /// Session phase indicating the current workflow phase
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionPhase {
     /// Discovery and requirements gathering
@@ -75,12 +75,13 @@ pub enum SessionPhase {
     /// Review and refinement
     Review,
     /// Phase not yet determined
+    #[default]
     Unknown,
 }
 
 impl SessionPhase {
     /// Create from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "discovery" => Some(Self::Discovery),
             "planning" => Some(Self::Planning),
@@ -102,12 +103,6 @@ impl SessionPhase {
             Self::Review => "review",
             Self::Unknown => "unknown",
         }
-    }
-}
-
-impl Default for SessionPhase {
-    fn default() -> Self {
-        Self::Unknown
     }
 }
 
@@ -404,11 +399,17 @@ mod tests {
 
     #[test]
     fn test_session_status_from_str() {
-        assert_eq!(SessionStatus::from_str("active"), Some(SessionStatus::Active));
-        assert_eq!(SessionStatus::from_str("PAUSED"), Some(SessionStatus::Paused));
-        assert_eq!(SessionStatus::from_str("Completed"), Some(SessionStatus::Completed));
-        assert_eq!(SessionStatus::from_str("abandoned"), Some(SessionStatus::Abandoned));
-        assert_eq!(SessionStatus::from_str("invalid"), None);
+        assert_eq!(SessionStatus::parse("active"), Some(SessionStatus::Active));
+        assert_eq!(SessionStatus::parse("PAUSED"), Some(SessionStatus::Paused));
+        assert_eq!(
+            SessionStatus::parse("Completed"),
+            Some(SessionStatus::Completed)
+        );
+        assert_eq!(
+            SessionStatus::parse("abandoned"),
+            Some(SessionStatus::Abandoned)
+        );
+        assert_eq!(SessionStatus::parse("invalid"), None);
     }
 
     #[test]
@@ -421,9 +422,15 @@ mod tests {
 
     #[test]
     fn test_session_phase_from_str() {
-        assert_eq!(SessionPhase::from_str("discovery"), Some(SessionPhase::Discovery));
-        assert_eq!(SessionPhase::from_str("BUILDING"), Some(SessionPhase::Building));
-        assert_eq!(SessionPhase::from_str("invalid"), None);
+        assert_eq!(
+            SessionPhase::parse("discovery"),
+            Some(SessionPhase::Discovery)
+        );
+        assert_eq!(
+            SessionPhase::parse("BUILDING"),
+            Some(SessionPhase::Building)
+        );
+        assert_eq!(SessionPhase::parse("invalid"), None);
     }
 
     #[test]

@@ -38,7 +38,7 @@ pub enum SessionEventType {
 
 impl SessionEventType {
     /// Create from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "started" => Some(Self::Started),
             "paused" => Some(Self::Paused),
@@ -102,7 +102,11 @@ pub struct SessionEvent {
 
 impl SessionEvent {
     /// Create a new session event
-    pub fn new(session_id: Uuid, event_type: SessionEventType, data: Option<serde_json::Value>) -> Self {
+    pub fn new(
+        session_id: Uuid,
+        event_type: SessionEventType,
+        data: Option<serde_json::Value>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             session_id,
@@ -147,7 +151,11 @@ impl SessionEvent {
     }
 
     /// Create a project switched event
-    pub fn project_switched(session_id: Uuid, old_project_id: Option<Uuid>, new_project_id: Option<Uuid>) -> Self {
+    pub fn project_switched(
+        session_id: Uuid,
+        old_project_id: Option<Uuid>,
+        new_project_id: Option<Uuid>,
+    ) -> Self {
         let data = serde_json::json!({
             "old_project_id": old_project_id,
             "new_project_id": new_project_id,
@@ -156,7 +164,11 @@ impl SessionEvent {
     }
 
     /// Create a feature switched event
-    pub fn feature_switched(session_id: Uuid, old_feature_id: Option<Uuid>, new_feature_id: Option<Uuid>) -> Self {
+    pub fn feature_switched(
+        session_id: Uuid,
+        old_feature_id: Option<Uuid>,
+        new_feature_id: Option<Uuid>,
+    ) -> Self {
         let data = serde_json::json!({
             "old_feature_id": old_feature_id,
             "new_feature_id": new_feature_id,
@@ -206,10 +218,19 @@ mod tests {
 
     #[test]
     fn test_event_type_from_str() {
-        assert_eq!(SessionEventType::from_str("started"), Some(SessionEventType::Started));
-        assert_eq!(SessionEventType::from_str("PAUSED"), Some(SessionEventType::Paused));
-        assert_eq!(SessionEventType::from_str("project_switched"), Some(SessionEventType::ProjectSwitched));
-        assert_eq!(SessionEventType::from_str("invalid"), None);
+        assert_eq!(
+            SessionEventType::parse("started"),
+            Some(SessionEventType::Started)
+        );
+        assert_eq!(
+            SessionEventType::parse("PAUSED"),
+            Some(SessionEventType::Paused)
+        );
+        assert_eq!(
+            SessionEventType::parse("project_switched"),
+            Some(SessionEventType::ProjectSwitched)
+        );
+        assert_eq!(SessionEventType::parse("invalid"), None);
     }
 
     #[test]
@@ -228,7 +249,8 @@ mod tests {
         let old_project = Uuid::new_v4();
         let new_project = Uuid::new_v4();
 
-        let event = SessionEvent::project_switched(session_id, Some(old_project), Some(new_project));
+        let event =
+            SessionEvent::project_switched(session_id, Some(old_project), Some(new_project));
 
         assert_eq!(event.event_type, SessionEventType::ProjectSwitched);
         assert!(event.data.is_some());

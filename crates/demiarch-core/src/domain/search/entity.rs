@@ -36,7 +36,7 @@ impl SearchEntityType {
     }
 
     /// Create from string representation
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "feature" => Some(Self::Feature),
             "document" => Some(Self::Document),
@@ -445,10 +445,10 @@ mod tests {
     fn test_search_entity_type_conversion() {
         assert_eq!(SearchEntityType::Feature.as_str(), "feature");
         assert_eq!(
-            SearchEntityType::from_str("feature"),
+            SearchEntityType::parse("feature"),
             Some(SearchEntityType::Feature)
         );
-        assert_eq!(SearchEntityType::from_str("invalid"), None);
+        assert_eq!(SearchEntityType::parse("invalid"), None);
     }
 
     #[test]

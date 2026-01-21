@@ -2,9 +2,7 @@
 //!
 //! Handles all database interactions for cross-project search.
 
-use super::entity::{
-    CrossProjectSearchLog, ProjectSearchSettings, SearchEntityType, SearchResult,
-};
+use super::entity::{CrossProjectSearchLog, ProjectSearchSettings, SearchEntityType, SearchResult};
 use crate::error::{Error, Result};
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
@@ -56,10 +54,7 @@ impl SearchRepository {
     }
 
     /// Get or create default settings for a project
-    pub async fn get_or_create_settings(
-        &self,
-        project_id: Uuid,
-    ) -> Result<ProjectSearchSettings> {
+    pub async fn get_or_create_settings(&self, project_id: Uuid) -> Result<ProjectSearchSettings> {
         if let Some(settings) = self.get_settings(project_id).await? {
             return Ok(settings);
         }
@@ -177,7 +172,11 @@ impl SearchRepository {
         }
 
         let project_ids_str: Vec<String> = project_ids.iter().map(|id| id.to_string()).collect();
-        let placeholders: String = project_ids_str.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let placeholders: String = project_ids_str
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(",");
 
         let sql = format!(
             r#"
@@ -207,7 +206,9 @@ impl SearchRepository {
             .await
             .map_err(Error::DatabaseError)?;
 
-        rows.into_iter().map(|row| row.into_search_result()).collect()
+        rows.into_iter()
+            .map(|row| row.into_search_result())
+            .collect()
     }
 
     /// Search documents across specified projects
@@ -223,7 +224,11 @@ impl SearchRepository {
         }
 
         let project_ids_str: Vec<String> = project_ids.iter().map(|id| id.to_string()).collect();
-        let placeholders: String = project_ids_str.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let placeholders: String = project_ids_str
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(",");
 
         let sql = format!(
             r#"
@@ -253,7 +258,9 @@ impl SearchRepository {
             .await
             .map_err(Error::DatabaseError)?;
 
-        rows.into_iter().map(|row| row.into_search_result()).collect()
+        rows.into_iter()
+            .map(|row| row.into_search_result())
+            .collect()
     }
 
     /// Search messages (conversations) across specified projects
@@ -269,7 +276,11 @@ impl SearchRepository {
         }
 
         let project_ids_str: Vec<String> = project_ids.iter().map(|id| id.to_string()).collect();
-        let placeholders: String = project_ids_str.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let placeholders: String = project_ids_str
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(",");
 
         let sql = format!(
             r#"
@@ -300,7 +311,9 @@ impl SearchRepository {
             .await
             .map_err(Error::DatabaseError)?;
 
-        rows.into_iter().map(|row| row.into_search_result()).collect()
+        rows.into_iter()
+            .map(|row| row.into_search_result())
+            .collect()
     }
 
     /// Search learned skills (global or filtered by source project)
@@ -337,8 +350,11 @@ impl SearchRepository {
         } else {
             let project_ids_str: Vec<String> =
                 project_ids.iter().map(|id| id.to_string()).collect();
-            let placeholders: String =
-                project_ids_str.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+            let placeholders: String = project_ids_str
+                .iter()
+                .map(|_| "?")
+                .collect::<Vec<_>>()
+                .join(",");
 
             let sql = format!(
                 r#"
@@ -369,7 +385,9 @@ impl SearchRepository {
                 .map_err(Error::DatabaseError)?
         };
 
-        rows.into_iter().map(|row| row.into_search_result()).collect()
+        rows.into_iter()
+            .map(|row| row.into_search_result())
+            .collect()
     }
 
     // ========== Search Audit Log ==========
@@ -378,9 +396,15 @@ impl SearchRepository {
     pub async fn log_search(&self, log: &CrossProjectSearchLog) -> Result<()> {
         let id = log.id.to_string();
         let searcher_project_id = log.searcher_project_id.to_string();
-        let searched_project_ids = serde_json::to_string(&log.searched_project_ids)
-            .map_err(|e| Error::Parse(format!("Failed to serialize searched_project_ids: {}", e)))?;
-        let search_scope: Vec<String> = log.search_scope.iter().map(|t| t.as_str().to_string()).collect();
+        let searched_project_ids =
+            serde_json::to_string(&log.searched_project_ids).map_err(|e| {
+                Error::Parse(format!("Failed to serialize searched_project_ids: {}", e))
+            })?;
+        let search_scope: Vec<String> = log
+            .search_scope
+            .iter()
+            .map(|t| t.as_str().to_string())
+            .collect();
         let search_scope_json = serde_json::to_string(&search_scope)
             .map_err(|e| Error::Parse(format!("Failed to serialize search_scope: {}", e)))?;
 
@@ -577,7 +601,9 @@ impl MessageResultRow {
         let project_id = Uuid::parse_str(&self.project_id)
             .map_err(|e| Error::Parse(format!("Invalid project ID: {}", e)))?;
 
-        let title = self.conv_title.unwrap_or_else(|| "Conversation".to_string());
+        let title = self
+            .conv_title
+            .unwrap_or_else(|| "Conversation".to_string());
         let snippet = if self.content.len() > 200 {
             format!("{}...", &self.content[..200])
         } else {
@@ -664,7 +690,7 @@ impl SearchLogRow {
             .map_err(|e| Error::Parse(format!("Invalid search_scope: {}", e)))?;
         let search_scope: Vec<SearchEntityType> = search_scope_strs
             .iter()
-            .filter_map(|s| SearchEntityType::from_str(s))
+            .filter_map(|s| SearchEntityType::parse(s))
             .collect();
 
         Ok(CrossProjectSearchLog {

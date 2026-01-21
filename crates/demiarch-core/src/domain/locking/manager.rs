@@ -15,8 +15,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio::time::{sleep, Instant};
+use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::time::{Instant, sleep};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -165,7 +165,15 @@ impl LockManager {
 
         loop {
             // Check if we can acquire the lock
-            match self.try_acquire_lock_internal(&lock_key, resource_type, resource_id, holder_description).await {
+            match self
+                .try_acquire_lock_internal(
+                    &lock_key,
+                    resource_type,
+                    resource_id,
+                    holder_description,
+                )
+                .await
+            {
                 Ok(guard) => {
                     info!(
                         lock_key = %lock_key,
@@ -174,7 +182,10 @@ impl LockManager {
                     );
                     return Ok(guard);
                 }
-                Err(LockError::Contention { resource, holder_pid }) => {
+                Err(LockError::Contention {
+                    resource,
+                    holder_pid,
+                }) => {
                     // Lock is held by another process
                     if start.elapsed() >= timeout {
                         return Err(LockError::Timeout {
@@ -346,9 +357,8 @@ impl LockManager {
         // Remove lock file
         let lock_file = self.lock_file_path(lock_key);
         if lock_file.exists() {
-            std::fs::remove_file(&lock_file).map_err(|e| {
-                LockError::IoError(format!("Failed to remove lock file: {}", e))
-            })?;
+            std::fs::remove_file(&lock_file)
+                .map_err(|e| LockError::IoError(format!("Failed to remove lock file: {}", e)))?;
         }
 
         info!(lock_key = %lock_key, "Lock force-released");
@@ -534,12 +544,12 @@ impl LockManager {
         _holder_description: &str,
     ) -> LockResult<()> {
         // Ensure parent directory exists
-        if let Some(parent) = lock_file.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    LockError::IoError(format!("Failed to create lock directory: {}", e))
-                })?;
-            }
+        if let Some(parent) = lock_file.parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                LockError::IoError(format!("Failed to create lock directory: {}", e))
+            })?;
         }
 
         // Check if lock file exists and is valid
@@ -573,26 +583,22 @@ impl LockManager {
 
     /// Write lock info to a file
     async fn write_lock_file(&self, path: &Path, info: &LockInfo) -> LockResult<()> {
-        let json = serde_json::to_string_pretty(info).map_err(|e| {
-            LockError::IoError(format!("Failed to serialize lock info: {}", e))
-        })?;
+        let json = serde_json::to_string_pretty(info)
+            .map_err(|e| LockError::IoError(format!("Failed to serialize lock info: {}", e)))?;
 
-        std::fs::write(path, json).map_err(|e| {
-            LockError::IoError(format!("Failed to write lock file: {}", e))
-        })?;
+        std::fs::write(path, json)
+            .map_err(|e| LockError::IoError(format!("Failed to write lock file: {}", e)))?;
 
         Ok(())
     }
 
     /// Read lock info from a file
     async fn read_lock_file(&self, path: &Path) -> LockResult<LockInfo> {
-        let contents = std::fs::read_to_string(path).map_err(|e| {
-            LockError::IoError(format!("Failed to read lock file: {}", e))
-        })?;
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| LockError::IoError(format!("Failed to read lock file: {}", e)))?;
 
-        serde_json::from_str(&contents).map_err(|e| {
-            LockError::Corrupted(format!("Failed to parse lock file: {}", e))
-        })
+        serde_json::from_str(&contents)
+            .map_err(|e| LockError::Corrupted(format!("Failed to parse lock file: {}", e)))
     }
 }
 
@@ -616,9 +622,7 @@ fn is_process_alive(pid: u32) -> bool {
         Command::new("tasklist")
             .args(["/FI", &format!("PID eq {}", pid)])
             .output()
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout).contains(&pid.to_string())
-            })
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
             .unwrap_or(false)
     }
 

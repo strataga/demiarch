@@ -5,7 +5,9 @@
 
 use super::event::SessionEvent;
 use super::repository::SessionRepository;
-use super::session::{RecoveryInfo, RecoveryResult, Session, SessionInfo, SessionPhase, SessionStatus};
+use super::session::{
+    RecoveryInfo, RecoveryResult, Session, SessionInfo, SessionPhase, SessionStatus,
+};
 use crate::error::{Error, Result};
 use sqlx::SqlitePool;
 use tracing::{info, warn};
@@ -264,15 +266,15 @@ impl SessionManager {
         }
 
         // Pause any other active session
-        if let Some(mut active) = self.repository.get_active().await? {
-            if active.id != session_id {
-                info!(session_id = %active.id, "Pausing existing active session");
-                active.pause();
-                self.repository.update(&active).await?;
-                self.repository
-                    .save_event(&SessionEvent::paused(active.id))
-                    .await?;
-            }
+        if let Some(mut active) = self.repository.get_active().await?
+            && active.id != session_id
+        {
+            info!(session_id = %active.id, "Pausing existing active session");
+            active.pause();
+            self.repository.update(&active).await?;
+            self.repository
+                .save_event(&SessionEvent::paused(active.id))
+                .await?;
         }
 
         session.resume();
@@ -342,7 +344,11 @@ impl SessionManager {
     // ========== Context Switching ==========
 
     /// Switch the current project in a session
-    pub async fn switch_project(&self, session_id: Uuid, project_id: Option<Uuid>) -> Result<Session> {
+    pub async fn switch_project(
+        &self,
+        session_id: Uuid,
+        project_id: Option<Uuid>,
+    ) -> Result<Session> {
         let mut session = self
             .repository
             .get(session_id)
@@ -381,7 +387,11 @@ impl SessionManager {
     }
 
     /// Switch the current feature in a session
-    pub async fn switch_feature(&self, session_id: Uuid, feature_id: Option<Uuid>) -> Result<Session> {
+    pub async fn switch_feature(
+        &self,
+        session_id: Uuid,
+        feature_id: Option<Uuid>,
+    ) -> Result<Session> {
         let mut session = self
             .repository
             .get(session_id)
@@ -455,7 +465,11 @@ impl SessionManager {
     }
 
     /// Record a checkpoint in the session
-    pub async fn record_checkpoint(&self, session_id: Uuid, checkpoint_id: Uuid) -> Result<Session> {
+    pub async fn record_checkpoint(
+        &self,
+        session_id: Uuid,
+        checkpoint_id: Uuid,
+    ) -> Result<Session> {
         let mut session = self
             .repository
             .get(session_id)
@@ -530,7 +544,11 @@ impl SessionManager {
     }
 
     /// Get session events
-    pub async fn get_events(&self, session_id: Uuid, limit: Option<i32>) -> Result<Vec<SessionEvent>> {
+    pub async fn get_events(
+        &self,
+        session_id: Uuid,
+        limit: Option<i32>,
+    ) -> Result<Vec<SessionEvent>> {
         self.repository.get_events(session_id, limit).await
     }
 
@@ -556,7 +574,11 @@ impl SessionManager {
     pub async fn cleanup_old_events(&self, days: i64) -> Result<u64> {
         let deleted = self.repository.delete_old_events(days).await?;
         if deleted > 0 {
-            info!(deleted = deleted, days = days, "Cleaned up old session events");
+            info!(
+                deleted = deleted,
+                days = days,
+                "Cleaned up old session events"
+            );
         }
         Ok(deleted)
     }
@@ -609,10 +631,22 @@ impl SessionManager {
 
     /// Get session statistics
     pub async fn stats(&self) -> Result<SessionStats> {
-        let active = self.repository.count_by_status(SessionStatus::Active).await?;
-        let paused = self.repository.count_by_status(SessionStatus::Paused).await?;
-        let completed = self.repository.count_by_status(SessionStatus::Completed).await?;
-        let abandoned = self.repository.count_by_status(SessionStatus::Abandoned).await?;
+        let active = self
+            .repository
+            .count_by_status(SessionStatus::Active)
+            .await?;
+        let paused = self
+            .repository
+            .count_by_status(SessionStatus::Paused)
+            .await?;
+        let completed = self
+            .repository
+            .count_by_status(SessionStatus::Completed)
+            .await?;
+        let abandoned = self
+            .repository
+            .count_by_status(SessionStatus::Abandoned)
+            .await?;
 
         Ok(SessionStats {
             active,
@@ -701,11 +735,17 @@ mod tests {
         let manager = create_test_manager().await;
 
         // Create first session
-        let session1 = manager.create(None, None, Some("First".to_string())).await.unwrap();
+        let session1 = manager
+            .create(None, None, Some("First".to_string()))
+            .await
+            .unwrap();
         assert!(session1.is_active());
 
         // Create second session - should pause first
-        let session2 = manager.create(None, None, Some("Second".to_string())).await.unwrap();
+        let session2 = manager
+            .create(None, None, Some("Second".to_string()))
+            .await
+            .unwrap();
         assert!(session2.is_active());
 
         // First session should now be paused
@@ -773,7 +813,10 @@ mod tests {
         let session = manager.create(None, None, None).await.unwrap();
         assert_eq!(session.phase, SessionPhase::Unknown);
 
-        let session = manager.set_phase(session.id, SessionPhase::Building).await.unwrap();
+        let session = manager
+            .set_phase(session.id, SessionPhase::Building)
+            .await
+            .unwrap();
         assert_eq!(session.phase, SessionPhase::Building);
     }
 
@@ -842,7 +885,10 @@ mod tests {
         let manager = create_test_manager().await;
 
         // Create and pause a session (simulates clean shutdown)
-        let session = manager.create(None, None, Some("Test".to_string())).await.unwrap();
+        let session = manager
+            .create(None, None, Some("Test".to_string()))
+            .await
+            .unwrap();
         manager.pause(session.id).await.unwrap();
 
         // Recover should resume the paused session
@@ -864,7 +910,10 @@ mod tests {
         let manager = create_test_manager().await;
 
         // Create a session and leave it active (simulates unclean shutdown/crash)
-        let session = manager.create(None, None, Some("Crashed".to_string())).await.unwrap();
+        let session = manager
+            .create(None, None, Some("Crashed".to_string()))
+            .await
+            .unwrap();
         assert!(session.is_active());
 
         // Recover should detect unclean shutdown
@@ -929,7 +978,10 @@ mod tests {
         let manager = create_test_manager().await;
 
         // No existing session - should create new
-        let result = manager.recover_or_create(None, Some("New".to_string())).await.unwrap();
+        let result = manager
+            .recover_or_create(None, Some("New".to_string()))
+            .await
+            .unwrap();
 
         match result {
             RecoveryResult::CreatedNew(session) => {
