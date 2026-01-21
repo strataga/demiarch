@@ -107,7 +107,7 @@ pub async fn restore_checkpoint(
     let checkpoint = manager
         .get_checkpoint(checkpoint_id)
         .await?
-        .ok_or_else(|| RestoreError::CheckpointNotFound(checkpoint_id))?;
+        .ok_or(RestoreError::CheckpointNotFound(checkpoint_id))?;
 
     // 2. Verify signature
     debug!("Verifying checkpoint signature");
@@ -336,16 +336,16 @@ async fn restore_files(snapshot: &SnapshotData) -> Result<usize> {
 
         // Ensure parent directory exists
         let path = std::path::Path::new(&code_file.path);
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    RestoreError::FileRestoreFailed(format!(
-                        "Failed to create directory {}: {}",
-                        parent.display(),
-                        e
-                    ))
-                })?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                RestoreError::FileRestoreFailed(format!(
+                    "Failed to create directory {}: {}",
+                    parent.display(),
+                    e
+                ))
+            })?;
         }
 
         // Write file content

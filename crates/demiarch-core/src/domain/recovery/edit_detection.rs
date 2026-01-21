@@ -15,6 +15,19 @@ use std::path::Path;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+/// Type alias for tracked file database row
+type TrackedFileRow = (
+    String,            // id
+    String,            // project_id
+    Option<String>,    // feature_id
+    String,            // file_path
+    String,            // content_hash
+    DateTime<Utc>,     // generation_timestamp
+    Option<String>,    // last_verified_hash
+    Option<DateTime<Utc>>, // last_verified_at
+    i32,               // edit_detected
+);
+
 /// A tracked generated file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackedFile {
@@ -194,17 +207,7 @@ impl TrackedFileRepository {
         project_id: Uuid,
         file_path: &str,
     ) -> Result<Option<TrackedFile>> {
-        let row: Option<(
-            String,
-            String,
-            Option<String>,
-            String,
-            String,
-            DateTime<Utc>,
-            Option<String>,
-            Option<DateTime<Utc>>,
-            i32,
-        )> = sqlx::query_as(
+        let row: Option<TrackedFileRow> = sqlx::query_as(
             r#"
             SELECT id, project_id, feature_id, file_path, content_hash,
                    generation_timestamp, last_verified_hash, last_verified_at, edit_detected
@@ -233,17 +236,7 @@ impl TrackedFileRepository {
 
     /// Get all tracked files for a project
     pub async fn list_by_project(&self, project_id: Uuid) -> Result<Vec<TrackedFile>> {
-        let rows: Vec<(
-            String,
-            String,
-            Option<String>,
-            String,
-            String,
-            DateTime<Utc>,
-            Option<String>,
-            Option<DateTime<Utc>>,
-            i32,
-        )> = sqlx::query_as(
+        let rows: Vec<TrackedFileRow> = sqlx::query_as(
             r#"
             SELECT id, project_id, feature_id, file_path, content_hash,
                    generation_timestamp, last_verified_hash, last_verified_at, edit_detected
@@ -275,17 +268,7 @@ impl TrackedFileRepository {
 
     /// Get all tracked files for a feature
     pub async fn list_by_feature(&self, feature_id: Uuid) -> Result<Vec<TrackedFile>> {
-        let rows: Vec<(
-            String,
-            String,
-            Option<String>,
-            String,
-            String,
-            DateTime<Utc>,
-            Option<String>,
-            Option<DateTime<Utc>>,
-            i32,
-        )> = sqlx::query_as(
+        let rows: Vec<TrackedFileRow> = sqlx::query_as(
             r#"
             SELECT id, project_id, feature_id, file_path, content_hash,
                    generation_timestamp, last_verified_hash, last_verified_at, edit_detected
@@ -317,17 +300,7 @@ impl TrackedFileRepository {
 
     /// Get files with detected edits
     pub async fn list_edited_files(&self, project_id: Uuid) -> Result<Vec<TrackedFile>> {
-        let rows: Vec<(
-            String,
-            String,
-            Option<String>,
-            String,
-            String,
-            DateTime<Utc>,
-            Option<String>,
-            Option<DateTime<Utc>>,
-            i32,
-        )> = sqlx::query_as(
+        let rows: Vec<TrackedFileRow> = sqlx::query_as(
             r#"
             SELECT id, project_id, feature_id, file_path, content_hash,
                    generation_timestamp, last_verified_hash, last_verified_at, edit_detected

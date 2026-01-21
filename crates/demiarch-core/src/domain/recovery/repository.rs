@@ -8,6 +8,18 @@ use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+/// Type alias for feature database row
+type FeatureRow = (
+    String,         // id
+    String,         // title
+    Option<String>, // description
+    String,         // status
+    Option<String>, // phase_id
+    i32,            // priority
+    Option<String>, // acceptance_criteria
+    Option<String>, // labels
+);
+
 /// Repository for checkpoint database operations
 #[derive(Debug, Clone)]
 pub struct CheckpointRepository {
@@ -167,33 +179,10 @@ impl CheckpointRepository {
     }
 
     /// Get features for a project (for snapshot capture)
-    pub async fn get_features(
-        &self,
-        project_id: Uuid,
-    ) -> Result<
-        Vec<(
-            String,
-            String,
-            Option<String>,
-            String,
-            Option<String>,
-            i32,
-            Option<String>,
-            Option<String>,
-        )>,
-    > {
+    pub async fn get_features(&self, project_id: Uuid) -> Result<Vec<FeatureRow>> {
         let project_id_str = project_id.to_string();
 
-        let rows: Vec<(
-            String,
-            String,
-            Option<String>,
-            String,
-            Option<String>,
-            i32,
-            Option<String>,
-            Option<String>,
-        )> = sqlx::query_as(
+        let rows: Vec<FeatureRow> = sqlx::query_as(
             r#"
             SELECT id, title, description, status, phase_id, priority, acceptance_criteria, labels
             FROM features
