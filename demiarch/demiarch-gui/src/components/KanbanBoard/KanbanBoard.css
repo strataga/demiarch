@@ -262,6 +262,44 @@
   transform: rotate(3deg);
 }
 
+/* Card Wrapper for Drag Handling */
+.kanban-card-wrapper {
+  cursor: grab;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.kanban-card-wrapper:active {
+  cursor: grabbing;
+}
+
+.kanban-card-wrapper--dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+}
+
+.kanban-card-wrapper--dragging .kanban-card {
+  border-color: var(--accent);
+  box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.4);
+}
+
+/* Drop Indicator */
+.kanban-column__drop-indicator {
+  height: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin: 0.25rem 0;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .kanban-card__header {
   display: flex;
   justify-content: space-between;
@@ -360,6 +398,174 @@
   background: rgba(239, 68, 68, 0.1);
   border-color: #ef4444;
   color: #ef4444;
+}
+
+/* Expanded Card Styles */
+.kanban-card--expanded {
+  max-height: none;
+}
+
+.kanban-card__expand-toggle {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.625rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+}
+
+.kanban-card:hover .kanban-card__expand-toggle {
+  opacity: 1;
+}
+
+.kanban-card__expand-toggle:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.kanban-card {
+  position: relative;
+}
+
+/* Criteria Summary (collapsed view) */
+.kanban-card__criteria-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+  padding: 0.375rem;
+  background: var(--bg-secondary);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.kanban-card__criteria-summary:hover {
+  background: var(--bg-primary);
+}
+
+.kanban-card__criteria-icon {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.kanban-card__criteria-count {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.kanban-card__criteria-progress {
+  flex: 1;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.kanban-card__criteria-progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Expanded Details */
+.kanban-card__details {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.kanban-card__details-section {
+  margin-bottom: 0.75rem;
+}
+
+.kanban-card__details-section:last-child {
+  margin-bottom: 0;
+}
+
+.kanban-card__details-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.kanban-card__criteria-badge {
+  font-size: 0.625rem;
+  font-weight: 500;
+  padding: 0.125rem 0.375rem;
+  background: var(--accent);
+  color: white;
+  border-radius: 9999px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.kanban-card__details-description {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Acceptance Criteria List */
+.kanban-card__criteria-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.kanban-card__criterion {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.375rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.kanban-card__criterion:hover {
+  background: var(--bg-secondary);
+}
+
+.kanban-card__criterion-checkbox {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.kanban-card__criterion--completed .kanban-card__criterion-checkbox {
+  color: #22c55e;
+}
+
+.kanban-card__criterion-text {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.kanban-card__criterion--completed .kanban-card__criterion-text {
+  text-decoration: line-through;
+  color: var(--text-secondary);
 }
 
 /* Priority indicators on left border */

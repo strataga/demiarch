@@ -1,15 +1,20 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { KanbanCard } from './KanbanCard';
 import type { KanbanColumn as KanbanColumnType, KanbanCard as KanbanCardType } from './types';
+import { MAX_TITLE_LENGTH } from './types';
 
 interface KanbanColumnProps {
   column: KanbanColumnType;
-  onCardMove?: (cardId: string, sourceColumnId: string, targetColumnId: string) => void;
+  onCardMove?: (cardId: string, sourceColumnId: string, targetColumnId: string, targetIndex?: number) => void;
   onCardEdit?: (card: KanbanCardType) => void;
   onCardDelete?: (cardId: string, columnId: string) => void;
   onAddCard?: (columnId: string, title: string) => void;
   onEditColumn?: (columnId: string, title: string) => void;
   onDeleteColumn?: (columnId: string) => void;
+  onAcceptanceCriterionToggle?: (cardId: string, criterionId: string) => void;
+  draggingCardId?: string | null;
+  onDragStart?: (cardId: string) => void;
+  onDragEnd?: () => void;
 }
 
 export function KanbanColumn({
@@ -20,12 +25,18 @@ export function KanbanColumn({
   onAddCard,
   onEditColumn,
   onDeleteColumn,
+  onAcceptanceCriterionToggle,
+  draggingCardId,
+  onDragStart,
+  onDragEnd,
 }: KanbanColumnProps) {
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  const cardsContainerRef = useRef<HTMLDivElement>(null);
 
   const isOverLimit = column.limit !== undefined && column.cards.length >= column.limit;
 
@@ -35,18 +46,34 @@ export function KanbanColumn({
     setIsDragOver(true);
   };
 
-  const handleDragLeave = () => {
-    setIsDragOver(false);
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only set drag over false if leaving the column entirely
+    const relatedTarget = e.relatedTarget as Node | null;
+    if (!e.currentTarget.contains(relatedTarget)) {
+      setIsDragOver(false);
+      setDropTargetIndex(null);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    setDropTargetIndex(null);
     const cardId = e.dataTransfer.getData('cardId');
     const sourceColumnId = e.dataTransfer.getData('sourceColumnId');
     if (cardId && sourceColumnId && onCardMove) {
-      onCardMove(cardId, sourceColumnId, column.id);
+      onCardMove(cardId, sourceColumnId, column.id, dropTargetIndex ?? undefined);
     }
+  };
+
+  const handleCardDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const newIndex = e.clientY < midY ? index : index + 1;
+    setDropTargetIndex(newIndex);
+    setIsDragOver(true);
   };
 
   const handleAddCard = () => {
@@ -87,6 +114,7 @@ export function KanbanColumn({
                 setIsEditingTitle(false);
               }
             }}
+            maxLength={MAX_TITLE_LENGTH}
             autoFocus
           />
         ) : (
@@ -116,23 +144,39 @@ export function KanbanColumn({
         )}
       </div>
 
-      <div className="kanban-column__cards">
-        {column.cards.map((card) => (
-          <div
-            key={card.id}
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('cardId', card.id);
-              e.dataTransfer.setData('sourceColumnId', column.id);
-            }}
-          >
-            <KanbanCard
-              card={card}
-              onEdit={onCardEdit}
-              onDelete={onCardDelete ? (id) => onCardDelete(id, column.id) : undefined}
-            />
+      <div className="kanban-column__cards" ref={cardsContainerRef}>
+        {column.cards.map((card, index) => (
+          <div key={card.id}>
+            {dropTargetIndex === index && (
+              <div className="kanban-column__drop-indicator" />
+            )}
+            <div
+              className={`kanban-card-wrapper ${draggingCardId === card.id ? 'kanban-card-wrapper--dragging' : ''}`}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('cardId', card.id);
+                e.dataTransfer.setData('sourceColumnId', column.id);
+                e.dataTransfer.effectAllowed = 'move';
+                onDragStart?.(card.id);
+              }}
+              onDragEnd={() => {
+                onDragEnd?.();
+              }}
+              onDragOver={(e) => handleCardDragOver(e, index)}
+            >
+              <KanbanCard
+                card={card}
+                onEdit={onCardEdit}
+                onDelete={onCardDelete ? (id) => onCardDelete(id, column.id) : undefined}
+                onAcceptanceCriterionToggle={onAcceptanceCriterionToggle}
+                isDragging={draggingCardId === card.id}
+              />
+            </div>
           </div>
         ))}
+        {dropTargetIndex === column.cards.length && (
+          <div className="kanban-column__drop-indicator" />
+        )}
       </div>
 
       {isAddingCard ? (
@@ -149,6 +193,7 @@ export function KanbanColumn({
                 setIsAddingCard(false);
               }
             }}
+            maxLength={MAX_TITLE_LENGTH}
             autoFocus
           />
           <div className="kanban-column__add-actions">

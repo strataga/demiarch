@@ -1,11 +1,29 @@
 // Kanban Board Types
 
+// Validation constants
+export const MAX_TITLE_LENGTH = 100;
+export const MAX_DESCRIPTION_LENGTH = 1000;
+export const MAX_COLUMNS = 20;
+export const MAX_CARDS_PER_COLUMN = 100;
+
+// Hex color validation
+export function isValidHexColor(color: string): boolean {
+  return /^#([0-9A-Fa-f]{3}){1,2}$/.test(color);
+}
+
+export interface AcceptanceCriterion {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 export interface KanbanCard {
   id: string;
   title: string;
   description?: string;
   priority?: 'low' | 'medium' | 'high';
   labels?: string[];
+  acceptanceCriteria?: AcceptanceCriterion[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,8 +58,8 @@ export function createCard(title: string, description?: string): KanbanCard {
   const now = new Date();
   return {
     id: `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    title,
-    description,
+    title: title.slice(0, MAX_TITLE_LENGTH),
+    description: description?.slice(0, MAX_DESCRIPTION_LENGTH),
     createdAt: now,
     updatedAt: now,
   };
@@ -49,10 +67,13 @@ export function createCard(title: string, description?: string): KanbanCard {
 
 // Helper to create a new column
 export function createColumn(title: string, color?: string): KanbanColumn {
+  // Validate and sanitize color
+  const safeColor = color && isValidHexColor(color) ? color : undefined;
+
   return {
     id: `col-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    title,
+    title: title.slice(0, MAX_TITLE_LENGTH),
     cards: [],
-    color,
+    color: safeColor,
   };
 }
