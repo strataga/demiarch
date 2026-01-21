@@ -2,8 +2,8 @@
 //!
 //! Provides CRUD operations for project features.
 
-use crate::storage::Database;
 use crate::Result;
+use crate::storage::Database;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -286,8 +286,7 @@ impl<'a> FeatureRepository<'a> {
     /// Convert a database row to a Feature
     fn row_to_feature(&self, row: sqlx::sqlite::SqliteRow) -> Feature {
         let labels_str: Option<String> = row.get("labels");
-        let labels = labels_str
-            .and_then(|s| serde_json::from_str(&s).ok());
+        let labels = labels_str.and_then(|s| serde_json::from_str(&s).ok());
 
         Feature {
             id: row.get("id"),
@@ -404,9 +403,15 @@ mod tests {
 
     #[test]
     fn test_feature_status_parse() {
-        assert_eq!(FeatureStatus::parse("backlog"), Some(FeatureStatus::Backlog));
+        assert_eq!(
+            FeatureStatus::parse("backlog"),
+            Some(FeatureStatus::Backlog)
+        );
         assert_eq!(FeatureStatus::parse("todo"), Some(FeatureStatus::Todo));
-        assert_eq!(FeatureStatus::parse("in_progress"), Some(FeatureStatus::InProgress));
+        assert_eq!(
+            FeatureStatus::parse("in_progress"),
+            Some(FeatureStatus::InProgress)
+        );
         assert_eq!(FeatureStatus::parse("review"), Some(FeatureStatus::Review));
         assert_eq!(FeatureStatus::parse("done"), Some(FeatureStatus::Done));
         assert_eq!(FeatureStatus::parse("invalid"), None);
@@ -433,8 +438,14 @@ mod tests {
             .with_priority(1);
 
         assert_eq!(feature.description, Some("A test feature".to_string()));
-        assert_eq!(feature.acceptance_criteria, Some("Given X When Y Then Z".to_string()));
-        assert_eq!(feature.labels, Some(vec!["backend".to_string(), "api".to_string()]));
+        assert_eq!(
+            feature.acceptance_criteria,
+            Some("Given X When Y Then Z".to_string())
+        );
+        assert_eq!(
+            feature.labels,
+            Some(vec!["backend".to_string(), "api".to_string()])
+        );
         assert_eq!(feature.phase_id, Some("phase-1".to_string()));
         assert_eq!(feature.priority, 1);
     }
@@ -462,8 +473,7 @@ mod tests {
         let repo = FeatureRepository::new(&db);
 
         // Create
-        let feature = Feature::new(&project.id, "Test Feature")
-            .with_description("A test feature");
+        let feature = Feature::new(&project.id, "Test Feature").with_description("A test feature");
         repo.create(&feature).await.unwrap();
 
         // Read
@@ -475,7 +485,9 @@ mod tests {
         assert_eq!(features.len(), 1);
 
         // Update status
-        repo.update_status(&feature.id, FeatureStatus::InProgress).await.unwrap();
+        repo.update_status(&feature.id, FeatureStatus::InProgress)
+            .await
+            .unwrap();
         let updated = repo.get(&feature.id).await.unwrap().unwrap();
         assert_eq!(updated.status, FeatureStatus::InProgress);
 

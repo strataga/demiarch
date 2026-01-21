@@ -2,8 +2,8 @@
 //!
 //! Provides CRUD operations for project phases and phase planning.
 
-use crate::storage::Database;
 use crate::Result;
+use crate::storage::Database;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -322,7 +322,10 @@ pub async fn delete_phase(db: &Database, id: &str) -> Result<()> {
 }
 
 /// Get phases with feature counts
-pub async fn get_phases_with_counts(db: &Database, project_id: &str) -> Result<Vec<PhaseWithCount>> {
+pub async fn get_phases_with_counts(
+    db: &Database,
+    project_id: &str,
+) -> Result<Vec<PhaseWithCount>> {
     let repo = PhaseRepository::new(db);
     let phases = repo.list_by_project(project_id).await?;
 
@@ -400,8 +403,7 @@ mod tests {
         let repo = PhaseRepository::new(&db);
 
         // Create
-        let phase =
-            Phase::new(&project.id, "Test Phase", 0).with_description("A test phase");
+        let phase = Phase::new(&project.id, "Test Phase", 0).with_description("A test phase");
         repo.create(&phase).await.unwrap();
 
         // Read

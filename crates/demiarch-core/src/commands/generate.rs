@@ -81,10 +81,7 @@ impl CodeGenerator {
 
         let messages = self.build_messages(description);
 
-        debug!(
-            message_count = messages.len(),
-            "Sending request to LLM"
-        );
+        debug!(message_count = messages.len(), "Sending request to LLM");
 
         let response = self.llm_client.complete_with_fallback(messages).await?;
 
@@ -101,7 +98,11 @@ impl CodeGenerator {
 
         // Estimate cost (rough approximation based on token counts)
         // Claude 3.5 Sonnet: ~$3/1M input, ~$15/1M output
-        let cost_usd = estimate_cost(&response.model, response.input_tokens, response.output_tokens);
+        let cost_usd = estimate_cost(
+            &response.model,
+            response.input_tokens,
+            response.output_tokens,
+        );
 
         let result = GenerationResult {
             files_created,
@@ -340,19 +341,76 @@ fn looks_like_path(s: &str) -> bool {
         // Has extension
         let ext = s.rsplit('.').next().unwrap_or("");
         let common_exts = [
-            "rs", "py", "js", "ts", "tsx", "jsx", "go", "java", "c", "cpp", "h", "hpp",
-            "rb", "php", "swift", "kt", "scala", "clj", "ex", "exs", "erl", "hs",
-            "ml", "fs", "cs", "vb", "lua", "r", "jl", "nim", "zig", "v",
-            "html", "css", "scss", "sass", "less", "vue", "svelte",
-            "json", "yaml", "yml", "toml", "xml", "md", "txt", "sql",
-            "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd",
-            "dockerfile", "makefile", "gitignore", "env",
+            "rs",
+            "py",
+            "js",
+            "ts",
+            "tsx",
+            "jsx",
+            "go",
+            "java",
+            "c",
+            "cpp",
+            "h",
+            "hpp",
+            "rb",
+            "php",
+            "swift",
+            "kt",
+            "scala",
+            "clj",
+            "ex",
+            "exs",
+            "erl",
+            "hs",
+            "ml",
+            "fs",
+            "cs",
+            "vb",
+            "lua",
+            "r",
+            "jl",
+            "nim",
+            "zig",
+            "v",
+            "html",
+            "css",
+            "scss",
+            "sass",
+            "less",
+            "vue",
+            "svelte",
+            "json",
+            "yaml",
+            "yml",
+            "toml",
+            "xml",
+            "md",
+            "txt",
+            "sql",
+            "sh",
+            "bash",
+            "zsh",
+            "fish",
+            "ps1",
+            "bat",
+            "cmd",
+            "dockerfile",
+            "makefile",
+            "gitignore",
+            "env",
         ];
         return common_exts.iter().any(|&e| ext.eq_ignore_ascii_case(e));
     }
 
     // Special filenames without extension
-    let special_files = ["Makefile", "Dockerfile", "Rakefile", "Gemfile", "Cargo.toml"];
+    let special_files = [
+        "Makefile",
+        "Dockerfile",
+        "Rakefile",
+        "Gemfile",
+        "Cargo.toml",
+    ];
     special_files.contains(&s)
 }
 

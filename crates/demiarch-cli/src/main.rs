@@ -727,13 +727,19 @@ async fn cmd_documents(db: &Database, action: DocumentAction, quiet: bool) -> an
                 }
                 println!();
                 println!("View with: demiarch documents show {}", doc.id);
-                println!("Export with: demiarch documents export {} --output prd.md", doc.id);
+                println!(
+                    "Export with: demiarch documents export {} --output prd.md",
+                    doc.id
+                );
             }
         }
 
         DocumentAction::GenerateArchitecture { project } => {
             if !quiet {
-                println!("Generating architecture document for project '{}'...", project);
+                println!(
+                    "Generating architecture document for project '{}'...",
+                    project
+                );
                 println!();
             }
 
@@ -758,12 +764,17 @@ async fn cmd_documents(db: &Database, action: DocumentAction, quiet: bool) -> an
                 }
                 println!();
                 println!("View with: demiarch documents show {}", doc.id);
-                println!("Export with: demiarch documents export {} --output architecture.md", doc.id);
+                println!(
+                    "Export with: demiarch documents export {} --output architecture.md",
+                    doc.id
+                );
             }
         }
 
         DocumentAction::List { project, doc_type } => {
-            let dt = doc_type.as_ref().and_then(|s| document::DocumentType::parse(s));
+            let dt = doc_type
+                .as_ref()
+                .and_then(|s| document::DocumentType::parse(s));
 
             let docs = document::list_documents(db, &project, dt)
                 .await
@@ -775,7 +786,10 @@ async fn cmd_documents(db: &Database, action: DocumentAction, quiet: bool) -> an
                     println!();
                     println!("Generate one with:");
                     println!("  demiarch documents generate-prd --project {}", project);
-                    println!("  demiarch documents generate-architecture --project {}", project);
+                    println!(
+                        "  demiarch documents generate-architecture --project {}",
+                        project
+                    );
                 }
             } else {
                 if !quiet {
@@ -825,8 +839,12 @@ async fn cmd_documents(db: &Database, action: DocumentAction, quiet: bool) -> an
         }
 
         DocumentAction::UpdateStatus { id, status } => {
-            let new_status = document::DocumentStatus::parse(&status)
-                .ok_or_else(|| anyhow::anyhow!("Invalid status '{}'. Use: draft, review, final, archived", status))?;
+            let new_status = document::DocumentStatus::parse(&status).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Invalid status '{}'. Use: draft, review, final, archived",
+                    status
+                )
+            })?;
 
             document::update_document_status(db, &id, new_status)
                 .await

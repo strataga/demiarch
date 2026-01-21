@@ -17,8 +17,8 @@ use crate::error::{Error, Result};
 use crate::llm::{LlmClient, Message};
 use crate::storage::Database;
 
-use super::project::{Project, ProjectRepository};
 use super::feature::{Feature, FeatureRepository};
+use super::project::{Project, ProjectRepository};
 
 /// Document type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -465,7 +465,12 @@ impl DocumentGenerator {
 
         let features_list = features
             .iter()
-            .map(|f| format!("- {} (Priority: {}, Status: {:?})", f.title, f.priority, f.status))
+            .map(|f| {
+                format!(
+                    "- {} (Priority: {}, Status: {:?})",
+                    f.title, f.priority, f.status
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -493,8 +498,15 @@ Please create a complete PRD with the following sections:
 11. Appendix (glossary, references)"#,
             project.name,
             project.framework,
-            project.description.as_deref().unwrap_or("No description provided"),
-            if features_list.is_empty() { "No features defined yet".to_string() } else { features_list }
+            project
+                .description
+                .as_deref()
+                .unwrap_or("No description provided"),
+            if features_list.is_empty() {
+                "No features defined yet".to_string()
+            } else {
+                features_list
+            }
         );
 
         let messages = vec![
@@ -502,7 +514,10 @@ Please create a complete PRD with the following sections:
             Message::user(user_prompt),
         ];
 
-        debug!(message_count = messages.len(), "Sending PRD generation request to LLM");
+        debug!(
+            message_count = messages.len(),
+            "Sending PRD generation request to LLM"
+        );
 
         let response = self.llm_client.complete_with_fallback(messages).await?;
 
@@ -512,7 +527,11 @@ Please create a complete PRD with the following sections:
             "Received PRD response"
         );
 
-        let cost_usd = estimate_cost(&response.model, response.input_tokens, response.output_tokens);
+        let cost_usd = estimate_cost(
+            &response.model,
+            response.input_tokens,
+            response.output_tokens,
+        );
 
         Ok(GeneratedDocument {
             doc_type: DocumentType::Prd,
@@ -534,7 +553,13 @@ Please create a complete PRD with the following sections:
 
         let features_list = features
             .iter()
-            .map(|f| format!("- {}: {}", f.title, f.description.as_deref().unwrap_or("No description")))
+            .map(|f| {
+                format!(
+                    "- {}: {}",
+                    f.title,
+                    f.description.as_deref().unwrap_or("No description")
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -564,9 +589,20 @@ Please create a complete architecture document with the following sections:
 12. Future Considerations"#,
             project.name,
             project.framework,
-            if project.repo_url.is_empty() { "Not specified" } else { &project.repo_url },
-            project.description.as_deref().unwrap_or("No description provided"),
-            if features_list.is_empty() { "No features defined yet".to_string() } else { features_list }
+            if project.repo_url.is_empty() {
+                "Not specified"
+            } else {
+                &project.repo_url
+            },
+            project
+                .description
+                .as_deref()
+                .unwrap_or("No description provided"),
+            if features_list.is_empty() {
+                "No features defined yet".to_string()
+            } else {
+                features_list
+            }
         );
 
         let messages = vec![
@@ -574,7 +610,10 @@ Please create a complete architecture document with the following sections:
             Message::user(user_prompt),
         ];
 
-        debug!(message_count = messages.len(), "Sending architecture generation request to LLM");
+        debug!(
+            message_count = messages.len(),
+            "Sending architecture generation request to LLM"
+        );
 
         let response = self.llm_client.complete_with_fallback(messages).await?;
 
@@ -584,7 +623,11 @@ Please create a complete architecture document with the following sections:
             "Received architecture response"
         );
 
-        let cost_usd = estimate_cost(&response.model, response.input_tokens, response.output_tokens);
+        let cost_usd = estimate_cost(
+            &response.model,
+            response.input_tokens,
+            response.output_tokens,
+        );
 
         Ok(GeneratedDocument {
             doc_type: DocumentType::Architecture,
@@ -803,7 +846,10 @@ pub async fn update_document_status(
 
     // Verify document exists
     if doc_repo.get(document_id).await?.is_none() {
-        return Err(Error::NotFound(format!("Document not found: {}", document_id)));
+        return Err(Error::NotFound(format!(
+            "Document not found: {}",
+            document_id
+        )));
     }
 
     doc_repo.update_status(document_id, status).await
@@ -815,7 +861,10 @@ pub async fn delete_document(db: &Database, document_id: &str) -> Result<()> {
 
     // Verify document exists
     if doc_repo.get(document_id).await?.is_none() {
-        return Err(Error::NotFound(format!("Document not found: {}", document_id)));
+        return Err(Error::NotFound(format!(
+            "Document not found: {}",
+            document_id
+        )));
     }
 
     doc_repo.delete(document_id).await
@@ -852,9 +901,15 @@ mod tests {
     #[test]
     fn test_document_type_parse() {
         assert_eq!(DocumentType::parse("prd"), Some(DocumentType::Prd));
-        assert_eq!(DocumentType::parse("architecture"), Some(DocumentType::Architecture));
+        assert_eq!(
+            DocumentType::parse("architecture"),
+            Some(DocumentType::Architecture)
+        );
         assert_eq!(DocumentType::parse("design"), Some(DocumentType::Design));
-        assert_eq!(DocumentType::parse("tech_spec"), Some(DocumentType::TechSpec));
+        assert_eq!(
+            DocumentType::parse("tech_spec"),
+            Some(DocumentType::TechSpec)
+        );
         assert_eq!(DocumentType::parse("custom"), Some(DocumentType::Custom));
         assert_eq!(DocumentType::parse("invalid"), None);
     }
@@ -862,9 +917,15 @@ mod tests {
     #[test]
     fn test_document_status_parse() {
         assert_eq!(DocumentStatus::parse("draft"), Some(DocumentStatus::Draft));
-        assert_eq!(DocumentStatus::parse("review"), Some(DocumentStatus::Review));
+        assert_eq!(
+            DocumentStatus::parse("review"),
+            Some(DocumentStatus::Review)
+        );
         assert_eq!(DocumentStatus::parse("final"), Some(DocumentStatus::Final));
-        assert_eq!(DocumentStatus::parse("archived"), Some(DocumentStatus::Archived));
+        assert_eq!(
+            DocumentStatus::parse("archived"),
+            Some(DocumentStatus::Archived)
+        );
         assert_eq!(DocumentStatus::parse("invalid"), None);
     }
 
@@ -930,14 +991,23 @@ mod tests {
         assert_eq!(docs.len(), 1);
 
         // List by type
-        let prd_docs = doc_repo.list_by_project(&project.id, Some(DocumentType::Prd)).await.unwrap();
+        let prd_docs = doc_repo
+            .list_by_project(&project.id, Some(DocumentType::Prd))
+            .await
+            .unwrap();
         assert_eq!(prd_docs.len(), 1);
 
-        let arch_docs = doc_repo.list_by_project(&project.id, Some(DocumentType::Architecture)).await.unwrap();
+        let arch_docs = doc_repo
+            .list_by_project(&project.id, Some(DocumentType::Architecture))
+            .await
+            .unwrap();
         assert_eq!(arch_docs.len(), 0);
 
         // Update status
-        doc_repo.update_status(&doc.id, DocumentStatus::Review).await.unwrap();
+        doc_repo
+            .update_status(&doc.id, DocumentStatus::Review)
+            .await
+            .unwrap();
         let updated = doc_repo.get(&doc.id).await.unwrap().unwrap();
         assert_eq!(updated.status, DocumentStatus::Review);
 

@@ -2,11 +2,11 @@
 //!
 //! This module provides AI-powered phase planning and feature extraction.
 
+use crate::Result;
 use crate::commands::feature::{Feature, FeatureRepository, FeatureStatus};
 use crate::commands::phase::{Phase, PhaseRepository};
 use crate::llm::{LlmClient, Message};
 use crate::storage::Database;
-use crate::Result;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -316,11 +316,7 @@ impl<'a> PhasePlanner<'a> {
                 .unwrap_or(content)
                 .trim()
         } else if content.contains("```") {
-            content
-                .split("```")
-                .nth(1)
-                .unwrap_or(content)
-                .trim()
+            content.split("```").nth(1).unwrap_or(content).trim()
         } else {
             content.trim()
         };
@@ -415,7 +411,10 @@ pub async fn extract_features_from_conversation(
     }
 
     let extracted: ExtractedFeatures = serde_json::from_str(json_content).map_err(|e| {
-        crate::Error::Parse(format!("Failed to parse feature extraction response: {}", e))
+        crate::Error::Parse(format!(
+            "Failed to parse feature extraction response: {}",
+            e
+        ))
     })?;
 
     Ok(extracted
