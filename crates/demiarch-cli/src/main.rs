@@ -1,7 +1,7 @@
 //! Demiarch CLI - local-first AI app builder
 
 use clap::{Parser, Subcommand};
-use demiarch_core::commands::{document, feature, generate, project};
+use demiarch_core::commands::{checkpoint, document, feature, generate, project};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
 use demiarch_core::storage::{Database, DatabaseManager};
@@ -110,6 +110,12 @@ enum Commands {
     Sync {
         #[command(subcommand)]
         action: SyncAction,
+    },
+
+    /// Manage checkpoints for code safety and recovery
+    Checkpoints {
+        #[command(subcommand)]
+        action: CheckpointAction,
     },
 
     /// Configuration management
@@ -316,6 +322,53 @@ enum SyncAction {
 }
 
 #[derive(Subcommand)]
+enum CheckpointAction {
+    /// List checkpoints for a project
+    List {
+        /// Project ID
+        #[arg(short, long)]
+        project: String,
+    },
+    /// Show checkpoint statistics for a project
+    Stats {
+        /// Project ID
+        #[arg(short, long)]
+        project: String,
+    },
+    /// Create a manual checkpoint
+    Create {
+        /// Project ID
+        #[arg(short, long)]
+        project: String,
+        /// Description for the checkpoint
+        #[arg(short, long)]
+        description: String,
+        /// Optional feature ID
+        #[arg(short, long)]
+        feature: Option<String>,
+    },
+    /// Verify a checkpoint's integrity
+    Verify {
+        /// Checkpoint ID
+        id: String,
+    },
+    /// Delete a checkpoint
+    Delete {
+        /// Checkpoint ID
+        id: String,
+    },
+    /// Delete all checkpoints for a project
+    DeleteAll {
+        /// Project ID
+        #[arg(short, long)]
+        project: String,
+        /// Force deletion without confirmation
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum ConfigAction {
     /// Get a configuration value
     Get { key: String },
@@ -453,6 +506,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::Costs { project } => cmd_costs(project.as_deref(), cli.quiet).await,
 
         Commands::Sync { action } => cmd_sync(action, cli.quiet).await,
+
+        Commands::Checkpoints { action } => cmd_checkpoints(action, cli.quiet).await,
 
         Commands::Config { action } => cmd_config(action, cli.quiet),
 
@@ -1150,6 +1205,164 @@ async fn cmd_sync(action: SyncAction, quiet: bool) -> anyhow::Result<()> {
                 println!("  SQLite: up to date");
                 println!("  JSONL: up to date");
                 println!("  Last sync: never");
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn cmd_checkpoints(action: CheckpointAction, quiet: bool) -> anyhow::Result<()> {
+    match action {
+        CheckpointAction::List { project } => {
+            let project_id = uuid::Uuid::parse_str(&project)
+                .map_err(|_| anyhow::anyhow!("Invalid project ID: {}", project))?;
+
+            let checkpoints = checkpoint::list_checkpoints(project_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if checkpoints.is_empty() {
+                if !quiet {
+                    println!("No checkpoints found for project '{}'.", project);
+                    println!();
+                    println!("Checkpoints are created automatically before code generation.");
+                    println!("You can also create a manual checkpoint with:");
+                    println!("  demiarch checkpoints create --project {} --description \"Before my changes\"", project);
+                }
+            } else {
+                if !quiet {
+                    println!("Checkpoints for project '{}':", &project[..8]);
+                    println!();
+                }
+                for cp in checkpoints {
+                    let feature_info = cp
+                        .feature_id
+                        .map(|f| format!(" [feature: {}]", &f.to_string()[..8]))
+                        .unwrap_or_default();
+                    println!(
+                        "  {} - {} ({}){}",
+                        &cp.id.to_string()[..8],
+                        cp.description,
+                        cp.display_size(),
+                        feature_info
+                    );
+                    println!(
+                        "       Created: {}",
+                        cp.created_at.format("%Y-%m-%d %H:%M:%S")
+                    );
+                }
+            }
+        }
+
+        CheckpointAction::Stats { project } => {
+            let project_id = uuid::Uuid::parse_str(&project)
+                .map_err(|_| anyhow::anyhow!("Invalid project ID: {}", project))?;
+
+            let stats = checkpoint::get_checkpoint_stats(project_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Checkpoint Statistics:");
+                println!("  Project: {}", &project[..8]);
+                println!("  Total checkpoints: {}", stats.total_count);
+                println!("  Total size: {}", stats.display_total_size());
+                if let Some(oldest) = stats.oldest_checkpoint {
+                    println!("  Oldest: {}", oldest.format("%Y-%m-%d %H:%M:%S"));
+                }
+                if let Some(newest) = stats.newest_checkpoint {
+                    println!("  Newest: {}", newest.format("%Y-%m-%d %H:%M:%S"));
+                }
+            }
+        }
+
+        CheckpointAction::Create {
+            project,
+            description,
+            feature,
+        } => {
+            let project_id = uuid::Uuid::parse_str(&project)
+                .map_err(|_| anyhow::anyhow!("Invalid project ID: {}", project))?;
+
+            let feature_id = feature
+                .map(|f| uuid::Uuid::parse_str(&f))
+                .transpose()
+                .map_err(|_| anyhow::anyhow!("Invalid feature ID"))?;
+
+            if !quiet {
+                println!("Creating checkpoint...");
+            }
+
+            let cp = checkpoint::create_checkpoint(project_id, description, feature_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Checkpoint created successfully!");
+                println!("  ID: {}", cp.id);
+                println!("  Description: {}", cp.description);
+                println!("  Size: {}", cp.display_size());
+            }
+        }
+
+        CheckpointAction::Verify { id } => {
+            let checkpoint_id = uuid::Uuid::parse_str(&id)
+                .map_err(|_| anyhow::anyhow!("Invalid checkpoint ID: {}", id))?;
+
+            let is_valid = checkpoint::verify_checkpoint(checkpoint_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                if is_valid {
+                    println!("[OK] Checkpoint '{}' signature is valid.", &id[..8]);
+                } else {
+                    println!("[!!] Checkpoint '{}' signature verification FAILED.", &id[..8]);
+                    println!("     The checkpoint data may have been corrupted or tampered with.");
+                }
+            }
+        }
+
+        CheckpointAction::Delete { id } => {
+            let checkpoint_id = uuid::Uuid::parse_str(&id)
+                .map_err(|_| anyhow::anyhow!("Invalid checkpoint ID: {}", id))?;
+
+            let deleted = checkpoint::delete_checkpoint(checkpoint_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                if deleted {
+                    println!("Checkpoint '{}' deleted.", &id[..8]);
+                } else {
+                    println!("Checkpoint '{}' not found.", &id[..8]);
+                }
+            }
+        }
+
+        CheckpointAction::DeleteAll { project, force } => {
+            let project_id = uuid::Uuid::parse_str(&project)
+                .map_err(|_| anyhow::anyhow!("Invalid project ID: {}", project))?;
+
+            if !force && !quiet {
+                println!(
+                    "Warning: This will delete ALL checkpoints for project '{}'.",
+                    &project[..8]
+                );
+                println!("Use --force to confirm deletion.");
+                return Ok(());
+            }
+
+            let deleted = checkpoint::delete_all_checkpoints(project_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!(
+                    "Deleted {} checkpoint(s) for project '{}'.",
+                    deleted,
+                    &project[..8]
+                );
             }
         }
     }

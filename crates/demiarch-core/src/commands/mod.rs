@@ -3,6 +3,7 @@
 //! These commands are used by CLI, TUI, and GUI interfaces.
 
 pub mod chat;
+pub mod checkpoint;
 pub mod document;
 pub mod feature;
 pub mod generate;

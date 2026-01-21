@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 3;
+pub const CURRENT_VERSION: i32 = 4;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -232,6 +232,33 @@ const MIGRATION_V3: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_feature_extraction_history_project_id ON feature_extraction_history(project_id);
 "#;
 
+/// Migration 4: Enhanced checkpoints for automatic code safety
+///
+/// Transforms the basic file-level checkpoints table into a project-state
+/// checkpoint system with Ed25519 signatures for integrity verification.
+const MIGRATION_V4: &str = r#"
+    -- Drop old checkpoints table and recreate with new schema
+    -- The old schema stored individual file contents; new schema stores full project state
+    DROP TABLE IF EXISTS checkpoints;
+
+    -- Create enhanced checkpoints table for automatic code safety
+    CREATE TABLE checkpoints (
+        id TEXT PRIMARY KEY NOT NULL,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        feature_id TEXT REFERENCES features(id) ON DELETE SET NULL,
+        description TEXT NOT NULL,
+        snapshot_data TEXT NOT NULL,  -- JSON blob containing project state
+        size_bytes INTEGER NOT NULL,
+        signature BLOB NOT NULL,      -- Ed25519 signature for integrity
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Indexes for efficient querying
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_project_id ON checkpoints(project_id);
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_feature_id ON checkpoints(feature_id);
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_created_at ON checkpoints(created_at);
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -286,6 +313,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v3: Phase planning enhancements");
         sqlx::raw_sql(MIGRATION_V3).execute(pool).await?;
         record_migration(pool, 3).await?;
+    }
+
+    if current_version < 4 {
+        tracing::info!("Applying migration v4: Enhanced checkpoints for code safety");
+        sqlx::raw_sql(MIGRATION_V4).execute(pool).await?;
+        record_migration(pool, 4).await?;
     }
 
     tracing::info!("Database migrations completed");

@@ -533,6 +533,71 @@ pub async fn generate_with_tracker(
     generator.generate(description, dry_run).await
 }
 
+/// Generate code with automatic checkpointing for code safety
+///
+/// This is the recommended entry point for code generation as it:
+/// 1. Creates a checkpoint of the project state before generation
+/// 2. Generates the code
+/// 3. Returns the checkpoint ID along with the generation result
+///
+/// If `dry_run` is true, no checkpoint is created and no files are written.
+pub async fn generate_with_checkpoint(
+    project_id: uuid::Uuid,
+    feature_id: Option<uuid::Uuid>,
+    feature_name: &str,
+    description: &str,
+    dry_run: bool,
+) -> Result<GenerationResultWithCheckpoint> {
+    use crate::domain::recovery::{CheckpointManager, CheckpointSigner};
+    use crate::storage::Database;
+
+    let config = Config::load().map_err(|e| Error::ConfigError(e.to_string()))?;
+    let cost_tracker = Arc::new(CostTracker::from_config(&config.cost));
+
+    // Create checkpoint before generation (unless dry run)
+    let checkpoint_id = if !dry_run {
+        let db = Database::default()
+            .await
+            .map_err(|e| Error::Other(e.to_string()))?;
+        let signer = CheckpointSigner::generate();
+        let manager = CheckpointManager::new(db.pool().clone(), signer);
+
+        let checkpoint = manager
+            .create_before_generation(project_id, feature_id, feature_name)
+            .await?;
+
+        info!(
+            checkpoint_id = %checkpoint.id,
+            size = %checkpoint.display_size(),
+            "Created checkpoint before code generation"
+        );
+
+        Some(checkpoint.id)
+    } else {
+        debug!("Dry run mode - skipping checkpoint creation");
+        None
+    };
+
+    // Generate code
+    let generator = CodeGenerator::new(config, Some(cost_tracker))?;
+    let result = generator.generate(description, dry_run).await?;
+
+    Ok(GenerationResultWithCheckpoint {
+        result,
+        checkpoint_id,
+    })
+}
+
+/// Result of code generation with checkpoint information
+#[derive(Debug, Clone)]
+pub struct GenerationResultWithCheckpoint {
+    /// The generation result
+    pub result: GenerationResult,
+
+    /// The checkpoint ID created before generation (None if dry-run)
+    pub checkpoint_id: Option<uuid::Uuid>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
