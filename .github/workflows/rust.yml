@@ -87,7 +87,7 @@ jobs:
 
       - name: Cargo deny
         working-directory: ${{ matrix.workspace }}
-        run: cargo deny check --workspace --all-features
+        run: cargo deny check
 
       - name: Cargo audit
         working-directory: ${{ matrix.workspace }}
