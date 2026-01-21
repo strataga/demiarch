@@ -1,0 +1,14 @@
+{
+  "id": "e27f423c-be48-4a3f-b3d7-7f3184ef720e",
+  "status": "running",
+  "startedAt": "2026-01-21T04:07:59.410Z",
+  "updatedAt": "2026-01-21T04:07:59.410Z",
+  "agentPlugin": "claude",
+  "trackerPlugin": "json",
+  "prdPath": ".ralph-tui/prd.json",
+  "currentIteration": 0,
+  "maxIterations": 10,
+  "totalTasks": 0,
+  "tasksCompleted": 0,
+  "cwd": "/home/jason/projects/demiarch"
+}

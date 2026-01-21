@@ -380,6 +380,7 @@ CREATE TABLE checkpoints (
     description TEXT,
     snapshot_data TEXT NOT NULL,  -- JSON: full state snapshot
     size_bytes INTEGER,
+    signature TEXT,  -- ed25519 signature for integrity verification
     created_at TEXT DEFAULT (datetime('now')),
     expires_at TEXT
 );
@@ -519,7 +520,7 @@ CREATE TABLE learned_skills (
     solution TEXT NOT NULL,
     verification TEXT,
     category TEXT DEFAULT 'debugging' CHECK (category IN ('debugging', 'pattern', 'workaround', 'optimization', 'integration')),
-    quality_score REAL DEFAULT 0.0,  -- RL-updated quality metric
+    quality_score REAL DEFAULT 0.0 CHECK (quality_score >= 0.0 AND quality_score <= 1.0),  -- RL-updated quality metric (0.0-1.0)
     usage_count INTEGER DEFAULT 0,
     success_count INTEGER DEFAULT 0,
     last_used_at TEXT,

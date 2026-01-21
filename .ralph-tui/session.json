@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "sessionId": "e27f423c-be48-4a3f-b3d7-7f3184ef720e",
+  "status": "running",
+  "startedAt": "2026-01-21T04:08:00.675Z",
+  "updatedAt": "2026-01-21T04:08:00.675Z",
+  "currentIteration": 0,
+  "maxIterations": 10,
+  "tasksCompleted": 0,
+  "isPaused": false,
+  "agentPlugin": "claude",
+  "trackerState": {
+    "plugin": "json",
+    "prdPath": ".ralph-tui/prd.json",
+    "totalTasks": 6,
+    "tasks": [
+      {
+        "id": "US-001",
+        "title": "Initialize Project with Starter Template",
+        "status": "completed",
+        "completedInSession": false
+      },
+      {
+        "id": "US-002",
+        "title": "Set up SQLite Database per Project",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-003",
+        "title": "Configure API Key Storage with Encryption",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-004",
+        "title": "Implement Basic CLI Interface",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-005",
+        "title": "Implement Basic GUI Entry Point",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-006",
+        "title": "Track Basic LLM Costs",
+        "status": "open",
+        "completedInSession": false
+      }
+    ]
+  },
+  "iterations": [],
+  "skippedTaskIds": [],
+  "cwd": "/home/jason/projects/demiarch",
+  "activeTaskIds": [],
+  "subagentPanelVisible": false
+}

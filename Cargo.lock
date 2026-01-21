@@ -712,8 +712,10 @@ name = "demiarch-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "clap",
  "demiarch-core",
+ "ed25519-dalek",
  "tokio",
  "tracing",
  "tracing-subscriber",

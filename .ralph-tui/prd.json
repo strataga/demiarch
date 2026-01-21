@@ -1,0 +1,687 @@
+{
+  "name": "Demiarch",
+  "description": "AI-powered code generation platform with Russian Doll agent hierarchy, plugin ecosystem, and local-first architecture. 8 Epics with 38 Stories covering Foundation, Conversational Development, Kanban, Code Safety, Advanced Agents, Multi-Project Workspace, Plugin Ecosystem, and Offline Operations.",
+  "userStories": [
+    {
+      "id": "1.0",
+      "title": "Setup CI/CD Pipeline with Security Scanning",
+      "description": "As a developer, I want automated CI/CD with security scanning from the start, so that vulnerabilities are caught early and builds are reproducible.",
+      "acceptanceCriteria": [
+        "GitHub Actions CI pipeline runs automatically on push",
+        "Pipeline runs cargo-audit for Rust dependency vulnerabilities",
+        "Pipeline runs npm audit for frontend dependency vulnerabilities",
+        "Pipeline fails on high-severity vulnerabilities",
+        "Pipeline runs cargo test for all workspace crates",
+        "Pipeline runs cargo clippy for linting",
+        "Pipeline caches Cargo registry and target directory for faster builds",
+        "CI badge is displayed in repository README"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "1.1",
+      "title": "Initialize Project with Starter Template",
+      "description": "As a new user, I want to initialize a Demiarch project using create-tauri-app with React + TypeScript, so that I can start development with a working foundation.",
+      "acceptanceCriteria": [
+        "Project is created using create-tauri-app template with React + TypeScript",
+        "Cargo workspace is configured with 3 crates: demiarch-core, demiarch-cli, demiarch-gui",
+        "Project structure matches architecture specification (domain/application/infrastructure/)",
+        "All dependencies from architecture are added to Cargo.toml",
+        "User sees confirmation message: Project initialized successfully"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "1.2",
+      "title": "Set Up SQLite Database per Project",
+      "description": "As a user creating a project, I want a local SQLite database created automatically for my project, so that all my data stays local and is properly isolated.",
+      "acceptanceCriteria": [
+        "SQLite database file is created at .demiarch/{project_id}/database.sqlite",
+        "Core tables are created: projects, user_preferences, metadata",
+        "Schema version is recorded in metadata table as version 1",
+        "Database file permissions are set to 0600 (owner read/write only)",
+        "Connection pool is configured with 5 max connections",
+        "sqlite-vec extension (v0.1.6) loaded for embedding support"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "1.3",
+      "title": "Configure API Key Storage with Encryption",
+      "description": "As a user, I want to securely store my OpenRouter API key with encryption, so that my credentials are protected and not exposed.",
+      "acceptanceCriteria": [
+        "System attempts to store key in OS keyring first (keyring crate)",
+        "If OS keyring fails, stores in encrypted SQLite table",
+        "Key is encrypted using AES-GCM with argon2-derived key from machine ID",
+        "Nonce is generated using ChaChaRng (cryptographically secure, never reused)",
+        "All plaintext containing key is zeroed from memory immediately after encryption (zeroize)",
+        "Success message shown without exposing key in logs or console"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "1.4",
+      "title": "Implement Basic CLI Interface",
+      "description": "As a developer user, I want to interact with Demiarch through a command-line interface, so that I can script operations and use terminal workflows.",
+      "acceptanceCriteria": [
+        "CLI displays available commands: project, generate, sync, config, watch",
+        "Each command shows usage and required arguments",
+        "Projects are displayed in a table format with ID, name, status, framework",
+        "Empty state shows helpful message for creating projects",
+        "Errors display with user-friendly messages and actionable suggestions"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "1.5",
+      "title": "Implement Basic GUI Entry Point",
+      "description": "As a non-technical user, I want to launch a desktop application with a graphical interface, so that I can interact with Demiarch visually without using the terminal.",
+      "acceptanceCriteria": [
+        "Tauri window opens with default dark theme",
+        "Window displays navigation header with project selector",
+        "Window shows empty state with Create your first project prompt",
+        "Window is resizable with minimum dimensions 800x600",
+        "React app loads without JavaScript errors in console"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "1.6",
+      "title": "Track Basic LLM Costs",
+      "description": "As a user, I want to see how much I'm spending on LLM calls, so that I can manage my AI development budget.",
+      "acceptanceCriteria": [
+        "System displays total cost spent for project in USD",
+        "Cost breakdown shows tokens used per model (prompt + completion)",
+        "Costs are retrieved from llm_usage table with accurate calculations",
+        "Dashboard panel shows daily cost vs budget limit",
+        "Zero cost displays as $0.00 not empty or null"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "2.1",
+      "title": "Implement Chat Interface with Conversation Threading",
+      "description": "As a user, I want to chat with Demiarch's AI through a conversational interface with message history, so that I can discuss my project requirements naturally and see our conversation context.",
+      "acceptanceCriteria": [
+        "Message appears immediately in chat stream with user avatar and timestamp",
+        "AI response appears within 5 seconds with typing indicator shown during processing",
+        "All messages are saved to chat_messages table with project_id, role, content, token_count, model",
+        "Chat scrolls automatically to latest message",
+        "User can scroll up to see full conversation history"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "2.2",
+      "title": "Integrate OpenRouter LLM Client",
+      "description": "As a user, I want Demiarch to communicate with LLMs through OpenRouter API, so that I can use multiple AI models for code generation and conversations.",
+      "acceptanceCriteria": [
+        "Request is sent to OpenRouter API with proper headers",
+        "Model is selectable from configured defaults",
+        "Request includes conversation context from chat_messages table",
+        "Response is parsed and saved to chat_messages table with token_count",
+        "Cost is calculated and saved to llm_usage table",
+        "Network errors trigger exponential backoff retry (max 3 retries, 30s max delay)",
+        "Model fallback activates on failure (default -> Haiku -> GPT-4o)"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "2.3",
+      "title": "Generate Code from Natural Language Description",
+      "description": "As a user, I want to describe a feature in natural language and have AI generate complete, working code, so that I can build applications without writing code manually.",
+      "acceptanceCriteria": [
+        "Generated files are created in the project repository at specified paths",
+        "Each file is recorded in generated_code table with feature_id, file_path, content, checksums",
+        "Files are created using the project's configured framework",
+        "User sees message showing count of generated files",
+        "User can run the generated code and it functions as described"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "2.4",
+      "title": "Auto-Generate PRD and Architecture Documents",
+      "description": "As a user, I want to automatically generate PRD and Architecture documents based on our conversation, so that I can have formal project documentation without writing it manually.",
+      "acceptanceCriteria": [
+        "PRD.md is created with sections: Overview, Functional Requirements, Non-Functional Requirements, Architecture, Database Schema",
+        "Content reflects all requirements discussed in conversation",
+        "Architecture.md is created with sections: System Overview, Tech Stack, Database Schema, API Contracts",
+        "Both documents are saved to project_documents table with doc_type"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "2.5",
+      "title": "Break Down Features into Phases with User Stories",
+      "description": "As a user, I want to automatically break down my project into phases with user stories and acceptance criteria, so that I can track development progress in a structured way.",
+      "acceptanceCriteria": [
+        "Phase records are created in phases table with name, description, status, order_index",
+        "Feature records are created in features table linked to phase_id",
+        "User sees organized phases: Discovery, Planning, Building, Complete",
+        "Each phase shows count of features within it",
+        "User can drag features between phases"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "3.1",
+      "title": "Create Kanban Board Layout with Columns",
+      "description": "As a user, I want to see a kanban board with columns representing project phases, so that I can visualize my project's feature workflow.",
+      "acceptanceCriteria": [
+        "Board displays with 4 columns: Discovery, Planning, Building, Complete",
+        "Each column shows feature cards linked to that phase",
+        "Column header displays feature count",
+        "Layout uses glassmorphism panels with custom design system colors",
+        "Board is responsive: 4 columns on desktop, 2 on tablet, 1 on mobile"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "3.2",
+      "title": "Implement Feature Cards with Drag-and-Drop",
+      "description": "As a user, I want to drag feature cards between kanban columns to update their status, so that I can track progress visually with satisfying interactions.",
+      "acceptanceCriteria": [
+        "Column highlights with teal glow indicating drop target",
+        "Card snaps into column with smooth animation (60fps, no lag)",
+        "Feature's phase_id in database is updated to new column's phase",
+        "Card shows updated status badge reflecting new phase",
+        "User can cancel drag with Escape key or by clicking outside board"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "3.3",
+      "title": "Display Feature Details on Card Expansion",
+      "description": "As a user, I want to expand a kanban card to see feature details, requirements, and linked conversation, so that I can review what was discussed without navigating away.",
+      "acceptanceCriteria": [
+        "Modal/panel opens showing: feature name, description, acceptance_criteria, priority",
+        "View Conversation button links to chat history that created this feature",
+        "View Code button shows generated files for this feature",
+        "Modal closes with Escape key or clicking outside"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "3.4",
+      "title": "Basic Project Switching UI",
+      "description": "As a user with multiple projects, I want to switch between projects via a dropdown or keyboard shortcuts, so that I can work on different projects without restarting Demiarch.",
+      "acceptanceCriteria": [
+        "Dropdown shows list of all projects with names and status",
+        "Selecting a project loads that project's data",
+        "Active project is visually indicated with teal accent in navigation",
+        "Shortcut Cmd/Ctrl + 1-5 switches to projects 1-5",
+        "Current project state is preserved during switch",
+        "Switch completes within 1 second"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "3.5",
+      "title": "Basic Agent Status Visualization",
+      "description": "As a user, I want to see basic agent activity status when code generation is running, so that I know what's happening without technical details.",
+      "acceptanceCriteria": [
+        "Panel shows simplified status: AI agents working on this feature",
+        "Status pulses with amber color to indicate activity",
+        "Status changes to Feature complete with teal color on completion",
+        "Panel shows summary of generated files, components, API routes",
+        "Panel offers Retry button on failure"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "4.1",
+      "title": "Create Automatic Checkpoints Before Major Changes",
+      "description": "As a user, I want Demiarch to automatically create a complete project state checkpoint before generating new code, so that I can always recover if something goes wrong.",
+      "acceptanceCriteria": [
+        "System creates checkpoint record in checkpoints table",
+        "snapshot_data contains JSON serialization of current project state",
+        "Checkpoint size in bytes is recorded",
+        "Checkpoint is signed with ed25519 private key",
+        "Oldest checkpoints beyond retention limit are automatically deleted"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "4.2",
+      "title": "Implement Rollback to Previous Checkpoint",
+      "description": "As a user, I want to restore my project to a previous checkpoint with one click, so that I can recover from mistakes or failed generations.",
+      "acceptanceCriteria": [
+        "System verifies checkpoint signature using ed25519 public key",
+        "If signature is invalid, user sees error message",
+        "All tables are restored from snapshot on valid signature",
+        "Current generated code files are reverted to checkpoint versions",
+        "Restore completes within 5 seconds",
+        "Checkpoint creation happens after restore (for safety)"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "4.3",
+      "title": "Detect User Edits to Generated Code",
+      "description": "As a user, I want Demiarch to automatically detect when I edit AI-generated files, so that conflicts are flagged when AI regenerates that code.",
+      "acceptanceCriteria": [
+        "Demiarch watch system detects file change via filesystem watcher",
+        "New checksum is calculated for file (SHA-256)",
+        "generated_code.current_checksum is updated with new checksum",
+        "generated_code.user_modified is set to 1",
+        "Record is added to user_code_edits table",
+        "Modified files show visual indicator (amber dot or Edited badge)"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "4.4",
+      "title": "Display Conflict Resolution Interface",
+      "description": "As a user, I want to see side-by-side diff when AI regenerates code I've edited, so that I can choose what to keep intelligently.",
+      "acceptanceCriteria": [
+        "System detects conflict by comparing checksums",
+        "Modal opens with side-by-side diff: original vs new AI version",
+        "User's edits are highlighted with amber overlay",
+        "Options displayed: Keep My Changes, Keep AI Version, Merge Both, Manual Edit",
+        "Security annotations show for suspicious additions",
+        "Record is added to conflict_resolutions table on resolution"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "4.5",
+      "title": "Export to JSONL for Git Sync",
+      "description": "As a user, I want to explicitly export my project data to JSONL format for git version control, so that I can commit my project history without automatic sync.",
+      "acceptanceCriteria": [
+        "All tables are exported to .demiarch/{project_id}/export.jsonl",
+        "Each record is one JSON line in JSONL format",
+        "metadata.dirty flag is set to 0",
+        "Import validates each line against JSON schema",
+        "Import completes without data corruption"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "5.1",
+      "title": "Implement Russian Doll Agent Hierarchy",
+      "description": "As a user, I want Demiarch to use a 3-level agent hierarchy (Orchestrator -> Planner -> Coder/Reviewer/Tester) for code generation, so that complex features are broken down and delegated intelligently.",
+      "acceptanceCriteria": [
+        "Orchestrator spawns a Planner agent via AgentTool call",
+        "Planner decomposes feature into tasks",
+        "Planner spawns Coder, Reviewer, and Tester agents for each task",
+        "All agent executions are recorded in agent_executions table",
+        "Results bubble up through hierarchy to Orchestrator",
+        "User sees agent hierarchy status"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "5.2",
+      "title": "Implement Progressive Disclosure for Context Management",
+      "description": "As a user, I want Demiarch to automatically retrieve only the most relevant context to save tokens, so that my conversations are efficient and cost-effective.",
+      "acceptanceCriteria": [
+        "System retrieves layered summaries from context_summaries table",
+        "Summary types follow: detail_level=1 (index), 2 (timeline), 3 (full)",
+        "Only relevant summaries are included based on semantic similarity",
+        "Semantic filter scans retrieved context for prompt injection patterns (~50ms overhead)",
+        "Suspicious patterns are excluded and logged in audit_log",
+        "Token savings are displayed to user"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "5.3",
+      "title": "Extract and Store Learned Skills",
+      "description": "As a user, I want Demiarch to automatically extract debugging solutions as reusable skills, so that similar problems are solved faster in the future.",
+      "acceptanceCriteria": [
+        "System analyzes error and solution for reusability",
+        "learned_skills record is created with name, description, problem, solution",
+        "Quality score is initialized to 0.0",
+        "Embedding is generated (1536-dimensional using OpenAI text-embedding-3-small)",
+        "Embedding is stored in skill_embeddings table",
+        "User can mark skill as Verified to increase quality score"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "5.4",
+      "title": "Implement Semantic Search for Skills Retrieval",
+      "description": "As a user, I want Demiarch to automatically suggest relevant learned skills when I encounter a problem, so that I can apply proven solutions without waiting for AI.",
+      "acceptanceCriteria": [
+        "System generates embedding for error/problem description",
+        "System queries skill_embeddings table for KNN search (sqlite-vec)",
+        "Top 3 most similar skills are returned by cosine distance",
+        "Semantic filter is applied to retrieved skills",
+        "Suspicious skills are not suggested and logged in audit_log",
+        "Skills are suggested to user with apply option"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "5.5",
+      "title": "Implement Dynamic Model Routing with RL",
+      "description": "As a user, I want Demiarch to automatically select the best model for each task type, so that I get optimal performance at lowest cost.",
+      "acceptanceCriteria": [
+        "System queries model_routing_rules table for matching task types",
+        "Priority-ordered models are returned based on is_specialized, min_quality_score, max_cost_per_1k",
+        "Selection is recorded in routing_decisions table",
+        "Performance metrics are recorded in model_performance table",
+        "Model performance scores are updated based on outcomes (RL feedback loop)",
+        "Routing rules are adjusted automatically based on learned performance"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "5.6",
+      "title": "Full Agent Visualization with Hierarchy Tree",
+      "description": "As a technical user, I want to see complete Russian Doll agent execution tree with detailed metrics, so that I can understand what each agent did and optimize performance.",
+      "acceptanceCriteria": [
+        "Neural network visualization displays with concentric rings",
+        "Outer ring: Orchestrator (teal), Middle ring: Planner (magenta), Inner ring: Workers (amber)",
+        "Each agent node shows: status, execution time, token usage, cost",
+        "Connections between nodes animate with flowing particles",
+        "Detail panel shows input_context, output_result, error_message",
+        "User can see full execution tree with parent-child relationships"
+      ],
+      "priority": "low",
+      "passes": []
+    },
+    {
+      "id": "6.1",
+      "title": "Implement Global Session Management",
+      "description": "As a user, I want to have a global session that tracks active projects and context windows, so that I can work across multiple projects without losing state.",
+      "acceptanceCriteria": [
+        "Global session record is created in global_sessions table with status=active",
+        "current_project_id is set to last used project or null",
+        "active_project_ids JSON array tracks all open projects",
+        "context_data JSON stores context windows for each project",
+        "Session persists in database across GUI/CLI restarts"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "6.2",
+      "title": "Implement Resource Locking for Concurrency",
+      "description": "As a user with multiple projects, I want agents to acquire locks on resources to prevent conflicts, so that concurrent operations don't corrupt data.",
+      "acceptanceCriteria": [
+        "Agent calls LockManager::acquire with resource_key (project_id, resource_type, resource_key)",
+        "Lock is granted if resource is free or timeout occurs after 300 seconds",
+        "Lock is recorded in resource_locks table with agent_id, acquired_at",
+        "Lock is released via LockGuard::release or Drop implementation",
+        "If deadlock is detected, lock is force-released after timeout",
+        "Warning is logged: Deadlock detected on resource"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "6.3",
+      "title": "Cross-Project Search with Opt-In",
+      "description": "As a user with opt-in enabled, I want to search across multiple projects to find code patterns and reuse solutions, so that I can leverage work from other projects.",
+      "acceptanceCriteria": [
+        "System searches selected projects' features, chat_messages, generated_code tables",
+        "Results show project name, feature name, relevance score",
+        "User sees which project each result came from",
+        "Reference is created in cross_project_refs table",
+        "User can navigate to source project to view full details",
+        "Search can be disabled per-project in settings"
+      ],
+      "priority": "low",
+      "passes": []
+    },
+    {
+      "id": "6.4",
+      "title": "Session Recovery on Restart",
+      "description": "As a user, I want my session state to be restored automatically when I restart Demiarch, so that I can continue working without setup.",
+      "acceptanceCriteria": [
+        "System queries global_sessions table for last active session",
+        "Session state is reconstructed from context_data JSON",
+        "current_project_id is restored",
+        "All active projects are loaded into memory",
+        "GUI displays projects in their last viewed state",
+        "User sees welcome back message with active project count"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "6.5",
+      "title": "Session End and Cleanup",
+      "description": "As a user, I want to explicitly end my session with cleanup, so that resources are released and state is saved properly.",
+      "acceptanceCriteria": [
+        "global_sessions.status is updated to completed",
+        "completed_at is set to current time",
+        "All resource locks for session are released",
+        "Context windows are serialized to context_data before cleanup",
+        "Audit log entry is created with event_type=session_end",
+        "Session cleanup completes within 2 seconds"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "7.1",
+      "title": "Install Built-in Framework Plugins",
+      "description": "As a user, I want Demiarch to include built-in plugins for major frameworks (Next.js, React Native, Flutter, etc.), so that I can generate code for my preferred framework without manual setup.",
+      "acceptanceCriteria": [
+        "Plugin is loaded from installed_plugins table with source=builtin",
+        "Plugin metadata is displayed: name, version, capabilities, api_version",
+        "Plugin can generate components, API routes, and models for that framework",
+        "User sees message showing which built-in plugin is being used"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "7.2",
+      "title": "Load and Execute WASM Plugins",
+      "description": "As a user, I want to install and use third-party plugins compiled to WASM, so that I can extend Demiarch's capabilities securely.",
+      "acceptanceCriteria": [
+        "installed_plugins record is created with source, source_url, checksum",
+        "System calculates SHA-256 checksum and verifies against registry",
+        "Plugin is loaded into Wasmtime sandbox with configured capabilities",
+        "Fuel limit is enforced (10M fuel max, randomized for security)",
+        "Only allowed capabilities are linked",
+        "Plugin execution is logged with fuel consumption metrics",
+        "Fuel consumption outliers are flagged for security review"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "7.3",
+      "title": "Offline License Verification with ed25519",
+      "description": "As a user, I want Demiarch to verify plugin licenses offline using ed25519 signatures, so that I can use plugins without internet connectivity.",
+      "acceptanceCriteria": [
+        "plugin_licenses record is created with plugin_id, license_key, license_type, tier, issued_at, expires_at",
+        "Signature is verified using public key compiled into binary (const array)",
+        "If signature is invalid, validation_status is set to invalid and user sees error",
+        "If signature is valid, validation_status is set to valid with validated_at timestamp",
+        "If license has expired, validation_status is expired with expiry message",
+        "Plugin functionality is available based on tier (free, paid features enabled)"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "7.4",
+      "title": "Implement Three-Tier Plugin Trust Model",
+      "description": "As a user, I want to see plugin trust levels (built-in, verified third-party, unverified) with appropriate warnings, so that I can make informed decisions about plugin safety.",
+      "acceptanceCriteria": [
+        "Each plugin shows trust badge: Built-in (green checkmark), Verified (blue shield), Unverified (amber warning)",
+        "Unverified plugins show warning: This plugin is unverified. Use at your own risk.",
+        "Verified plugins show: Signed by {publisher} verified at {date}",
+        "Built-in plugins show: Official Demiarch plugin",
+        "User can filter plugins by trust level"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "7.5",
+      "title": "Configure Plugin Capabilities and Permissions",
+      "description": "As a user, I want to review and approve plugin capabilities before first use, so that I understand what a plugin can access.",
+      "acceptanceCriteria": [
+        "Modal displays requested capabilities: read_files, write_files, network, execute_commands",
+        "Each capability shows plain-language explanation",
+        "User can approve all capabilities or select specific ones",
+        "Denied capabilities are not linked to WASM sandbox",
+        "User's choice is saved in plugin_config table per capability",
+        "If user denies all capabilities, plugin is disabled with message"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "7.6",
+      "title": "Implement Plugin Pricing Models",
+      "description": "As a user, I want Demiarch to support multiple plugin pricing models (free, paid, usage-based, trial, watermark), so that I can choose plugins with my preferred pricing.",
+      "acceptanceCriteria": [
+        "installed_plugins.pricing_model is set to: free, paid, usage, trial, or watermark",
+        "Paid plugins prompt for license_key during installation",
+        "Usage-based plugins track usage_count in plugin_usage table",
+        "When free_quota is exceeded, user sees upgrade message",
+        "Trial plugins show days remaining and expiration date",
+        "Watermark plugins include visible watermark in generated code",
+        "Watermark removal prompts for full license purchase"
+      ],
+      "priority": "low",
+      "passes": []
+    },
+    {
+      "id": "7.7",
+      "title": "Lifecycle Hooks for Plugin Events",
+      "description": "As a plugin developer or power user, I want plugins to register handlers for lifecycle events (session_start, pre_generation, post_generation, on_error, on_checkpoint), so that plugins can react to Demiarch events.",
+      "acceptanceCriteria": [
+        "System queries lifecycle_hooks table for handlers with matching hook_type",
+        "Each handler is executed based on handler_type: internal, plugin, script",
+        "Plugin handlers invoke plugin function via handler_config JSON",
+        "Script handlers execute external script via script_path",
+        "Record is added to hook_executions table with hook_id, session_id, trigger_context, result, duration_ms",
+        "If handler fails, error is logged and event continues",
+        "Handler priority is respected (lower number = higher priority)"
+      ],
+      "priority": "low",
+      "passes": []
+    },
+    {
+      "id": "8.1",
+      "title": "Detect Network Connectivity and Enter Offline Mode",
+      "description": "As a user, I want Demiarch to automatically detect when internet is unavailable, so that the system degrades gracefully without errors.",
+      "acceptanceCriteria": [
+        "System detects timeout, DNS failure, and network unreachable errors",
+        "System sets offline_mode=true and displays degraded UI banner",
+        "User sees message: Offline mode activated. Operations will queue until connection restores.",
+        "All pending LLM requests are queued to queued_operations table",
+        "System exits offline mode when connectivity is restored",
+        "User sees message showing count of queued operations being processed"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "8.2",
+      "title": "Queue Operations During Offline Mode",
+      "description": "As a user, I want my operations to be automatically queued when I'm offline, so that I can continue working and have operations executed when connectivity returns.",
+      "acceptanceCriteria": [
+        "Record is created in queued_operations table with operation_type, payload JSON, status=pending",
+        "retry_count is initialized to 0, max_retries set to 3",
+        "Queue displays count of pending operations",
+        "Each operation shows type and status (pending/processing/completed/failed)",
+        "User can cancel individual operations with confirmation"
+      ],
+      "priority": "high",
+      "passes": []
+    },
+    {
+      "id": "8.3",
+      "title": "Automatic Retry on Connectivity Restore",
+      "description": "As a user, I want queued operations to automatically retry with exponential backoff when connection returns, so that I don't need to manually trigger each failed operation.",
+      "acceptanceCriteria": [
+        "Each pending operation is processed in FIFO order",
+        "retry_count is incremented on failure",
+        "Exponential backoff is applied: delay = 2^retry_count * base_delay (max 30 seconds)",
+        "Operation status is set to failed when retry_count reaches max_retries (3)",
+        "last_error is recorded in queued_operations table",
+        "User is notified of failure with operation type",
+        "On success, status is set to completed with processed_at timestamp",
+        "User sees completion notification"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "8.4",
+      "title": "Graceful Degradation for Offline Features",
+      "description": "As a user, I want non-essential features to be disabled when offline, so that I can continue core development without confusion.",
+      "acceptanceCriteria": [
+        "LLM-dependent features show Unavailable offline message with amber warning",
+        "Offline-capable features remain fully functional (file editing, project viewing, checkpoint management)",
+        "User sees clear explanation when attempting online-only feature",
+        "Operation is auto-queued with confirmation: Operation queued. Will run when online.",
+        "All features are re-enabled without requiring restart when connectivity restores"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "8.5",
+      "title": "Cost Alerts with Daily Limits",
+      "description": "As a user, I want to be alerted when approaching or exceeding daily cost limits, so that I can control spending and avoid unexpected bills.",
+      "acceptanceCriteria": [
+        "User has cost_daily_limit_usd in user_preferences (default $10.00)",
+        "Daily cost is calculated from llm_usage table for current date",
+        "cost_alerts record is created when cost reaches 80% threshold (cost_alert_threshold)",
+        "User sees notification: Daily cost alert: $X of $Y spent. Z% remaining.",
+        "cost_alerts record is created when daily limit is reached",
+        "User sees blocking message: Daily cost limit reached. Generate blocked until tomorrow or increase limit.",
+        "User can acknowledge alert to dismiss notification",
+        "User can view cost history with daily breakdowns"
+      ],
+      "priority": "medium",
+      "passes": []
+    },
+    {
+      "id": "8.6",
+      "title": "Project Rate Limits and Resource Throttling",
+      "description": "As a user, I want Demiarch to enforce project-specific rate limits (hourly requests, concurrent agents), so that resource usage stays controlled and predictable.",
+      "acceptanceCriteria": [
+        "System checks project_rate_limits table for limit_type (hourly_requests, concurrent_agents, tokens_per_minute)",
+        "Default limits applied: hourly_requests=100, concurrent_agents=3, tokens_per_minute=100000, requests_per_minute=20",
+        "Current value is tracked and incremented",
+        "Operation is throttled when current_value reaches limit_value",
+        "Throttle message shows wait time: Rate limit exceeded. Wait {reset_at} to continue.",
+        "current_value is reset to 0 when reset_at time passes",
+        "Rate limits show in project settings: type, current_value, limit_value, reset_at",
+        "User can adjust limits (not below system minimums: hourly_requests>=10, concurrent_agents>=1)",
+        "Limits persist across sessions"
+      ],
+      "priority": "medium",
+      "passes": []
+    }
+  ]
+}

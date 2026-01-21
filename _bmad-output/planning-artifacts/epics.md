@@ -63,7 +63,7 @@ NFR15: Code Quality - SOLID principles applied throughout codebase; DDD structur
 - SQLite vector extension: sqlite-vec (v0.1.6) for embedding-based search
 - Cargo Workspace structure with 3 Crates: demiarch-core, demiarch-cli, demiarch-gui
 - UI Framework: Tailwind CSS (v3.4) + shadcn/ui (Radix UI components)
-- State Management: Zustand (v4.5.0) for React state
+- State Management: Zustand (v5.0.0) for React state
 - Database Schema: SQLite per project (not shared) + JSONL for git sync
 - API Key Storage: OS keyring (keyring crate) preferred, encrypted SQLite fallback with zeroize
 - Encryption: AES-GCM for encryption, argon2 for key derivation, ChaChaRng for nonce generation
@@ -158,6 +158,24 @@ Users can work without connectivity with queued operations, automatic retry, and
 ## Epic 1: Foundation & Project Setup
 
 Users can install Demiarch, create projects, and configure core infrastructure (storage, security, settings)
+
+### Story 1.0: Setup CI/CD Pipeline with Security Scanning
+As a developer,
+I want automated CI/CD with security scanning from the start,
+So that vulnerabilities are caught early and builds are reproducible.
+
+**Acceptance Criteria:**
+
+**Given** Project is initialized with Cargo workspace
+**When** Developer pushes code to repository
+**Then** GitHub Actions CI pipeline runs automatically
+**And** Pipeline runs `cargo-audit` for Rust dependency vulnerabilities
+**And** Pipeline runs `npm audit` for frontend dependency vulnerabilities
+**And** Pipeline fails on high-severity vulnerabilities
+**And** Pipeline runs `cargo test` for all workspace crates
+**And** Pipeline runs `cargo clippy` for linting
+**And** Pipeline caches Cargo registry and target directory for faster builds
+**And** CI badge is displayed in repository README
 
 ### Story 1.1: Initialize Project with Starter Template
 As a new user,
@@ -561,6 +579,8 @@ So that my conversations are efficient and cost-effective.
 **Then** System retrieves layered summaries from context_summaries table
 **And** Summary types follow: detail_level=1 (index), 2 (timeline), 3 (full)
 **And** Only relevant summaries are included based on semantic similarity (using sqlite-vec embeddings)
+**And** Semantic filter scans retrieved context for prompt injection patterns (~50ms overhead)
+**And** If suspicious patterns detected, content is excluded and event logged in audit_log
 **And** Full context is retrieved only when needed (user explicitly requests more detail)
 **When** Context is prepared
 **Then** Total token count is displayed to user
@@ -767,7 +787,10 @@ So that I can extend Demiarch's capabilities securely.
 
 **Given** User has a WASM plugin file and installs it
 **When** Plugin is installed
-**Then** installed_plugins record is created with source='local' or 'registry', source_url, checksum
+**Then** System calculates SHA-256 checksum of plugin binary
+**And** If source='registry', checksum is verified against registry-provided checksum
+**And** If checksum mismatch, installation fails with error: "Plugin integrity verification failed"
+**And** installed_plugins record is created with source='local' or 'registry', source_url, checksum
 **Then** Plugin is loaded into Wasmtime sandbox with configured capabilities (read_files, write_files, network, max_memory_mb, max_cpu_seconds)
 **And** Fuel limit is enforced (10M fuel max, randomized to prevent side-channel attacks)
 **And** Only allowed capabilities are linked (plugin_func_wrap for read, write)
@@ -975,6 +998,11 @@ So that resource usage stays controlled and predictable.
 **Given** User has configured rate limits or uses defaults
 **When** User initiates operations (LLM requests, file operations)
 **Then** System checks project_rate_limits table for limit_type (hourly_requests, concurrent_agents)
+**And** Default rate limits are applied if not configured:
+  - hourly_requests: 100 requests/hour
+  - concurrent_agents: 3 agents max
+  - tokens_per_minute: 100,000 tokens/minute
+  - requests_per_minute: 20 requests/minute
 **And** Current value is tracked and incremented
 **When** current_value reaches limit_value
 **Then** Operation is throttled with message: "Rate limit exceeded. Wait {reset_at} to continue."
@@ -982,7 +1010,7 @@ So that resource usage stays controlled and predictable.
 **Then** current_value is reset to 0
 **When** User views project settings
 **Then** Rate limits show: type, current_value, limit_value, reset_at
-**And** User can adjust limits (not below system minimums)
+**And** User can adjust limits (not below system minimums: hourly_requests >= 10, concurrent_agents >= 1)
 **And** Limits persist across sessions
 
 ---

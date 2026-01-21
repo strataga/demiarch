@@ -469,7 +469,7 @@ npm create tauri-app@latest demiarch --template react-ts
 1. **SQLite Vector Extension**: sqlite-vec (v0.1.6) - Active development with Mozilla Builders sponsorship
 2. **Project Structure**: Cargo Workspace with 3 Crates (demiarch-core, demiarch-cli, demiarch-gui)
 3. **UI Framework**: Tailwind CSS (v3.4) + shadcn/ui (Radix UI components)
-4. **State Management**: Zustand (v4.5.0) - Lightweight, providerless pattern
+4. **State Management**: Zustand (v5.0.0) - Lightweight, providerless pattern
 5. **Architectural Patterns**: DDD + SOLID principles with trait-based design
 
 **Important Decisions (Shape Architecture):**
@@ -551,9 +551,10 @@ npm create tauri-app@latest demiarch --template react-ts
 - **Affects**: GUI (demiarch-gui), bundle size, development speed
 - **Provided by Starter**: No - must be configured in Vite + Tauri
 
-**State Management: Zustand (v4.5.0)**
+**State Management: Zustand (v5.0.0)**
 
 - **Decision**: Zustand for React state management
+- **Version**: v5.0.0 (matches PRD specification)
 - **Rationale**: Lightweight (1KB gzipped), no provider wrapping, excellent TypeScript support, fits Tauri's command pattern, small bundle size
 - **Affects**: GUI state (projects, agents, costs, conflicts), CLI/GUI sharing patterns
 - **Provided by Starter**: No - must be added: `npm install zustand`

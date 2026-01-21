@@ -30,3 +30,10 @@ pub mod prelude {
     pub use crate::config::Config;
     pub use crate::error::{Error, Result};
 }
+
+#[cfg(test)]
+mod commands_tests;
+#[cfg(test)]
+mod config_tests;
+#[cfg(test)]
+mod error_tests;

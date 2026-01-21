@@ -1,6 +1,7 @@
 //! Demiarch CLI - local-first AI app builder
 
 use clap::{Parser, Subcommand};
+use tracing::{info, warn};
 
 #[derive(Parser)]
 #[command(name = "demiarch")]
@@ -241,6 +242,71 @@ enum ConfigAction {
     Reset,
 }
 
+fn validate_license_key_on_startup() -> anyhow::Result<()> {
+    use std::env;
+
+    // Check if license enforcement is enabled (default: true)
+    let enforcement_enabled = match env::var("DEMIARCH_REQUIRE_LICENSE") {
+        Err(_) => true, // Default to enabled
+        Ok(val) if val == "0" || val.to_lowercase() == "false" => {
+            // Check if unsafe mode is explicitly enabled
+            let unsafe_mode = match env::var("DEMIARCH_UNSAFE_ALLOW_UNLICENSED") {
+                Err(_) => false,
+                Ok(v) => v == "1" || v.to_lowercase() == "true",
+            };
+
+            if unsafe_mode {
+                eprintln!("⚠️  WARNING: License enforcement is DISABLED");
+                eprintln!("⚠️  WARNING: Running in UNSAFE mode");
+                eprintln!("⚠️  WARNING: Unverified plugins may execute");
+                return Ok(());
+            } else {
+                return Err(anyhow::anyhow!(
+                    "License enforcement is disabled but UNSAFE_ALLOW_UNLICENSED is not set. \
+                     Set DEMIARCH_UNSAFE_ALLOW_UNLICENSED=1 to proceed in unsafe mode."
+                ));
+            }
+        }
+        Ok(_) => true, // Explicitly enabled
+    };
+
+    if !enforcement_enabled {
+        return Ok(());
+    }
+
+    // Validate license issuer key exists and is valid
+    let key_b64 = env::var("DEMIARCH_LICENSE_ISSUER_KEY").map_err(|_| {
+        anyhow::anyhow!(
+            "License enforcement is enabled, but DEMIARCH_LICENSE_ISSUER_KEY is not set. \
+             Set a valid 32-byte Ed25519 public key (base64-encoded)."
+        )
+    })?;
+
+    // Validate key format (must be base64, decode to 32 bytes)
+    use base64::Engine;
+    use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+
+    let key_bytes = BASE64_STANDARD
+        .decode(&key_b64)
+        .map_err(|e| anyhow::anyhow!("Invalid license issuer key encoding: {}", e))?;
+
+    if key_bytes.len() != 32 {
+        return Err(anyhow::anyhow!(
+            "License issuer key must be exactly 32 bytes (Ed25519 public key). Got {} bytes.",
+            key_bytes.len()
+        ));
+    }
+
+    // Try to parse as Ed25519 public key to verify it's valid
+    ed25519_dalek::VerifyingKey::from_bytes(&key_bytes.try_into().map_err(|_| {
+        anyhow::anyhow!("License issuer key could not be converted to 32-byte array")
+    })?)
+    .map_err(|e| anyhow::anyhow!("Invalid Ed25519 public key: {}", e))?;
+
+    tracing::info!("License issuer key validated successfully");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -251,6 +317,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
+    // Validate license issuer key early if license enforcement is enabled
+    validate_license_key_on_startup()?;
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -259,32 +328,39 @@ async fn main() -> anyhow::Result<()> {
             framework,
             repo,
         } => {
-            println!("Creating project '{}' with framework '{}'", name, framework);
+            info!("Creating project '{}' with framework '{}'", name, framework);
             if let Some(repo) = repo {
-                println!("Repository: {}", repo);
+                info!("Repository: {}", repo);
             }
-            todo!("Implement project creation")
+            Err(anyhow::anyhow!(
+                "Command 'new' is not yet implemented. See ROADMAP.md for implementation status."
+            ))
         }
         Commands::Chat => {
-            println!("Starting conversational discovery...");
-            todo!("Implement chat")
+            info!("Starting conversational discovery...");
+            Err(anyhow::anyhow!(
+                "Command 'chat' is not yet implemented. See ROADMAP.md for implementation status."
+            ))
         }
         Commands::Doctor => {
             println!("Demiarch Health Check");
             println!("=====================");
             println!("✅ Configuration: Valid");
-            println!("⚠️  Database: Not initialized");
-            println!("⚠️  API Key: Not configured");
+            warn!("Database: Not initialized");
+            warn!("API Key: Not configured");
             Ok(())
         }
         Commands::Watch => {
-            println!("Starting TUI monitor...");
+            info!("Starting TUI monitor...");
             println!("(Run demiarch-tui binary for full TUI experience)");
-            todo!("Launch TUI")
+            Err(anyhow::anyhow!(
+                "Command 'watch' is not yet implemented. See ROADMAP.md for implementation status."
+            ))
         }
         _ => {
-            println!("Command not yet implemented");
-            Ok(())
+            Err(anyhow::anyhow!(
+                "This command is not yet implemented. See ROADMAP.md for implementation status."
+            ))
         }
     }
 }

@@ -12,7 +12,7 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 authors = ["Demiarch Contributors"]
-repository = "https://github.com/TODO/demiarch"
+repository = "https://github.com/demiarch/demiarch"
 description = "Local-first AI app builder"
 rust-version = "1.85"
 

@@ -44,75 +44,75 @@ development_status:
   epic-1: in-progress
   1-1-initialize-project-with-starter-template: review
   1-2-set-up-sqlite-database-per-project: in-progress
-  1-3-configure-api-key-storage-with-encryption: backlog
-  1-4-implement-basic-cli-interface: backlog
-  1-5-implement-basic-gui-entry-point: backlog
-  1-6-track-basic-llm-costs: backlog
+  1-3-configure-api-key-storage-with-encryption: ready-for-dev
+  1-4-implement-basic-cli-interface: ready-for-dev
+  1-5-implement-basic-gui-entry-point: ready-for-dev
+  1-6-track-basic-llm-costs: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Conversational Development
-  epic-2: backlog
-  2-1-implement-chat-interface-with-conversation-threading: backlog
-  2-2-integrate-openrouter-llm-client: backlog
-  2-3-generate-code-from-natural-language-description: backlog
-  2-4-auto-generate-prd-and-architecture-documents: backlog
-  2-5-break-down-features-into-phases-with-user-stories: backlog
+  epic-2: in-progress
+  2-1-implement-chat-interface-with-conversation-threading: ready-for-dev
+  2-2-integrate-openrouter-llm-client: ready-for-dev
+  2-3-generate-code-from-natural-language-description: ready-for-dev
+  2-4-auto-generate-prd-and-architecture-documents: ready-for-dev
+  2-5-break-down-features-into-phases-with-user-stories: ready-for-dev
   epic-2-retrospective: optional
 
   # Epic 3: Project Management & Kanban
-  epic-3: backlog
-  3-1-create-kanban-board-layout-with-columns: backlog
-  3-2-implement-feature-cards-with-drag-and-drop: backlog
-  3-3-display-feature-details-on-card-expansion: backlog
-  3-4-basic-project-switching-ui: backlog
-  3-5-basic-agent-status-visualization: backlog
+  epic-3: in-progress
+  3-1-create-kanban-board-layout-with-columns: ready-for-dev
+  3-2-implement-feature-cards-with-drag-and-drop: ready-for-dev
+  3-3-display-feature-details-on-card-expansion: ready-for-dev
+  3-4-basic-project-switching-ui: ready-for-dev
+  3-5-basic-agent-status-visualization: ready-for-dev
   epic-3-retrospective: optional
 
   # Epic 4: Code Safety & Recovery
-  epic-4: backlog
-  4-1-create-automatic-checkpoints-before-major-changes: backlog
-  4-2-implement-rollback-to-previous-checkpoint: backlog
-  4-3-detect-user-edits-to-generated-code: backlog
-  4-4-display-conflict-resolution-interface: backlog
-  4-5-export-to-jsonl-for-git-sync: backlog
+  epic-4: in-progress
+  4-1-create-automatic-checkpoints-before-major-changes: ready-for-dev
+  4-2-implement-rollback-to-previous-checkpoint: ready-for-dev
+  4-3-detect-user-edits-to-generated-code: ready-for-dev
+  4-4-display-conflict-resolution-interface: ready-for-dev
+  4-5-export-to-jsonl-for-git-sync: ready-for-dev
   epic-4-retrospective: optional
 
   # Epic 5: Advanced Agent Capabilities
-  epic-5: backlog
-  5-1-implement-russian-doll-agent-hierarchy: backlog
-  5-2-implement-progressive-disclosure-for-context-management: backlog
-  5-3-extract-and-store-learned-skills: backlog
-  5-4-implement-semantic-search-for-skills-retrieval: backlog
-  5-5-implement-dynamic-model-routing-with-rl: backlog
-  5-6-full-agent-visualization-with-hierarchy-tree: backlog
+  epic-5: in-progress
+  5-1-implement-russian-doll-agent-hierarchy: ready-for-dev
+  5-2-implement-progressive-disclosure-for-context-management: ready-for-dev
+  5-3-extract-and-store-learned-skills: ready-for-dev
+  5-4-implement-semantic-search-for-skills-retrieval: ready-for-dev
+  5-5-implement-dynamic-model-routing-with-rl: ready-for-dev
+  5-6-full-agent-visualization-with-hierarchy-tree: ready-for-dev
   epic-5-retrospective: optional
 
   # Epic 6: Multi-Project Workspace
-  epic-6: backlog
-  6-1-implement-global-session-management: backlog
-  6-2-implement-resource-locking-for-concurrency: backlog
-  6-3-cross-project-search-with-opt-in: backlog
-  6-4-session-recovery-on-restart: backlog
-  6-5-session-end-and-cleanup: backlog
+  epic-6: in-progress
+  6-1-implement-global-session-management: ready-for-dev
+  6-2-implement-resource-locking-for-concurrency: ready-for-dev
+  6-3-cross-project-search-with-opt-in: ready-for-dev
+  6-4-session-recovery-on-restart: ready-for-dev
+  6-5-session-end-and-cleanup: ready-for-dev
   epic-6-retrospective: optional
 
   # Epic 7: Plugin Ecosystem
-  epic-7: backlog
-  7-1-install-built-in-framework-plugins: backlog
-  7-2-load-and-execute-wasm-plugins: backlog
-  7-3-offline-license-verification-with-ed25519: backlog
-  7-4-implement-three-tier-plugin-trust-model: backlog
-  7-5-configure-plugin-capabilities-and-permissions: backlog
-  7-6-implement-plugin-pricing-models: backlog
-  7-7-lifecycle-hooks-for-plugin-events: backlog
+  epic-7: in-progress
+  7-1-install-built-in-framework-plugins: ready-for-dev
+  7-2-load-and-execute-wasm-plugins: ready-for-dev
+  7-3-offline-license-verification-with-ed25519: ready-for-dev
+  7-4-implement-three-tier-plugin-trust-model: ready-for-dev
+  7-5-configure-plugin-capabilities-and-permissions: ready-for-dev
+  7-6-implement-plugin-pricing-models: ready-for-dev
+  7-7-lifecycle-hooks-for-plugin-events: ready-for-dev
   epic-7-retrospective: optional
 
   # Epic 8: Offline & Operations
-  epic-8: backlog
-  8-1-detect-network-connectivity-and-enter-offline-mode: backlog
-  8-2-queue-operations-during-offline-mode: backlog
-  8-3-automatic-retry-on-connectivity-restore: backlog
-  8-4-graceful-degradation-for-offline-features: backlog
-  8-5-cost-alerts-with-daily-limits: backlog
-  8-6-project-rate-limits-and-resource-throttling: backlog
+  epic-8: in-progress
+  8-1-detect-network-connectivity-and-enter-offline-mode: ready-for-dev
+  8-2-queue-operations-during-offline-mode: ready-for-dev
+  8-3-automatic-retry-on-connectivity-restore: ready-for-dev
+  8-4-graceful-degradation-for-offline-features: ready-for-dev
+  8-5-cost-alerts-with-daily-limits: ready-for-dev
+  8-6-project-rate-limits-and-resource-throttling: ready-for-dev
   epic-8-retrospective: optional
