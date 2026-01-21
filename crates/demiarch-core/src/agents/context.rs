@@ -269,6 +269,21 @@ impl SharedAgentState {
             .cloned()
             .collect()
     }
+
+    /// Get a snapshot of the agent registry for visualization
+    ///
+    /// Returns a clone of the current registry state, useful for
+    /// building tree visualizations without holding locks.
+    pub async fn agent_registry_snapshot(&self) -> HashMap<AgentId, ChildAgentInfo> {
+        let registry = self.agent_registry.read().await;
+        registry.clone()
+    }
+
+    /// Get all agents in the registry
+    pub async fn get_all_agents(&self) -> Vec<ChildAgentInfo> {
+        let registry = self.agent_registry.read().await;
+        registry.values().cloned().collect()
+    }
 }
 
 impl std::fmt::Debug for SharedAgentState {

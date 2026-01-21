@@ -483,7 +483,7 @@ mod tests {
 
         let plan = planner.parse_execution_plan("Login feature", text_response);
         assert!(!plan.tasks.is_empty());
-        assert!(plan.coding_tasks().len() > 0);
+        assert!(!plan.coding_tasks().is_empty());
     }
 
     #[test]

@@ -5,6 +5,7 @@ use demiarch_core::commands::{checkpoint, document, feature, generate, project};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
 use demiarch_core::storage::{Database, DatabaseManager};
+use demiarch_core::visualization::{HierarchyTree, NodeStyle, RenderOptions, TreeBuilder};
 use std::sync::Arc;
 use tracing::{info, warn};
 
@@ -129,6 +130,12 @@ enum Commands {
 
     /// Open TUI monitor (watch mode)
     Watch,
+
+    /// View agent hierarchy and status
+    Agents {
+        #[command(subcommand)]
+        action: AgentAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -390,6 +397,32 @@ enum ConfigAction {
     Path,
 }
 
+#[derive(Subcommand)]
+enum AgentAction {
+    /// Show agent hierarchy tree (demo/example)
+    Tree {
+        /// Use ASCII characters instead of Unicode
+        #[arg(long)]
+        ascii: bool,
+        /// Show agent IDs
+        #[arg(long, default_value = "true")]
+        show_ids: bool,
+        /// Show token usage
+        #[arg(long, default_value = "true")]
+        show_tokens: bool,
+        /// Maximum depth to display (-1 for unlimited)
+        #[arg(long, default_value = "-1")]
+        max_depth: i32,
+        /// Show minimal output (no icons)
+        #[arg(long)]
+        minimal: bool,
+    },
+    /// Show agent hierarchy as compact single-line status
+    Status,
+    /// List agent types and their capabilities
+    Types,
+}
+
 fn validate_license_key_on_startup() -> anyhow::Result<()> {
     use std::env;
 
@@ -522,6 +555,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::Doctor => cmd_doctor(cli.quiet).await,
 
         Commands::Watch => cmd_watch(cli.quiet),
+
+        Commands::Agents { action } => cmd_agents(action, cli.quiet),
     }
 }
 
@@ -1650,5 +1685,118 @@ fn cmd_watch(quiet: bool) -> anyhow::Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+fn cmd_agents(action: AgentAction, quiet: bool) -> anyhow::Result<()> {
+    use demiarch_core::agents::AgentType;
+
+    match action {
+        AgentAction::Tree {
+            ascii,
+            show_ids,
+            show_tokens,
+            max_depth,
+            minimal,
+        } => {
+            // Build a demo tree to show the hierarchy structure
+            let tree = TreeBuilder::demo_tree();
+
+            // Configure render options
+            let options = if minimal {
+                RenderOptions::minimal().with_max_depth(max_depth)
+            } else {
+                let style = if ascii {
+                    NodeStyle::Ascii
+                } else {
+                    NodeStyle::Unicode
+                };
+                RenderOptions::default()
+                    .with_style(style)
+                    .with_max_depth(max_depth)
+            };
+
+            // Override specific options
+            let mut options = options;
+            options.show_ids = show_ids;
+            options.show_tokens = show_tokens;
+
+            let renderer = HierarchyTree::with_options(tree, options);
+
+            if !quiet {
+                println!("{}", renderer.render_with_summary());
+                println!();
+                println!("Note: This is a demo tree showing the agent hierarchy structure.");
+                println!("During code generation, you'll see actual agents in this tree.");
+            } else {
+                println!("{}", renderer.render());
+            }
+        }
+
+        AgentAction::Status => {
+            let tree = TreeBuilder::demo_tree();
+            let renderer = HierarchyTree::new(tree);
+
+            if !quiet {
+                println!("Agent Status: {}", renderer.render_compact());
+            } else {
+                println!("{}", renderer.render_compact());
+            }
+        }
+
+        AgentAction::Types => {
+            if !quiet {
+                println!("Agent Types and Hierarchy");
+                println!("=========================");
+                println!();
+                println!("Level 1 (Director):");
+                println!(
+                    "  {} - Session coordinator, manages overall workflow",
+                    format_agent_type(AgentType::Orchestrator)
+                );
+                println!("        Can spawn: Planner");
+                println!();
+                println!("Level 2 (Coordinator):");
+                println!(
+                    "  {} - Decomposes features into tasks, creates execution plans",
+                    format_agent_type(AgentType::Planner)
+                );
+                println!("        Can spawn: Coder, Reviewer, Tester");
+                println!();
+                println!("Level 3 (Workers - leaf nodes):");
+                println!(
+                    "  {} - Generates code implementations",
+                    format_agent_type(AgentType::Coder)
+                );
+                println!(
+                    "  {} - Reviews code for quality and correctness",
+                    format_agent_type(AgentType::Reviewer)
+                );
+                println!(
+                    "  {} - Creates and validates tests",
+                    format_agent_type(AgentType::Tester)
+                );
+                println!();
+                println!("Execution Flow:");
+                println!("  1. User submits feature request");
+                println!("  2. Orchestrator receives request, spawns Planner");
+                println!("  3. Planner decomposes into tasks, spawns worker agents");
+                println!("  4. Workers execute tasks (code, review, test)");
+                println!("  5. Results bubble up through hierarchy");
+                println!("  6. Orchestrator returns complete implementation");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn format_agent_type(agent_type: demiarch_core::agents::AgentType) -> String {
+    use demiarch_core::agents::AgentType;
+    match agent_type {
+        AgentType::Orchestrator => "🎭 Orchestrator".to_string(),
+        AgentType::Planner => "📋 Planner".to_string(),
+        AgentType::Coder => "💻 Coder".to_string(),
+        AgentType::Reviewer => "🔍 Reviewer".to_string(),
+        AgentType::Tester => "🧪 Tester".to_string(),
     }
 }
