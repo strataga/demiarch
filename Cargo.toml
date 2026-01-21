@@ -42,6 +42,10 @@ futures-core = "0.3"
 futures-util = "0.3"
 async-stream = "0.3"
 
+# Random
+rand = "0.8"
+rand_distr = "0.4"
+
 # Utilities
 uuid = { version = "1.11", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }

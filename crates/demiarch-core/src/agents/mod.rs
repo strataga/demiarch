@@ -38,8 +38,11 @@ pub use tester::TesterAgent;
 pub use tool::{AgentTool, AgentToolResult};
 pub use traits::{Agent, AgentCapability, AgentResult, AgentStatus};
 
+use serde::{Deserialize, Serialize};
+
 /// Agent types in the hierarchy
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentType {
     /// Top-level session coordinator (Level 1)
     Orchestrator,
@@ -167,7 +170,10 @@ mod tests {
 
     #[test]
     fn test_agent_type_from_str() {
-        assert_eq!("orchestrator".parse::<AgentType>().unwrap(), AgentType::Orchestrator);
+        assert_eq!(
+            "orchestrator".parse::<AgentType>().unwrap(),
+            AgentType::Orchestrator
+        );
         assert_eq!("PLANNER".parse::<AgentType>().unwrap(), AgentType::Planner);
         assert!("unknown".parse::<AgentType>().is_err());
     }
