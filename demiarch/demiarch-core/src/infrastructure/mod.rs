@@ -3,6 +3,7 @@
 pub mod db;
 pub mod git;
 pub mod llm;
+pub mod security;
 pub mod wasm;
 
 // Re-export common infrastructure types
