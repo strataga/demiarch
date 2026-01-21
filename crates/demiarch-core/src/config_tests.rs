@@ -1,6 +1,6 @@
 //! Config module tests
 
-use crate::config::{Config, CostConfig, LlmConfig, RoutingConfig};
+use crate::config::{Config, CostConfig, RoutingConfig};
 
 #[test]
 fn test_llm_config_fallback_models() {

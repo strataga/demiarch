@@ -45,6 +45,7 @@ anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dirs = "5"
+toml = "0.8"
 
 # Security
 aes-gcm = "0.10"
