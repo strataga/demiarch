@@ -54,8 +54,9 @@ impl DatabaseConfig {
             path: PathBuf::from(":memory:"),
             max_connections: 1, // In-memory requires single connection
             auto_migrate: true,
-            journal_mode: SqliteJournalMode::Wal,
-            synchronous: SqliteSynchronous::Normal,
+            // WAL mode doesn't work with :memory: databases - use Memory journal mode
+            journal_mode: SqliteJournalMode::Memory,
+            synchronous: SqliteSynchronous::Off,
         }
     }
 

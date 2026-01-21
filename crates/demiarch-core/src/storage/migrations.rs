@@ -396,23 +396,8 @@ const MIGRATION_V7: &str = r#"
     -- This combines name + description + tags for embedding generation
     ALTER TABLE learned_skills ADD COLUMN embedding_text TEXT;
 
-    -- Trigger to regenerate embedding_text when skill is updated
-    CREATE TRIGGER IF NOT EXISTS learned_skills_embedding_text_update
-    AFTER UPDATE OF name, description, tags ON learned_skills
-    BEGIN
-        UPDATE learned_skills
-        SET embedding_text = NEW.name || ' ' || NEW.description || ' ' || COALESCE(NEW.tags, '')
-        WHERE id = NEW.id;
-    END;
-
-    -- Trigger to set embedding_text on insert
-    CREATE TRIGGER IF NOT EXISTS learned_skills_embedding_text_insert
-    AFTER INSERT ON learned_skills
-    BEGIN
-        UPDATE learned_skills
-        SET embedding_text = NEW.name || ' ' || NEW.description || ' ' || COALESCE(NEW.tags, '')
-        WHERE id = NEW.id;
-    END;
+    -- Note: embedding_text triggers removed - embedding_text is now computed on read
+    -- This avoids potential trigger conflicts with FTS5 external content tables
 "#;
 
 /// Get the current schema version from the database

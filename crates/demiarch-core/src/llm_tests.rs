@@ -173,6 +173,7 @@ mod integration {
     #[tokio::test]
     async fn test_streaming_api_call() {
         use futures_util::StreamExt;
+        use std::pin::pin;
 
         let config = Config::load().unwrap();
         let api_key = config
@@ -185,7 +186,8 @@ mod integration {
 
         let messages = vec![Message::user("Count from 1 to 3.")];
 
-        let mut stream = client.complete_streaming(messages, None).await.unwrap();
+        let stream = client.complete_streaming(messages, None).await.unwrap();
+        let mut stream = pin!(stream);
         let mut content = String::new();
 
         while let Some(event) = stream.next().await {

@@ -807,13 +807,23 @@ impl SkillRow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::Database;
+    use crate::storage::migrations::run_migrations;
+    use sqlx::sqlite::SqlitePoolOptions;
 
     async fn setup_test_db() -> SkillStore {
-        let db = Database::in_memory()
+        // Use raw SQLite pool like migration tests do to avoid any Database wrapper issues
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
             .await
-            .expect("Failed to create test database");
-        SkillStore::new(db.pool().clone())
+            .expect("Failed to create test pool");
+
+        // Run migrations
+        run_migrations(&pool)
+            .await
+            .expect("Failed to run migrations");
+
+        SkillStore::new(pool)
     }
 
     fn create_test_skill(name: &str) -> LearnedSkill {
