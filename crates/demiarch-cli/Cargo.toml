@@ -22,3 +22,4 @@ uuid.workspace = true
 chrono.workspace = true
 serde_json.workspace = true
 dirs.workspace = true
+dotenvy = "0.15"

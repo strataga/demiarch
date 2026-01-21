@@ -7,6 +7,8 @@ pub mod checkpoint;
 pub mod document;
 pub mod feature;
 pub mod generate;
+pub mod graph;
+pub mod image;
 pub mod phase;
 pub mod planner;
 pub mod project;

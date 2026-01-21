@@ -76,6 +76,9 @@ gethostname = "0.5"
 # Testing
 tempfile = "3.10"
 
+# Image processing
+image = "0.25"
+
 # Caching
 # WASM (for plugins)
 wasmtime = "38.0.4"

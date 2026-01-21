@@ -106,6 +106,44 @@ pub enum Error {
     #[error("Embedding generation failed: {0}")]
     EmbeddingFailed(String),
 
+    // Graph/Knowledge errors (E1300-E1399)
+    #[error("Knowledge entity '{0}' not found")]
+    EntityNotFound(String),
+
+    #[error("Knowledge relationship '{0}' not found")]
+    RelationshipNotFound(String),
+
+    #[error("Entity extraction failed: {0}")]
+    EntityExtractionFailed(String),
+
+    #[error("Graph traversal failed: {0}")]
+    GraphTraversalFailed(String),
+
+    #[error("Graph query failed: {0}")]
+    GraphQueryFailed(String),
+
+    #[error("Invalid graph operation: {0}")]
+    InvalidGraphOperation(String),
+
+    // Image errors (E1400-E1499)
+    #[error("E1400: Image generation requires an API key. Set OPENROUTER_API_KEY or DEMIARCH_API_KEY.")]
+    ImageApiKeyMissing,
+
+    #[error("E1401: Image generation failed: {0}")]
+    ImageGenerationError(String),
+
+    #[error("E1402: Invalid image format: {0}")]
+    InvalidImageFormat(String),
+
+    #[error("E1403: Image model not available: {0}")]
+    ImageModelNotAvailable(String),
+
+    #[error("E1404: Failed to read input image: {0}")]
+    ImageReadError(String),
+
+    #[error("E1405: Failed to save image: {0}")]
+    ImageSaveError(String),
+
     // Generic errors
     #[error("{0}")]
     Other(String),
@@ -145,6 +183,18 @@ impl Error {
             Self::NoSuitableModel(_) => "E1101",
             Self::ContextRetrievalFailed(_) => "E1200",
             Self::EmbeddingFailed(_) => "E1201",
+            Self::EntityNotFound(_) => "E1300",
+            Self::RelationshipNotFound(_) => "E1301",
+            Self::EntityExtractionFailed(_) => "E1302",
+            Self::GraphTraversalFailed(_) => "E1303",
+            Self::GraphQueryFailed(_) => "E1304",
+            Self::InvalidGraphOperation(_) => "E1305",
+            Self::ImageApiKeyMissing => "E1400",
+            Self::ImageGenerationError(_) => "E1401",
+            Self::InvalidImageFormat(_) => "E1402",
+            Self::ImageModelNotAvailable(_) => "E1403",
+            Self::ImageReadError(_) => "E1404",
+            Self::ImageSaveError(_) => "E1405",
             Self::Other(_) | Self::Io(_) => "E9999",
         }
     }
@@ -163,6 +213,10 @@ impl Error {
             Self::PluginNotFound(name) => Some(format!("demiarch plugin install {}", name)),
             Self::SkillNotFound(_) => Some("demiarch skills list".to_string()),
             Self::ContextRetrievalFailed(_) => Some("demiarch context rebuild".to_string()),
+            Self::ImageApiKeyMissing => Some(
+                "Set OPENROUTER_API_KEY or DEMIARCH_API_KEY environment variable".to_string(),
+            ),
+            Self::ImageModelNotAvailable(_) => Some("demiarch image models".to_string()),
             _ => None,
         }
     }

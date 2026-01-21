@@ -1,7 +1,8 @@
 //! Demiarch CLI - local-first AI app builder
 
 use clap::{Parser, Subcommand};
-use demiarch_core::commands::{checkpoint, document, feature, generate, project};
+use demiarch_core::commands::{checkpoint, document, feature, generate, graph, image, project};
+use demiarch_core::domain::knowledge::{EntityType, RelationshipType};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
 use demiarch_core::domain::locking::{LockConfig, LockManager};
@@ -146,6 +147,18 @@ enum Commands {
     Sessions {
         #[command(subcommand)]
         action: SessionAction,
+    },
+
+    /// Explore knowledge graph (entities, relationships)
+    Graph {
+        #[command(subcommand)]
+        action: GraphAction,
+    },
+
+    /// Generate and manipulate images using AI models
+    Image {
+        #[command(subcommand)]
+        action: ImageAction,
     },
 }
 
@@ -517,6 +530,128 @@ enum SessionAction {
     },
 }
 
+#[derive(Subcommand)]
+enum GraphAction {
+    /// Show knowledge graph statistics
+    Stats {
+        /// Show detailed breakdown by type
+        #[arg(long)]
+        detailed: bool,
+    },
+
+    /// Explore entity relationships and connections
+    Explore {
+        /// Entity name or ID to explore
+        entity: String,
+
+        /// Max relationship depth to traverse (1-5)
+        #[arg(short, long, default_value = "2")]
+        depth: u32,
+
+        /// Filter by relationship type (uses, depends_on, similar_to, etc.)
+        #[arg(short, long)]
+        relationship: Option<String>,
+
+        /// Show in tree format
+        #[arg(long)]
+        tree: bool,
+    },
+
+    /// Search for entities by name or description
+    Search {
+        /// Search query
+        query: String,
+
+        /// Maximum results to return
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+    },
+
+    /// List entities by type
+    List {
+        /// Entity type (library, concept, pattern, technique, framework, etc.)
+        entity_type: String,
+
+        /// Maximum results to return
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+    },
+}
+
+#[derive(Subcommand)]
+enum ImageAction {
+    /// Generate an image from a text description
+    Generate {
+        /// Text description of the image to generate
+        prompt: String,
+        /// Output file path
+        #[arg(short, long)]
+        output: Option<std::path::PathBuf>,
+        /// Image size (square, portrait, landscape, or WxH e.g., 1024x768)
+        #[arg(short, long, default_value = "square")]
+        size: String,
+        /// Image style (vivid, natural, photorealistic, artistic)
+        #[arg(long)]
+        style: Option<String>,
+        /// Model to use for generation
+        #[arg(long)]
+        model: Option<String>,
+        /// Negative prompt (what to avoid)
+        #[arg(short, long)]
+        negative: Option<String>,
+        /// Seed for reproducible generation
+        #[arg(long)]
+        seed: Option<u64>,
+    },
+    /// Transform an existing image with a prompt
+    Transform {
+        /// Path to input image
+        input: std::path::PathBuf,
+        /// Description of the transformation
+        prompt: String,
+        /// Output file path
+        #[arg(short, long)]
+        output: Option<std::path::PathBuf>,
+        /// Transformation strength (0.0-1.0, how much to change)
+        #[arg(long, default_value = "0.75")]
+        strength: f32,
+        /// Model to use for transformation
+        #[arg(long)]
+        model: Option<String>,
+    },
+    /// Upscale an image to higher resolution
+    Upscale {
+        /// Path to input image
+        input: std::path::PathBuf,
+        /// Scale factor (2 or 4)
+        #[arg(short, long, default_value = "2")]
+        scale: u32,
+        /// Output file path
+        #[arg(short, long)]
+        output: Option<std::path::PathBuf>,
+        /// Model to use for upscaling (optional, uses local if not available)
+        #[arg(long)]
+        model: Option<String>,
+    },
+    /// Edit a region of an image using a mask (inpainting)
+    Inpaint {
+        /// Path to input image
+        input: std::path::PathBuf,
+        /// Path to mask image (white = edit, black = keep)
+        mask: std::path::PathBuf,
+        /// Description of what to fill in the masked area
+        prompt: String,
+        /// Output file path
+        #[arg(short, long)]
+        output: Option<std::path::PathBuf>,
+        /// Model to use for inpainting
+        #[arg(long)]
+        model: Option<String>,
+    },
+    /// List available image generation models
+    Models,
+}
+
 fn validate_license_key_on_startup() -> anyhow::Result<()> {
     use std::env;
 
@@ -584,6 +719,9 @@ fn validate_license_key_on_startup() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env file if present (silently ignore if not found)
+    let _ = dotenvy::dotenv();
+
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -656,6 +794,13 @@ async fn main() -> anyhow::Result<()> {
             let db = get_db().await?;
             cmd_sessions(&db, action, cli.quiet).await
         }
+
+        Commands::Graph { action } => {
+            let db = get_db().await?;
+            cmd_graph(&db, action, cli.quiet).await
+        }
+
+        Commands::Image { action } => cmd_image(action, cli.quiet).await,
     }
 }
 
@@ -2282,4 +2427,302 @@ fn format_duration(duration: chrono::Duration) -> String {
             format!("{}d", days)
         }
     }
+}
+
+// ============================================================================
+// Knowledge Graph Commands
+// ============================================================================
+
+async fn cmd_graph(db: &Database, action: GraphAction, quiet: bool) -> anyhow::Result<()> {
+    let pool = db.pool();
+
+    match action {
+        GraphAction::Stats { detailed } => {
+            let stats = graph::get_stats(pool).await?;
+
+            if !quiet {
+                println!("Knowledge Graph Statistics");
+                println!("==========================");
+                println!();
+                println!("Total Entities:      {}", stats.total_entities);
+                println!("Total Relationships: {}", stats.total_relationships);
+                println!("Linked Skills:       {}", stats.linked_skills);
+                println!(
+                    "Average Confidence:  {:.1}%",
+                    stats.average_confidence * 100.0
+                );
+
+                if detailed && !stats.entities_by_type.is_empty() {
+                    println!();
+                    println!("Entities by Type:");
+                    let mut sorted: Vec<_> = stats.entities_by_type.iter().collect();
+                    sorted.sort_by(|a, b| b.1.cmp(a.1));
+                    for (entity_type, count) in sorted {
+                        println!("  {:20} {}", entity_type.as_str(), count);
+                    }
+                }
+
+                if detailed && !stats.relationships_by_type.is_empty() {
+                    println!();
+                    println!("Relationships by Type:");
+                    let mut sorted: Vec<_> = stats.relationships_by_type.iter().collect();
+                    sorted.sort_by(|a, b| b.1.cmp(a.1));
+                    for (rel_type, count) in sorted {
+                        println!("  {:20} {}", rel_type.as_str(), count);
+                    }
+                }
+            }
+        }
+
+        GraphAction::Explore {
+            entity,
+            depth,
+            relationship,
+            tree,
+        } => {
+            let rel_filter = relationship
+                .as_ref()
+                .and_then(|r| RelationshipType::parse(r));
+
+            match graph::explore_entity(pool, &entity, depth, rel_filter).await? {
+                Some(result) => {
+                    if !quiet {
+                        if tree {
+                            println!("{}", graph::format_explore_tree(&result, depth));
+                        } else {
+                            println!("{}", graph::format_explore_list(&result));
+                        }
+                    }
+                }
+                None => {
+                    if !quiet {
+                        println!("Entity '{}' not found.", entity);
+                        println!();
+                        println!("Try searching for entities: demiarch graph search <query>");
+                    }
+                }
+            }
+        }
+
+        GraphAction::Search { query, limit } => {
+            let results = graph::search_entities(pool, &query, limit).await?;
+
+            if results.is_empty() {
+                if !quiet {
+                    println!("No entities found matching '{}'.", query);
+                }
+            } else {
+                if !quiet {
+                    println!("Found {} entities:", results.len());
+                    println!();
+                }
+                for entity in results {
+                    let desc = entity
+                        .description
+                        .as_ref()
+                        .map(|d| format!(": {}", truncate_str(d, 60)))
+                        .unwrap_or_default();
+                    println!(
+                        "  {} ({}) [conf: {:.0}%]{}",
+                        entity.name,
+                        entity.entity_type.as_str(),
+                        entity.confidence * 100.0,
+                        desc
+                    );
+                }
+            }
+        }
+
+        GraphAction::List { entity_type, limit } => {
+            let parsed_type = parse_entity_type(&entity_type)?;
+            let entities = graph::list_entities_by_type(pool, parsed_type).await?;
+
+            if entities.is_empty() {
+                if !quiet {
+                    println!("No {} entities found.", entity_type);
+                }
+            } else {
+                let display_count = entities.len().min(limit);
+                if !quiet {
+                    println!("{} entities ({}):", entity_type, entities.len());
+                    println!();
+                }
+                for entity in entities.iter().take(limit) {
+                    let desc = entity
+                        .description
+                        .as_ref()
+                        .map(|d| format!(": {}", truncate_str(d, 50)))
+                        .unwrap_or_default();
+                    println!(
+                        "  {} [conf: {:.0}%]{}",
+                        entity.name,
+                        entity.confidence * 100.0,
+                        desc
+                    );
+                }
+                if entities.len() > limit {
+                    if !quiet {
+                        println!();
+                        println!("  ... and {} more", entities.len() - display_count);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Parse entity type from string
+fn parse_entity_type(s: &str) -> anyhow::Result<EntityType> {
+    EntityType::parse(s).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Unknown entity type '{}'. Valid types: library, concept, pattern, technique, \
+             framework, language, tool, domain, api, data_structure, algorithm",
+            s
+        )
+    })
+}
+
+/// Truncate a string to max length with ellipsis
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
+    }
+}
+
+// ============================================================================
+// Image Generation Commands
+// ============================================================================
+
+async fn cmd_image(action: ImageAction, quiet: bool) -> anyhow::Result<()> {
+    match action {
+        ImageAction::Generate {
+            prompt,
+            output,
+            size,
+            style,
+            model,
+            negative,
+            seed,
+        } => {
+            if !quiet {
+                println!("Generating image...");
+                println!("  Prompt: {}", truncate_str(&prompt, 60));
+                if let Some(s) = &style {
+                    println!("  Style: {}", s);
+                }
+                println!();
+            }
+
+            let output_path = image::generate(prompt, output, Some(size), style, model, negative, seed)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Image saved to: {}", output_path.display());
+            } else {
+                println!("{}", output_path.display());
+            }
+        }
+
+        ImageAction::Transform {
+            input,
+            prompt,
+            output,
+            strength,
+            model,
+        } => {
+            if !quiet {
+                println!("Transforming image...");
+                println!("  Input: {}", input.display());
+                println!("  Prompt: {}", truncate_str(&prompt, 60));
+                println!("  Strength: {:.1}", strength);
+                println!();
+            }
+
+            let output_path = image::transform(input, prompt, output, Some(strength), model)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Transformed image saved to: {}", output_path.display());
+            } else {
+                println!("{}", output_path.display());
+            }
+        }
+
+        ImageAction::Upscale {
+            input,
+            scale,
+            output,
+            model,
+        } => {
+            if !quiet {
+                println!("Upscaling image...");
+                println!("  Input: {}", input.display());
+                println!("  Scale: {}x", scale);
+                println!();
+            }
+
+            let output_path = image::upscale(input, scale, output, model)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Upscaled image saved to: {}", output_path.display());
+            } else {
+                println!("{}", output_path.display());
+            }
+        }
+
+        ImageAction::Inpaint {
+            input,
+            mask,
+            prompt,
+            output,
+            model,
+        } => {
+            if !quiet {
+                println!("Inpainting image...");
+                println!("  Input: {}", input.display());
+                println!("  Mask: {}", mask.display());
+                println!("  Prompt: {}", truncate_str(&prompt, 60));
+                println!();
+            }
+
+            let output_path = image::inpaint(input, mask, prompt, output, model)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Inpainted image saved to: {}", output_path.display());
+            } else {
+                println!("{}", output_path.display());
+            }
+        }
+
+        ImageAction::Models => {
+            let models = image::list_models();
+
+            if !quiet {
+                println!("Available Image Generation Models");
+                println!("==================================");
+                println!();
+            }
+
+            for model in models {
+                println!("{}", model.name);
+                println!("  ID: {}", model.id);
+                println!("  {}", model.description);
+                println!("  Capabilities: {}", model.capabilities_string());
+                println!("  Cost: {}", model.cost_string());
+                println!();
+            }
+        }
+    }
+
+    Ok(())
 }

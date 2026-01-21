@@ -21,6 +21,7 @@ pub mod cost;
 pub mod domain;
 pub mod error;
 pub mod hooks;
+pub mod image;
 pub mod infrastructure;
 pub mod llm;
 pub mod routing;
@@ -46,6 +47,20 @@ pub mod security {
         CREATE_ENCRYPTED_KEYS_TABLE_SQL, InMemoryKeyRepository, InMemoryMasterKeyRepository,
         KeyringMasterKeyRepository, SqliteKeyRepository,
     };
+}
+
+/// Re-export knowledge graph types for GraphRAG functionality
+pub mod knowledge {
+    pub use crate::domain::knowledge::{
+        CognifyResult, ContextEnricher, EnrichedContext, EnrichmentConfig, EnrichmentStats,
+        EntityContext, EntityExtractor, EntityRelevance, EntitySearchResult, EntityType,
+        EntityWithDistance, ExtractionResult, GraphSearchQuery, HybridRanker, HybridRankingConfig,
+        HybridSearchResult, KnowledgeEntity, KnowledgeEvent, KnowledgeGraphRepository,
+        KnowledgeGraphService, KnowledgeGraphStats, KnowledgeRelationship, PathRelationship,
+        PathStep, RelatedEntityMatch, RelationshipContext, RelationshipEvidence, RelationshipType,
+        ScoreBreakdown, TraversalDirection,
+    };
+    pub use crate::infrastructure::knowledge::SqliteKnowledgeGraphRepository;
 }
 
 #[cfg(test)]

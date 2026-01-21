@@ -17,6 +17,7 @@ A local-first, open-source AI app builder that generates code into your local re
 |---------|-------------|
 | Conversational Discovery | Chat with AI to define project requirements |
 | Document Generation | Auto-generate PRD, Architecture, UX docs |
+| Image Generation | Text-to-image, image-to-image, upscaling, and inpainting via OpenRouter |
 | Phase Planning | Break projects into phases with user stories |
 | Multi-Framework | Next.js, React, Vue, Flutter, iOS, Android, FastAPI, Go, and more |
 | Russian Doll Agents | 3-level hierarchical agent delegation (Orchestrator → Planner → Coder/Reviewer/Tester) |
@@ -138,9 +139,29 @@ demiarch skills       # Manage learned skills
 demiarch routing      # Model routing config
 demiarch hooks        # Lifecycle hooks management
 demiarch context      # Context memory management
+demiarch image        # Image generation and manipulation
 demiarch costs        # View usage & costs
 demiarch sync         # Export/import for git
 demiarch doctor       # Health check
+```
+
+### Image Commands
+
+```bash
+# Generate an image from text
+demiarch image generate "A futuristic city at sunset" --output city.png
+
+# Transform an existing image
+demiarch image transform input.png "Make it look like a watercolor painting"
+
+# Upscale an image (2x or 4x)
+demiarch image upscale input.png --scale 2
+
+# Inpaint (edit) a region using a mask
+demiarch image inpaint photo.png mask.png "Replace with a sunset"
+
+# List available models
+demiarch image models
 ```
 
 ## Tech Stack
@@ -150,6 +171,7 @@ demiarch doctor       # Health check
 - **TUI**: ratatui
 - **GUI**: Tauri + React + TypeScript (future)
 - **LLM**: OpenRouter API (Claude, GPT-4, etc.)
+- **Image AI**: OpenRouter (Gemini, DALL-E 3, Stable Diffusion XL, Nano Banana Pro)
 
 ## Development
 
