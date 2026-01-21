@@ -2,6 +2,7 @@
 //!
 //! Contains the core business logic and domain models.
 
+pub mod locking;
 pub mod recovery;
 pub mod security;
 pub mod session;
