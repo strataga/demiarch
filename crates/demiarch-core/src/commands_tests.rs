@@ -2,7 +2,7 @@
 
 use crate::Result;
 use crate::commands::{
-    chat::{self, ChatMessage},
+    chat::{self, ChatMessage, LegacyChatMessage, MessageRole},
     feature,
     generate::{self, GenerationResult},
     project,
@@ -11,46 +11,50 @@ use crate::commands::{
 
 #[tokio::test]
 async fn test_chat_message_structure() {
-    let message = ChatMessage {
+    // Test new ChatMessage with proper structure
+    let message = ChatMessage::user("conv-123", "Hello");
+
+    assert!(!message.id.is_empty());
+    assert_eq!(message.conversation_id, "conv-123");
+    assert_eq!(message.role, MessageRole::User);
+    assert_eq!(message.content, "Hello");
+}
+
+#[tokio::test]
+async fn test_chat_message_clone() {
+    let message = ChatMessage::assistant("conv-456", "Hi there!");
+
+    let cloned = message.clone();
+    assert_eq!(message.id, cloned.id);
+    assert_eq!(message.role, cloned.role);
+    assert_eq!(message.conversation_id, cloned.conversation_id);
+}
+
+#[tokio::test]
+async fn test_legacy_chat_message() {
+    // Test the legacy ChatMessage format for backwards compatibility
+    let legacy = LegacyChatMessage {
         id: "test-123".to_string(),
         role: "user".to_string(),
         content: "Hello".to_string(),
         created_at: "2024-01-01T00:00:00Z".to_string(),
     };
 
-    assert_eq!(message.id, "test-123");
-    assert_eq!(message.role, "user");
-    assert_eq!(message.content, "Hello");
-    assert!(!message.id.is_empty());
-}
-
-#[tokio::test]
-async fn test_chat_message_clone() {
-    let message = ChatMessage {
-        id: "test-456".to_string(),
-        role: "assistant".to_string(),
-        content: "Hi there!".to_string(),
-        created_at: "2024-01-01T00:00:00Z".to_string(),
-    };
-
-    let cloned = message.clone();
-    assert_eq!(message.id, cloned.id);
-    assert_eq!(message.role, cloned.role);
+    assert_eq!(legacy.id, "test-123");
+    assert_eq!(legacy.role, "user");
+    assert_eq!(legacy.content, "Hello");
 }
 
 #[tokio::test]
 async fn test_chat_send_returns_result() {
     let result: Result<String> = chat::send("project-id", "Hello").await;
     assert!(result.is_ok());
-    assert_eq!(
-        result.unwrap(),
-        "Chat message received. (Not yet implemented)"
-    );
+    assert!(result.unwrap().contains("Chat message received"));
 }
 
 #[tokio::test]
 async fn test_chat_history_returns_result() {
-    let result: Result<Vec<ChatMessage>> = chat::history("project-id", 10).await;
+    let result: Result<Vec<LegacyChatMessage>> = chat::history("project-id", 10).await;
     assert!(result.is_ok());
     assert!(result.unwrap().is_empty());
 }
