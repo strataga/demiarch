@@ -52,7 +52,7 @@ pub enum LicenseTier {
     Enterprise,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 pub enum Permission {
     ReadFiles,
     WriteFiles,
