@@ -373,6 +373,80 @@ impl SessionRepository {
 
         Ok(count)
     }
+
+    /// Delete old session events across all sessions
+    ///
+    /// Deletes events older than the specified number of days.
+    /// Returns the number of events deleted.
+    pub async fn delete_old_events(&self, days: i64) -> Result<u64> {
+        let cutoff = Utc::now() - chrono::Duration::days(days);
+
+        let result = sqlx::query(
+            r#"
+            DELETE FROM session_events
+            WHERE created_at < ?
+            "#,
+        )
+        .bind(cutoff)
+        .execute(&self.pool)
+        .await
+        .map_err(Error::DatabaseError)?;
+
+        Ok(result.rows_affected())
+    }
+
+    /// Delete events for sessions that have ended (completed or abandoned)
+    ///
+    /// Useful for cleaning up event history for terminated sessions.
+    /// Returns the number of events deleted.
+    pub async fn delete_events_for_ended_sessions(&self) -> Result<u64> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM session_events
+            WHERE session_id IN (
+                SELECT id FROM sessions
+                WHERE status IN ('completed', 'abandoned')
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(Error::DatabaseError)?;
+
+        Ok(result.rows_affected())
+    }
+
+    /// Delete events for a specific session
+    pub async fn delete_events_for_session(&self, session_id: Uuid) -> Result<u64> {
+        let session_id_str = session_id.to_string();
+
+        let result = sqlx::query(
+            r#"
+            DELETE FROM session_events
+            WHERE session_id = ?
+            "#,
+        )
+        .bind(&session_id_str)
+        .execute(&self.pool)
+        .await
+        .map_err(Error::DatabaseError)?;
+
+        Ok(result.rows_affected())
+    }
+
+    /// Count total events across all sessions
+    pub async fn count_all_events(&self) -> Result<i64> {
+        let (count,): (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*) FROM session_events
+            "#,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(Error::DatabaseError)?;
+
+        Ok(count)
+    }
 }
 
 // ========== Database Row Types ==========
@@ -657,5 +731,87 @@ mod tests {
             .await
             .expect("Failed to get events");
         assert_eq!(paused_events.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_delete_events_for_session() {
+        let pool = create_test_db().await;
+        let repo = SessionRepository::new(pool);
+
+        let session = Session::new(None, None, None);
+        repo.save(&session).await.expect("Failed to save session");
+
+        // Create events
+        repo.save_event(&SessionEvent::started(session.id)).await.unwrap();
+        repo.save_event(&SessionEvent::paused(session.id)).await.unwrap();
+        repo.save_event(&SessionEvent::resumed(session.id)).await.unwrap();
+
+        // Verify events exist
+        let count = repo.count_events(session.id).await.unwrap();
+        assert_eq!(count, 3);
+
+        // Delete events
+        let deleted = repo.delete_events_for_session(session.id).await.unwrap();
+        assert_eq!(deleted, 3);
+
+        // Verify events are gone
+        let count = repo.count_events(session.id).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_delete_events_for_ended_sessions() {
+        let pool = create_test_db().await;
+        let repo = SessionRepository::new(pool);
+
+        // Create an active session
+        let mut active_session = Session::new(None, None, Some("Active".to_string()));
+        repo.save(&active_session).await.unwrap();
+        repo.save_event(&SessionEvent::started(active_session.id)).await.unwrap();
+
+        // Create a completed session
+        let mut completed_session = Session::new(None, None, Some("Completed".to_string()));
+        completed_session.complete();
+        repo.save(&completed_session).await.unwrap();
+        repo.save_event(&SessionEvent::started(completed_session.id)).await.unwrap();
+        repo.save_event(&SessionEvent::completed(completed_session.id)).await.unwrap();
+
+        // Verify total event counts
+        let active_count = repo.count_events(active_session.id).await.unwrap();
+        let completed_count = repo.count_events(completed_session.id).await.unwrap();
+        assert_eq!(active_count, 1);
+        assert_eq!(completed_count, 2);
+
+        // Delete events for ended sessions
+        let deleted = repo.delete_events_for_ended_sessions().await.unwrap();
+        assert_eq!(deleted, 2); // Should delete events for completed session only
+
+        // Verify active session events still exist
+        let active_count = repo.count_events(active_session.id).await.unwrap();
+        assert_eq!(active_count, 1);
+
+        // Verify completed session events are gone
+        let completed_count = repo.count_events(completed_session.id).await.unwrap();
+        assert_eq!(completed_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_count_all_events() {
+        let pool = create_test_db().await;
+        let repo = SessionRepository::new(pool);
+
+        // Create two sessions with events
+        let session1 = Session::new(None, None, Some("Session 1".to_string()));
+        let session2 = Session::new(None, None, Some("Session 2".to_string()));
+        repo.save(&session1).await.unwrap();
+        repo.save(&session2).await.unwrap();
+
+        repo.save_event(&SessionEvent::started(session1.id)).await.unwrap();
+        repo.save_event(&SessionEvent::paused(session1.id)).await.unwrap();
+        repo.save_event(&SessionEvent::started(session2.id)).await.unwrap();
+
+        // Count all events
+        let count = repo.count_all_events().await.unwrap();
+        assert_eq!(count, 3);
     }
 }

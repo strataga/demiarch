@@ -4,7 +4,8 @@ use clap::{Parser, Subcommand};
 use demiarch_core::commands::{checkpoint, document, feature, generate, project};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
-use demiarch_core::domain::session::{SessionManager, SessionStatus};
+use demiarch_core::domain::locking::{LockConfig, LockManager};
+use demiarch_core::domain::session::{SessionManager, SessionStatus, ShutdownConfig, ShutdownHandler};
 use demiarch_core::storage::{Database, DatabaseManager};
 use demiarch_core::visualization::{HierarchyTree, NodeStyle, RenderOptions, TreeBuilder};
 use std::sync::Arc;
@@ -493,6 +494,24 @@ enum SessionAction {
         /// Delete sessions older than this many days
         #[arg(long, default_value = "30")]
         days: i64,
+        /// Also clean up old session events
+        #[arg(long)]
+        events: bool,
+        /// Days threshold for events (defaults to same as sessions)
+        #[arg(long)]
+        event_days: Option<i64>,
+    },
+    /// End the current session gracefully (with full cleanup)
+    End {
+        /// Complete the session (default) vs abandon it
+        #[arg(long)]
+        abandon: bool,
+        /// Run cleanup operations during shutdown
+        #[arg(long)]
+        cleanup: bool,
+        /// Days threshold for cleanup (if --cleanup is set)
+        #[arg(long, default_value = "30")]
+        cleanup_days: i64,
     },
 }
 
@@ -2104,14 +2123,83 @@ async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyh
             }
         }
 
-        SessionAction::Cleanup { days } => {
-            let deleted = manager.cleanup_old_sessions(days).await?;
+        SessionAction::Cleanup { days, events, event_days } => {
+            let summary = if events {
+                // Run full cleanup including events
+                manager.full_cleanup(days, event_days).await?
+            } else {
+                // Just clean up sessions
+                let sessions_deleted = manager.cleanup_old_sessions(days).await?;
+                demiarch_core::domain::session::CleanupSummary {
+                    sessions_deleted,
+                    events_deleted: 0,
+                    session_days: days,
+                    event_days: 0,
+                }
+            };
 
             if !quiet {
-                if deleted > 0 {
-                    println!("Cleaned up {} old sessions (older than {} days).", deleted, days);
+                if summary.had_cleanup() {
+                    println!("{}", summary.summary());
                 } else {
-                    println!("No old sessions to clean up.");
+                    println!("No old sessions or events to clean up.");
+                }
+            }
+        }
+
+        SessionAction::End { abandon, cleanup, cleanup_days } => {
+            // Create lock manager for shutdown handler
+            let lock_dir = dirs::config_dir()
+                .unwrap_or_default()
+                .join("demiarch")
+                .join("locks");
+            let lock_config = LockConfig::default().with_lock_dir(lock_dir);
+            let lock_manager = Arc::new(LockManager::new(lock_config));
+            lock_manager.initialize().await?;
+
+            // Create shutdown configuration
+            let config = if cleanup {
+                ShutdownConfig::with_cleanup(cleanup_days, cleanup_days)
+            } else {
+                ShutdownConfig::quick()
+            };
+
+            let handler = ShutdownHandler::new(
+                manager.clone(),
+                lock_manager,
+                db.clone(),
+                config,
+            );
+
+            // Perform shutdown
+            let result = if abandon {
+                handler.abandon_session().await?
+            } else {
+                handler.end_session().await?
+            };
+
+            if !quiet {
+                if let Some(session_id) = result.session_id {
+                    let action = if abandon { "abandoned" } else { "completed" };
+                    println!("Session {} {}", &session_id.to_string()[..8], action);
+                } else {
+                    println!("No active session to end.");
+                }
+
+                if result.locks_released > 0 {
+                    println!("  Released {} locks", result.locks_released);
+                }
+
+                if result.sessions_cleaned > 0 || result.events_cleaned > 0 {
+                    println!("  Cleaned up {} sessions, {} events", result.sessions_cleaned, result.events_cleaned);
+                }
+
+                if result.has_warnings() {
+                    println!();
+                    println!("Warnings:");
+                    for warning in &result.warnings {
+                        println!("  - {}", warning);
+                    }
                 }
             }
         }

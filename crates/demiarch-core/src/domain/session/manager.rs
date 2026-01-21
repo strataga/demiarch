@@ -550,6 +550,63 @@ impl SessionManager {
         Ok(deleted)
     }
 
+    /// Cleanup old session events
+    ///
+    /// Deletes events older than the specified number of days.
+    pub async fn cleanup_old_events(&self, days: i64) -> Result<u64> {
+        let deleted = self.repository.delete_old_events(days).await?;
+        if deleted > 0 {
+            info!(deleted = deleted, days = days, "Cleaned up old session events");
+        }
+        Ok(deleted)
+    }
+
+    /// Cleanup events for ended sessions
+    ///
+    /// Deletes all events for sessions that are completed or abandoned.
+    pub async fn cleanup_ended_session_events(&self) -> Result<u64> {
+        let deleted = self.repository.delete_events_for_ended_sessions().await?;
+        if deleted > 0 {
+            info!(deleted = deleted, "Cleaned up events for ended sessions");
+        }
+        Ok(deleted)
+    }
+
+    /// Perform full cleanup of old data
+    ///
+    /// This method cleans up:
+    /// - Sessions older than `session_days` that are completed or abandoned
+    /// - Events older than `event_days` (default: same as session_days)
+    ///
+    /// Returns a summary of what was cleaned up.
+    pub async fn full_cleanup(
+        &self,
+        session_days: i64,
+        event_days: Option<i64>,
+    ) -> Result<CleanupSummary> {
+        let event_days = event_days.unwrap_or(session_days);
+
+        let sessions_deleted = self.cleanup_old_sessions(session_days).await?;
+        let events_deleted = self.cleanup_old_events(event_days).await?;
+
+        let summary = CleanupSummary {
+            sessions_deleted,
+            events_deleted,
+            session_days,
+            event_days,
+        };
+
+        if summary.sessions_deleted > 0 || summary.events_deleted > 0 {
+            info!(
+                sessions = summary.sessions_deleted,
+                events = summary.events_deleted,
+                "Full cleanup completed"
+            );
+        }
+
+        Ok(summary)
+    }
+
     /// Get session statistics
     pub async fn stats(&self) -> Result<SessionStats> {
         let active = self.repository.count_by_status(SessionStatus::Active).await?;
@@ -580,6 +637,38 @@ pub struct SessionStats {
     pub abandoned: i64,
     /// Total number of sessions
     pub total: i64,
+}
+
+/// Summary of cleanup operations
+#[derive(Debug, Clone)]
+pub struct CleanupSummary {
+    /// Number of sessions deleted
+    pub sessions_deleted: u64,
+    /// Number of events deleted
+    pub events_deleted: u64,
+    /// Age threshold for sessions (in days)
+    pub session_days: i64,
+    /// Age threshold for events (in days)
+    pub event_days: i64,
+}
+
+impl CleanupSummary {
+    /// Check if any cleanup was performed
+    pub fn had_cleanup(&self) -> bool {
+        self.sessions_deleted > 0 || self.events_deleted > 0
+    }
+
+    /// Get a human-readable summary
+    pub fn summary(&self) -> String {
+        if !self.had_cleanup() {
+            "No cleanup needed".to_string()
+        } else {
+            format!(
+                "Cleaned up {} sessions (>{} days old) and {} events (>{} days old)",
+                self.sessions_deleted, self.session_days, self.events_deleted, self.event_days
+            )
+        }
+    }
 }
 
 #[cfg(test)]
