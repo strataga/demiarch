@@ -1,10 +1,11 @@
 //! Demiarch CLI - local-first AI app builder
 
 use clap::{Parser, Subcommand};
-use demiarch_core::commands::{feature, generate, project};
+use demiarch_core::commands::{document, feature, generate, project};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
 use demiarch_core::storage::{Database, DatabaseManager};
+use std::sync::Arc;
 use tracing::{info, warn};
 
 #[derive(Parser)]
@@ -66,6 +67,12 @@ enum Commands {
         /// Dry run (preview without writing files)
         #[arg(short, long)]
         dry_run: bool,
+    },
+
+    /// Generate and manage documents (PRD, Architecture, etc.)
+    Documents {
+        #[command(subcommand)]
+        action: DocumentAction,
     },
 
     /// Manage learned skills
@@ -156,6 +163,51 @@ enum FeatureAction {
         status: Option<String>,
     },
     /// Delete a feature
+    Delete { id: String },
+}
+
+#[derive(Subcommand)]
+enum DocumentAction {
+    /// Generate a PRD for a project
+    GeneratePrd {
+        /// Project ID
+        #[arg(short, long)]
+        project: String,
+    },
+    /// Generate an architecture document for a project
+    GenerateArchitecture {
+        /// Project ID
+        #[arg(short, long)]
+        project: String,
+    },
+    /// List documents for a project
+    List {
+        /// Project ID
+        #[arg(short, long)]
+        project: String,
+        /// Document type (prd, architecture, design, tech_spec)
+        #[arg(short, long)]
+        doc_type: Option<String>,
+    },
+    /// Show document details
+    Show { id: String },
+    /// Update document status
+    UpdateStatus {
+        /// Document ID
+        id: String,
+        /// New status (draft, review, final, archived)
+        #[arg(short, long)]
+        status: String,
+    },
+    /// Export a document to a file
+    Export {
+        /// Document ID
+        id: String,
+        /// Output file path
+        #[arg(short, long)]
+        output: String,
+    },
+    /// Delete a document
     Delete { id: String },
 }
 
@@ -384,6 +436,11 @@ async fn main() -> anyhow::Result<()> {
             description,
             dry_run,
         } => cmd_generate(&description, dry_run, cli.quiet).await,
+
+        Commands::Documents { action } => {
+            let db = get_db().await?;
+            cmd_documents(&db, action, cli.quiet).await
+        }
 
         Commands::Skills { action } => cmd_skills(action, cli.quiet).await,
 
@@ -632,6 +689,174 @@ async fn cmd_generate(description: &str, dry_run: bool, quiet: bool) -> anyhow::
             println!();
             println!("Dry run complete. No files were written.");
             println!("Run without --dry-run to create the files.");
+        }
+    }
+
+    Ok(())
+}
+
+async fn cmd_documents(db: &Database, action: DocumentAction, quiet: bool) -> anyhow::Result<()> {
+    let config = Config::load()?;
+    let cost_tracker = Arc::new(CostTracker::from_config(&config.cost));
+
+    match action {
+        DocumentAction::GeneratePrd { project } => {
+            if !quiet {
+                println!("Generating PRD for project '{}'...", project);
+                println!();
+            }
+
+            let doc = document::generate_prd(db, &project, Some(cost_tracker.clone()))
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("PRD generated successfully!");
+                println!();
+                println!("  Document ID: {}", doc.id);
+                println!("  Title: {}", doc.title);
+                println!("  Status: {:?}", doc.status);
+                if let Some(model) = &doc.model_used {
+                    println!("  Model: {}", model);
+                }
+                if let Some(tokens) = doc.tokens_used {
+                    println!("  Tokens used: {}", tokens);
+                }
+                if let Some(cost) = doc.generation_cost_usd {
+                    println!("  Generation cost: ${:.4}", cost);
+                }
+                println!();
+                println!("View with: demiarch documents show {}", doc.id);
+                println!("Export with: demiarch documents export {} --output prd.md", doc.id);
+            }
+        }
+
+        DocumentAction::GenerateArchitecture { project } => {
+            if !quiet {
+                println!("Generating architecture document for project '{}'...", project);
+                println!();
+            }
+
+            let doc = document::generate_architecture(db, &project, Some(cost_tracker.clone()))
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Architecture document generated successfully!");
+                println!();
+                println!("  Document ID: {}", doc.id);
+                println!("  Title: {}", doc.title);
+                println!("  Status: {:?}", doc.status);
+                if let Some(model) = &doc.model_used {
+                    println!("  Model: {}", model);
+                }
+                if let Some(tokens) = doc.tokens_used {
+                    println!("  Tokens used: {}", tokens);
+                }
+                if let Some(cost) = doc.generation_cost_usd {
+                    println!("  Generation cost: ${:.4}", cost);
+                }
+                println!();
+                println!("View with: demiarch documents show {}", doc.id);
+                println!("Export with: demiarch documents export {} --output architecture.md", doc.id);
+            }
+        }
+
+        DocumentAction::List { project, doc_type } => {
+            let dt = doc_type.as_ref().and_then(|s| document::DocumentType::parse(s));
+
+            let docs = document::list_documents(db, &project, dt)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if docs.is_empty() {
+                if !quiet {
+                    println!("No documents found for project '{}'.", project);
+                    println!();
+                    println!("Generate one with:");
+                    println!("  demiarch documents generate-prd --project {}", project);
+                    println!("  demiarch documents generate-architecture --project {}", project);
+                }
+            } else {
+                if !quiet {
+                    println!("Documents for project '{}':", project);
+                    println!();
+                }
+                for doc in docs {
+                    println!(
+                        "  {} - {} ({:?}) [{}]",
+                        &doc.id[..8],
+                        doc.title,
+                        doc.doc_type,
+                        doc.status.as_str()
+                    );
+                }
+            }
+        }
+
+        DocumentAction::Show { id } => {
+            let doc = document::get_document(db, &id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?
+                .ok_or_else(|| anyhow::anyhow!("Document '{}' not found", id))?;
+
+            println!("Document: {}", doc.title);
+            println!("=========={}", "=".repeat(doc.title.len()));
+            println!();
+            println!("ID: {}", doc.id);
+            println!("Type: {}", doc.doc_type.display_name());
+            println!("Status: {:?}", doc.status);
+            println!("Version: {}", doc.version);
+            if let Some(model) = &doc.model_used {
+                println!("Model: {}", model);
+            }
+            if let Some(tokens) = doc.tokens_used {
+                println!("Tokens: {}", tokens);
+            }
+            if let Some(cost) = doc.generation_cost_usd {
+                println!("Cost: ${:.4}", cost);
+            }
+            println!("Created: {}", doc.created_at.format("%Y-%m-%d %H:%M:%S"));
+            println!("Updated: {}", doc.updated_at.format("%Y-%m-%d %H:%M:%S"));
+            println!();
+            println!("Content:");
+            println!("--------");
+            println!("{}", doc.content);
+        }
+
+        DocumentAction::UpdateStatus { id, status } => {
+            let new_status = document::DocumentStatus::parse(&status)
+                .ok_or_else(|| anyhow::anyhow!("Invalid status '{}'. Use: draft, review, final, archived", status))?;
+
+            document::update_document_status(db, &id, new_status)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Document '{}' status updated to '{}'.", id, status);
+            }
+        }
+
+        DocumentAction::Export { id, output } => {
+            let path = std::path::PathBuf::from(&output);
+
+            document::export_document(db, &id, &path)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Document '{}' exported to '{}'.", id, output);
+            }
+        }
+
+        DocumentAction::Delete { id } => {
+            document::delete_document(db, &id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("Document '{}' deleted.", id);
+            }
         }
     }
 

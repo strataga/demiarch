@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 1;
+pub const CURRENT_VERSION: i32 = 2;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -149,6 +149,45 @@ const MIGRATION_V1: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_checkpoints_file_path ON checkpoints(file_path);
 "#;
 
+/// Migration 2: Documents table for PRD and architecture document generation
+const MIGRATION_V2: &str = r#"
+    -- Documents table for auto-generated PRDs, architecture docs, etc.
+    CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY NOT NULL,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        doc_type TEXT NOT NULL CHECK (doc_type IN ('prd', 'architecture', 'design', 'tech_spec', 'custom')),
+        title TEXT NOT NULL,
+        description TEXT,
+        content TEXT NOT NULL,
+        format TEXT NOT NULL DEFAULT 'markdown' CHECK (format IN ('markdown', 'json')),
+        version INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'review', 'final', 'archived')),
+        model_used TEXT,
+        tokens_used INTEGER,
+        generation_cost_usd REAL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents(project_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_doc_type ON documents(doc_type);
+    CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+
+    -- Document versions for tracking changes
+    CREATE TABLE IF NOT EXISTS document_versions (
+        id TEXT PRIMARY KEY NOT NULL,
+        document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        version_number INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        change_summary TEXT,
+        model_used TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_document_versions_document_id ON document_versions(document_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_document_versions_unique ON document_versions(document_id, version_number);
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -193,12 +232,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         record_migration(pool, 1).await?;
     }
 
-    // Future migrations would be added here:
-    // if current_version < 2 {
-    //     tracing::info!("Applying migration v2: ...");
-    //     sqlx::raw_sql(MIGRATION_V2).execute(pool).await?;
-    //     record_migration(pool, 2).await?;
-    // }
+    if current_version < 2 {
+        tracing::info!("Applying migration v2: Documents table");
+        sqlx::raw_sql(MIGRATION_V2).execute(pool).await?;
+        record_migration(pool, 2).await?;
+    }
 
     tracing::info!("Database migrations completed");
     Ok(())
@@ -291,6 +329,8 @@ mod tests {
             "conversations",
             "messages",
             "checkpoints",
+            "documents",
+            "document_versions",
         ];
 
         for table in tables {
