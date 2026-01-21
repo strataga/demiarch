@@ -37,6 +37,9 @@ build/
 # Tauri
 gui/src-tauri/target/
 
+# WSL build artifacts
+\\wsl.localhost\Ubuntu\home\jason\projects\demiarch\demiarch\target
+
 # Test artifacts
 *.profraw
 coverage/
