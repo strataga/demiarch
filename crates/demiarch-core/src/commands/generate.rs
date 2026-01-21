@@ -140,10 +140,10 @@ impl CodeGenerator {
             // Check for file path marker (various formats)
             if let Some(path) = extract_file_path(line) {
                 // Save previous file if exists
-                if let Some(builder) = current_file.take() {
-                    if let Some(file) = builder.build() {
-                        files.push(file);
-                    }
+                if let Some(builder) = current_file.take()
+                    && let Some(file) = builder.build()
+                {
+                    files.push(file);
                 }
 
                 // Start new file
@@ -170,19 +170,19 @@ impl CodeGenerator {
             }
 
             // Add content if we're in a file
-            if let Some(ref mut builder) = current_file {
-                if builder.in_code_block {
-                    builder.content.push_str(line);
-                    builder.content.push('\n');
-                }
+            if let Some(ref mut builder) = current_file
+                && builder.in_code_block
+            {
+                builder.content.push_str(line);
+                builder.content.push('\n');
             }
         }
 
         // Don't forget the last file
-        if let Some(builder) = current_file {
-            if let Some(file) = builder.build() {
-                files.push(file);
-            }
+        if let Some(builder) = current_file
+            && let Some(file) = builder.build()
+        {
+            files.push(file);
         }
 
         if files.is_empty() {
@@ -245,10 +245,10 @@ impl CodeGenerator {
             info!(path = %file.path.display(), "Writing generated file");
 
             // Create parent directories if needed
-            if let Some(parent) = file.path.parent() {
-                if !parent.as_os_str().is_empty() {
-                    std::fs::create_dir_all(parent).map_err(Error::Io)?;
-                }
+            if let Some(parent) = file.path.parent()
+                && !parent.as_os_str().is_empty()
+            {
+                std::fs::create_dir_all(parent).map_err(Error::Io)?;
             }
 
             std::fs::write(&file.path, &file.content).map_err(Error::Io)?;
@@ -353,7 +353,7 @@ fn looks_like_path(s: &str) -> bool {
 
     // Special filenames without extension
     let special_files = ["Makefile", "Dockerfile", "Rakefile", "Gemfile", "Cargo.toml"];
-    special_files.iter().any(|&f| s == f)
+    special_files.contains(&s)
 }
 
 /// Map language identifier to file extension
