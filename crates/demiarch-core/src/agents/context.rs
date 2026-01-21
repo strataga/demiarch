@@ -8,15 +8,15 @@
 //! - Progressive disclosure settings for token management
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use super::traits::{AgentResult, AgentStatus};
 use super::AgentType;
+use super::traits::{AgentResult, AgentStatus};
 use crate::context::{
     ContextBudget, ContextWindow, DisclosureLevel, TokenAllocation, estimate_messages_tokens,
 };
@@ -428,7 +428,9 @@ impl AgentContext {
 
     /// Get the token allocation for this agent based on its depth
     pub fn token_allocation(&self) -> TokenAllocation {
-        self.shared_state.context_budget.allocation_for_depth(self.depth)
+        self.shared_state
+            .context_budget
+            .allocation_for_depth(self.depth)
     }
 
     /// Create a context window for this agent
@@ -451,7 +453,9 @@ impl AgentContext {
     /// for the token allocation strategy at this depth.
     pub fn remaining_context_budget(&self) -> usize {
         let allocation = self.token_allocation();
-        allocation.context_tokens.saturating_sub(self.estimate_inherited_tokens())
+        allocation
+            .context_tokens
+            .saturating_sub(self.estimate_inherited_tokens())
     }
 
     /// Check if inherited messages exceed the context budget
@@ -472,7 +476,10 @@ impl AgentContext {
 
         // Get the disclosure level and allocation for the child
         let child_disclosure = DisclosureLevel::for_depth(child_depth);
-        let child_allocation = self.shared_state.context_budget.allocation_for_depth(child_depth);
+        let child_allocation = self
+            .shared_state
+            .context_budget
+            .allocation_for_depth(child_depth);
 
         // Create a context window for the parent to compress inherited messages
         let mut parent_window = self.create_context_window();
@@ -666,7 +673,9 @@ mod tests {
         assert_eq!(retrieved.agent_type, AgentType::Planner);
         assert_eq!(retrieved.status, AgentStatus::Running);
 
-        state.update_agent_status(agent_id, AgentStatus::Completed).await;
+        state
+            .update_agent_status(agent_id, AgentStatus::Completed)
+            .await;
         let updated = state.get_agent(agent_id).await.unwrap();
         assert_eq!(updated.status, AgentStatus::Completed);
     }
@@ -755,9 +764,14 @@ mod tests {
         let coder = planner.child_context(AgentType::Coder);
 
         // Orchestrator should have more context budget than planner
-        assert!(orchestrator.token_allocation().context_tokens > planner.token_allocation().context_tokens);
+        assert!(
+            orchestrator.token_allocation().context_tokens
+                > planner.token_allocation().context_tokens
+        );
         // Planner should have more context budget than coder
-        assert!(planner.token_allocation().context_tokens > coder.token_allocation().context_tokens);
+        assert!(
+            planner.token_allocation().context_tokens > coder.token_allocation().context_tokens
+        );
     }
 
     #[test]
@@ -772,8 +786,8 @@ mod tests {
     #[test]
     fn test_estimate_inherited_tokens() {
         let shared = Arc::new(SharedAgentState::new(test_llm_client()));
-        let ctx = AgentContext::root(AgentType::Orchestrator, shared)
-            .with_inherited_messages(vec![
+        let ctx =
+            AgentContext::root(AgentType::Orchestrator, shared).with_inherited_messages(vec![
                 Message::user("Hello, this is a test message."),
                 Message::assistant("This is a response."),
             ]);
@@ -792,9 +806,7 @@ mod tests {
 
         // Add messages and check budget decreases
         let ctx_with_messages = AgentContext::root(AgentType::Orchestrator, shared)
-            .with_inherited_messages(vec![
-                Message::user("Hello, this is a test message."),
-            ]);
+            .with_inherited_messages(vec![Message::user("Hello, this is a test message.")]);
 
         assert!(ctx_with_messages.remaining_context_budget() < budget);
     }
@@ -840,9 +852,7 @@ mod tests {
         let shared = Arc::new(SharedAgentState::new(test_llm_client()));
 
         let ctx = AgentContext::root(AgentType::Orchestrator, shared)
-            .with_inherited_messages(vec![
-                Message::user("Test message."),
-            ]);
+            .with_inherited_messages(vec![Message::user("Test message.")]);
 
         let summary = ctx.context_summary();
 

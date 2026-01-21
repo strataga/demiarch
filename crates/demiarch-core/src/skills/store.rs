@@ -139,9 +139,7 @@ impl SkillStore {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|r| r.into_learned_skill())
-            .collect()
+        rows.into_iter().map(|r| r.into_learned_skill()).collect()
     }
 
     /// Get skills by category
@@ -157,9 +155,7 @@ impl SkillStore {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|r| r.into_learned_skill())
-            .collect()
+        rows.into_iter().map(|r| r.into_learned_skill()).collect()
     }
 
     /// Search skills using full-text search
@@ -178,9 +174,7 @@ impl SkillStore {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|r| r.into_learned_skill())
-            .collect()
+        rows.into_iter().map(|r| r.into_learned_skill()).collect()
     }
 
     /// Search skills by tags
@@ -230,9 +224,7 @@ impl SkillStore {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|r| r.into_learned_skill())
-            .collect()
+        rows.into_iter().map(|r| r.into_learned_skill()).collect()
     }
 
     /// Get skills by project
@@ -248,9 +240,7 @@ impl SkillStore {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|r| r.into_learned_skill())
-            .collect()
+        rows.into_iter().map(|r| r.into_learned_skill()).collect()
     }
 
     /// Update usage statistics for a skill
@@ -345,7 +335,7 @@ impl SkillStore {
             high_confidence_skills: high_confidence as u64,
             skills_by_category: categories
                 .into_iter()
-                .map(|(cat, count)| (SkillCategory::from_str(&cat), count as u64))
+                .map(|(cat, count)| (SkillCategory::parse(&cat), count as u64))
                 .collect(),
         })
     }
@@ -362,10 +352,7 @@ impl SkillStore {
         text_hash: &str,
     ) -> Result<()> {
         let id = uuid::Uuid::new_v4().to_string();
-        let embedding_bytes: Vec<u8> = embedding
-            .iter()
-            .flat_map(|f| f.to_le_bytes())
-            .collect();
+        let embedding_bytes: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
         let dimensions = embedding.len() as i32;
         let now = Utc::now().to_rfc3339();
 
@@ -399,7 +386,11 @@ impl SkillStore {
     }
 
     /// Get the embedding for a skill
-    pub async fn get_embedding(&self, skill_id: &str, model: &str) -> Result<Option<SkillEmbedding>> {
+    pub async fn get_embedding(
+        &self,
+        skill_id: &str,
+        model: &str,
+    ) -> Result<Option<SkillEmbedding>> {
         let row: Option<EmbeddingRow> = sqlx::query_as(
             r#"
             SELECT * FROM skill_embeddings
@@ -415,7 +406,12 @@ impl SkillStore {
     }
 
     /// Check if a skill has an embedding that matches the current text
-    pub async fn has_valid_embedding(&self, skill_id: &str, model: &str, text_hash: &str) -> Result<bool> {
+    pub async fn has_valid_embedding(
+        &self,
+        skill_id: &str,
+        model: &str,
+        text_hash: &str,
+    ) -> Result<bool> {
         let row: Option<(String,)> = sqlx::query_as(
             r#"
             SELECT text_hash FROM skill_embeddings
@@ -492,7 +488,11 @@ impl SkillStore {
     ///
     /// Returns skills that either have no embedding or have outdated embeddings
     /// (text has changed since embedding was generated).
-    pub async fn get_skills_needing_embeddings(&self, model: &str, limit: u32) -> Result<Vec<LearnedSkill>> {
+    pub async fn get_skills_needing_embeddings(
+        &self,
+        model: &str,
+        limit: u32,
+    ) -> Result<Vec<LearnedSkill>> {
         let rows: Vec<SkillRow> = sqlx::query_as(
             r#"
             SELECT ls.* FROM learned_skills ls
@@ -506,9 +506,7 @@ impl SkillStore {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|r| r.into_learned_skill())
-            .collect()
+        rows.into_iter().map(|r| r.into_learned_skill()).collect()
     }
 
     /// Delete embedding for a skill
@@ -708,7 +706,7 @@ struct SkillRow {
 impl SkillRow {
     /// Convert a database row to a LearnedSkill
     fn into_learned_skill(self) -> Result<LearnedSkill> {
-        let category = SkillCategory::from_str(&self.category);
+        let category = SkillCategory::parse(&self.category);
 
         let pattern_type = match self.pattern_type.as_str() {
             "technique" => PatternType::Technique,
@@ -754,7 +752,7 @@ impl SkillRow {
             tokens_used: self.source_tokens_used.map(|t| t as u32),
         };
 
-        let confidence = SkillConfidence::from_str(&self.confidence);
+        let confidence = SkillConfidence::parse(&self.confidence);
 
         let tags: Vec<String> = self
             .tags
@@ -1042,8 +1040,18 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(store.has_valid_embedding(&id, model, "correct_hash").await.unwrap());
-        assert!(!store.has_valid_embedding(&id, model, "wrong_hash").await.unwrap());
+        assert!(
+            store
+                .has_valid_embedding(&id, model, "correct_hash")
+                .await
+                .unwrap()
+        );
+        assert!(
+            !store
+                .has_valid_embedding(&id, model, "wrong_hash")
+                .await
+                .unwrap()
+        );
     }
 
     #[tokio::test]
@@ -1066,17 +1074,23 @@ mod tests {
         let emb2 = vec![0.7, 0.7, 0.0]; // 45 degrees from x-axis
         let emb3 = vec![0.0, 0.0, 1.0]; // Points along z-axis (orthogonal)
 
-        store.save_embedding(&skill1.id, &emb1, model, "h1").await.unwrap();
-        store.save_embedding(&skill2.id, &emb2, model, "h2").await.unwrap();
-        store.save_embedding(&skill3.id, &emb3, model, "h3").await.unwrap();
+        store
+            .save_embedding(&skill1.id, &emb1, model, "h1")
+            .await
+            .unwrap();
+        store
+            .save_embedding(&skill2.id, &emb2, model, "h2")
+            .await
+            .unwrap();
+        store
+            .save_embedding(&skill3.id, &emb3, model, "h3")
+            .await
+            .unwrap();
 
         // Query similar to skill1
         let query = vec![0.9, 0.1, 0.0];
 
-        let results = store
-            .semantic_search(&query, model, 10, 0.0)
-            .await
-            .unwrap();
+        let results = store.semantic_search(&query, model, 10, 0.0).await.unwrap();
 
         assert_eq!(results.len(), 3);
 
@@ -1106,16 +1120,19 @@ mod tests {
         let emb1 = vec![1.0, 0.0, 0.0];
         let emb2 = vec![0.0, 1.0, 0.0]; // Orthogonal
 
-        store.save_embedding(&skill1.id, &emb1, model, "h1").await.unwrap();
-        store.save_embedding(&skill2.id, &emb2, model, "h2").await.unwrap();
+        store
+            .save_embedding(&skill1.id, &emb1, model, "h1")
+            .await
+            .unwrap();
+        store
+            .save_embedding(&skill2.id, &emb2, model, "h2")
+            .await
+            .unwrap();
 
         let query = vec![1.0, 0.0, 0.0];
 
         // With high min_similarity, only skill1 should match
-        let results = store
-            .semantic_search(&query, model, 10, 0.5)
-            .await
-            .unwrap();
+        let results = store.semantic_search(&query, model, 10, 0.5).await.unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].skill.id, skill1.id);
@@ -1139,7 +1156,10 @@ mod tests {
             .await
             .unwrap();
 
-        let needing = store.get_skills_needing_embeddings(model, 10).await.unwrap();
+        let needing = store
+            .get_skills_needing_embeddings(model, 10)
+            .await
+            .unwrap();
 
         assert_eq!(needing.len(), 1);
         assert_eq!(needing[0].id, skill2.id);

@@ -10,14 +10,12 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
+use super::AgentType;
 use super::coder::CoderAgent;
 use super::context::AgentContext;
 use super::reviewer::ReviewerAgent;
 use super::tester::TesterAgent;
-use super::traits::{
-    Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus,
-};
-use super::AgentType;
+use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
 use crate::error::Result;
 use crate::llm::Message;
 
@@ -110,10 +108,7 @@ impl PlannerAgent {
     pub fn new() -> Self {
         Self {
             status: AtomicU8::new(AgentStatus::Ready as u8),
-            capabilities: vec![
-                AgentCapability::Planning,
-                AgentCapability::CodebaseSearch,
-            ],
+            capabilities: vec![AgentCapability::Planning, AgentCapability::CodebaseSearch],
         }
     }
 
@@ -267,12 +262,12 @@ impl PlannerAgent {
         let mut plan = ExecutionPlan::new(original_task);
 
         // Try to parse JSON if present
-        if let Some(json_start) = response.find('{') {
-            if let Some(json_end) = response.rfind('}') {
-                let json_str = &response[json_start..=json_end];
-                if let Ok(parsed) = serde_json::from_str::<ExecutionPlan>(json_str) {
-                    return parsed;
-                }
+        if let Some(json_start) = response.find('{')
+            && let Some(json_end) = response.rfind('}')
+        {
+            let json_str = &response[json_start..=json_end];
+            if let Ok(parsed) = serde_json::from_str::<ExecutionPlan>(json_str) {
+                return parsed;
             }
         }
 
@@ -295,11 +290,8 @@ impl PlannerAgent {
         // Add review task if code was generated
         if !plan.coding_tasks().is_empty() && plan.requires_review {
             task_id += 1;
-            let depends_on: Vec<String> = plan
-                .coding_tasks()
-                .iter()
-                .map(|t| t.id.clone())
-                .collect();
+            let depends_on: Vec<String> =
+                plan.coding_tasks().iter().map(|t| t.id.clone()).collect();
             plan.tasks.push(PlanTask {
                 id: format!("task-{}", task_id),
                 agent_type: "reviewer".to_string(),
@@ -312,11 +304,8 @@ impl PlannerAgent {
         // Add test task if code was generated
         if !plan.coding_tasks().is_empty() && plan.requires_tests {
             task_id += 1;
-            let depends_on: Vec<String> = plan
-                .coding_tasks()
-                .iter()
-                .map(|t| t.id.clone())
-                .collect();
+            let depends_on: Vec<String> =
+                plan.coding_tasks().iter().map(|t| t.id.clone()).collect();
             plan.tasks.push(PlanTask {
                 id: format!("task-{}", task_id),
                 agent_type: "tester".to_string(),
@@ -489,7 +478,8 @@ mod tests {
     #[test]
     fn test_parse_execution_plan_heuristic() {
         let planner = PlannerAgent::new();
-        let text_response = "I will implement the user login feature by creating the necessary components.";
+        let text_response =
+            "I will implement the user login feature by creating the necessary components.";
 
         let plan = planner.parse_execution_plan("Login feature", text_response);
         assert!(!plan.tasks.is_empty());

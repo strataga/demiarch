@@ -9,11 +9,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use super::context::AgentContext;
-use super::traits::{
-    Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus,
-};
 use super::AgentType;
+use super::context::AgentContext;
+use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
 use crate::error::Result;
 use crate::llm::Message;
 
@@ -89,7 +87,10 @@ impl TestSuite {
 
     /// Count tests by type
     pub fn test_count(&self, test_type: TestType) -> usize {
-        self.tests.iter().filter(|t| t.test_type == test_type).count()
+        self.tests
+            .iter()
+            .filter(|t| t.test_type == test_type)
+            .count()
     }
 }
 
@@ -360,9 +361,11 @@ mod tests {
         let tester = TesterAgent::new();
         assert_eq!(tester.agent_type(), AgentType::Tester);
         assert_eq!(tester.status(), AgentStatus::Ready);
-        assert!(tester
-            .capabilities()
-            .contains(&AgentCapability::TestGeneration));
+        assert!(
+            tester
+                .capabilities()
+                .contains(&AgentCapability::TestGeneration)
+        );
     }
 
     #[test]

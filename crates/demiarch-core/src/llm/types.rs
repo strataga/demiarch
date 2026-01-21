@@ -342,15 +342,12 @@ impl Embedding {
 
     /// Serialize embedding vector to bytes for storage
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.vector
-            .iter()
-            .flat_map(|f| f.to_le_bytes())
-            .collect()
+        self.vector.iter().flat_map(|f| f.to_le_bytes()).collect()
     }
 
     /// Deserialize embedding vector from bytes
     pub fn from_bytes(bytes: &[u8], model: String) -> Option<Self> {
-        if bytes.len() % 4 != 0 {
+        if !bytes.len().is_multiple_of(4) {
             return None;
         }
 

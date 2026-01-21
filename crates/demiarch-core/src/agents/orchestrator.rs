@@ -9,12 +9,10 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use tracing::{debug, info};
 
+use super::AgentType;
 use super::context::AgentContext;
 use super::planner::PlannerAgent;
-use super::traits::{
-    Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus,
-};
-use super::AgentType;
+use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
 use crate::error::Result;
 use crate::llm::Message;
 
@@ -43,11 +41,7 @@ impl OrchestratorAgent {
     }
 
     /// Execute the orchestration logic
-    async fn orchestrate(
-        &self,
-        input: AgentInput,
-        context: AgentContext,
-    ) -> Result<AgentResult> {
+    async fn orchestrate(&self, input: AgentInput, context: AgentContext) -> Result<AgentResult> {
         info!(
             agent_id = %context.id,
             path = %context.path,
@@ -106,7 +100,10 @@ impl OrchestratorAgent {
             // Build final result
             AgentResult::success(&response.content)
                 .with_tokens(response.tokens_used)
-                .with_artifact(AgentArtifact::plan("orchestration-plan", &plan.refined_task))
+                .with_artifact(AgentArtifact::plan(
+                    "orchestration-plan",
+                    &plan.refined_task,
+                ))
                 .with_child_result(planner_result)
         } else {
             // Simple request that doesn't need planning
@@ -276,9 +273,11 @@ mod tests {
         let orchestrator = OrchestratorAgent::new();
         assert_eq!(orchestrator.agent_type(), AgentType::Orchestrator);
         assert_eq!(orchestrator.status(), AgentStatus::Ready);
-        assert!(orchestrator
-            .capabilities()
-            .contains(&AgentCapability::Orchestration));
+        assert!(
+            orchestrator
+                .capabilities()
+                .contains(&AgentCapability::Orchestration)
+        );
     }
 
     #[test]
@@ -292,13 +291,17 @@ mod tests {
         let orchestrator = OrchestratorAgent::new();
 
         // Should need planner
-        let plan = orchestrator.parse_orchestration_plan("I will implement the user authentication system. Step 1: Create the login form.");
+        let plan = orchestrator.parse_orchestration_plan(
+            "I will implement the user authentication system. Step 1: Create the login form.",
+        );
         assert!(plan.needs_planner);
 
-        let plan = orchestrator.parse_orchestration_plan("Let me generate the code for this feature.");
+        let plan =
+            orchestrator.parse_orchestration_plan("Let me generate the code for this feature.");
         assert!(plan.needs_planner);
 
-        let plan = orchestrator.parse_orchestration_plan("Tasks: 1. Create model 2. Add controller");
+        let plan =
+            orchestrator.parse_orchestration_plan("Tasks: 1. Create model 2. Add controller");
         assert!(plan.needs_planner);
     }
 
@@ -310,7 +313,8 @@ mod tests {
         let plan = orchestrator.parse_orchestration_plan("The project is well structured.");
         assert!(!plan.needs_planner);
 
-        let plan = orchestrator.parse_orchestration_plan("I understand your question about the architecture.");
+        let plan = orchestrator
+            .parse_orchestration_plan("I understand your question about the architecture.");
         assert!(!plan.needs_planner);
     }
 

@@ -1235,7 +1235,10 @@ async fn cmd_checkpoints(action: CheckpointAction, quiet: bool) -> anyhow::Resul
                     println!();
                     println!("Checkpoints are created automatically before code generation.");
                     println!("You can also create a manual checkpoint with:");
-                    println!("  demiarch checkpoints create --project {} --description \"Before my changes\"", project);
+                    println!(
+                        "  demiarch checkpoints create --project {} --description \"Before my changes\"",
+                        project
+                    );
                 }
             } else {
                 if !quiet {
@@ -1339,7 +1342,10 @@ async fn cmd_checkpoints(action: CheckpointAction, quiet: bool) -> anyhow::Resul
                 println!();
                 println!("Checkpoint restored successfully!");
                 println!();
-                println!("  Restored to: {}", result.checkpoint_timestamp.format("%Y-%m-%d %H:%M:%S"));
+                println!(
+                    "  Restored to: {}",
+                    result.checkpoint_timestamp.format("%Y-%m-%d %H:%M:%S")
+                );
                 println!("  Description: {}", result.checkpoint_description);
                 println!();
                 println!("  Phases restored: {}", result.phases_restored);
@@ -1349,10 +1355,16 @@ async fn cmd_checkpoints(action: CheckpointAction, quiet: bool) -> anyhow::Resul
                     println!("  Files restored: {}", result.files_restored);
                 }
                 println!();
-                println!("  Safety backup created: {}", &result.safety_backup_id.to_string()[..8]);
+                println!(
+                    "  Safety backup created: {}",
+                    &result.safety_backup_id.to_string()[..8]
+                );
                 println!();
                 println!("To undo this restore, run:");
-                println!("  demiarch checkpoints restore {} --force", &result.safety_backup_id.to_string()[..8]);
+                println!(
+                    "  demiarch checkpoints restore {} --force",
+                    &result.safety_backup_id.to_string()[..8]
+                );
             }
         }
 
@@ -1368,7 +1380,10 @@ async fn cmd_checkpoints(action: CheckpointAction, quiet: bool) -> anyhow::Resul
                 if is_valid {
                     println!("[OK] Checkpoint '{}' signature is valid.", &id[..8]);
                 } else {
-                    println!("[!!] Checkpoint '{}' signature verification FAILED.", &id[..8]);
+                    println!(
+                        "[!!] Checkpoint '{}' signature verification FAILED.",
+                        &id[..8]
+                    );
                     println!("     The checkpoint data may have been corrupted or tampered with.");
                 }
             }

@@ -17,15 +17,15 @@ use uuid::Uuid;
 
 /// Type alias for tracked file database row
 type TrackedFileRow = (
-    String,            // id
-    String,            // project_id
-    Option<String>,    // feature_id
-    String,            // file_path
-    String,            // content_hash
-    DateTime<Utc>,     // generation_timestamp
-    Option<String>,    // last_verified_hash
+    String,                // id
+    String,                // project_id
+    Option<String>,        // feature_id
+    String,                // file_path
+    String,                // content_hash
+    DateTime<Utc>,         // generation_timestamp
+    Option<String>,        // last_verified_hash
     Option<DateTime<Utc>>, // last_verified_at
-    i32,               // edit_detected
+    i32,                   // edit_detected
 );
 
 /// A tracked generated file
@@ -452,12 +452,7 @@ impl EditDetectionService {
     ) -> Result<TrackedFile> {
         let content_hash = compute_content_hash(content);
 
-        let tracked = TrackedFile::new(
-            project_id,
-            feature_id,
-            file_path.to_string(),
-            content_hash,
-        );
+        let tracked = TrackedFile::new(project_id, feature_id, file_path.to_string(), content_hash);
 
         self.repository.track_file(&tracked).await?;
 
@@ -501,10 +496,7 @@ impl EditDetectionService {
         let tracked = self.repository.get_by_path(project_id, file_path).await?;
 
         let Some(tracked) = tracked else {
-            return Err(Error::NotFound(format!(
-                "File not tracked: {}",
-                file_path
-            )));
+            return Err(Error::NotFound(format!("File not tracked: {}", file_path)));
         };
 
         let full_path = self.resolve_path(file_path);
@@ -656,7 +648,11 @@ impl EditDetectionService {
     ///
     /// This updates the stored hash to match the current file content,
     /// effectively accepting the user's changes as the new "generated" state.
-    pub async fn acknowledge_edits(&self, project_id: Uuid, file_paths: &[String]) -> Result<usize> {
+    pub async fn acknowledge_edits(
+        &self,
+        project_id: Uuid,
+        file_paths: &[String],
+    ) -> Result<usize> {
         let mut acknowledged = 0;
 
         for path in file_paths {
@@ -882,7 +878,9 @@ mod tests {
             "src/main.rs".to_string(),
             "hash_v2".to_string(),
         );
-        repo.track_file(&file2).await.expect("Failed to update file");
+        repo.track_file(&file2)
+            .await
+            .expect("Failed to update file");
 
         // Should have the updated hash
         let retrieved = repo
@@ -902,12 +900,7 @@ mod tests {
 
         // Track multiple files
         for (i, path) in ["a.rs", "b.rs", "c.rs"].iter().enumerate() {
-            let file = TrackedFile::new(
-                project_id,
-                None,
-                path.to_string(),
-                format!("hash_{}", i),
-            );
+            let file = TrackedFile::new(project_id, None, path.to_string(), format!("hash_{}", i));
             repo.track_file(&file).await.expect("Failed to track file");
         }
 
@@ -949,7 +942,10 @@ mod tests {
             .expect("File should exist");
 
         assert!(retrieved.edit_detected);
-        assert_eq!(retrieved.last_verified_hash, Some("modified_hash".to_string()));
+        assert_eq!(
+            retrieved.last_verified_hash,
+            Some("modified_hash".to_string())
+        );
         assert!(retrieved.last_verified_at.is_some());
     }
 
@@ -964,12 +960,7 @@ mod tests {
             .iter()
             .enumerate()
         {
-            let file = TrackedFile::new(
-                project_id,
-                None,
-                path.to_string(),
-                format!("hash_{}", i),
-            );
+            let file = TrackedFile::new(project_id, None, path.to_string(), format!("hash_{}", i));
             repo.track_file(&file).await.expect("Failed to track file");
         }
 

@@ -240,10 +240,7 @@ mod tests {
         let bytes = signer1.to_bytes();
 
         let signer2 = CheckpointSigner::from_bytes(&bytes).unwrap();
-        assert_eq!(
-            signer1.verifying_key_bytes(),
-            signer2.verifying_key_bytes()
-        );
+        assert_eq!(signer1.verifying_key_bytes(), signer2.verifying_key_bytes());
 
         // Both should produce same signature
         let data = b"Test data";

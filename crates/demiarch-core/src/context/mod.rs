@@ -61,8 +61,8 @@ impl DisclosureLevel {
     /// Deeper agents get less detailed context to preserve token budget
     pub fn for_depth(depth: u8) -> Self {
         match depth {
-            0 => DisclosureLevel::Full,     // Orchestrator - full context
-            1 => DisclosureLevel::Summary,  // Planner - summarized context
+            0 => DisclosureLevel::Full,      // Orchestrator - full context
+            1 => DisclosureLevel::Summary,   // Planner - summarized context
             _ => DisclosureLevel::Essential, // Workers - essential only
         }
     }
@@ -165,23 +165,23 @@ impl ContextBudget {
             level_allocations: vec![
                 // Level 0 (Orchestrator): Most context budget
                 TokenAllocation::new(
-                    1024,                       // System prompt
-                    input_budget * 40 / 100,    // 40% for inherited context
-                    input_budget * 30 / 100,    // 30% for input
+                    1024,                    // System prompt
+                    input_budget * 40 / 100, // 40% for inherited context
+                    input_budget * 30 / 100, // 30% for input
                     output_budget,
                 ),
                 // Level 1 (Planner): Moderate context budget
                 TokenAllocation::new(
-                    1024,                       // System prompt
-                    input_budget * 30 / 100,    // 30% for inherited context
-                    input_budget * 35 / 100,    // 35% for input
+                    1024,                    // System prompt
+                    input_budget * 30 / 100, // 30% for inherited context
+                    input_budget * 35 / 100, // 35% for input
                     output_budget,
                 ),
                 // Level 2 (Workers): Focused context budget
                 TokenAllocation::new(
-                    1024,                       // System prompt
-                    input_budget * 20 / 100,    // 20% for inherited context
-                    input_budget * 40 / 100,    // 40% for input
+                    1024,                    // System prompt
+                    input_budget * 20 / 100, // 20% for inherited context
+                    input_budget * 40 / 100, // 40% for input
                     output_budget,
                 ),
             ],
@@ -195,14 +195,19 @@ impl ContextBudget {
             .copied()
             .unwrap_or_else(|| {
                 // For depths beyond our defined levels, use most restrictive allocation
-                *self.level_allocations.last().unwrap_or(&TokenAllocation::default())
+                *self
+                    .level_allocations
+                    .last()
+                    .unwrap_or(&TokenAllocation::default())
             })
     }
 
     /// Calculate remaining tokens after system prompt
     pub fn remaining_for_context(&self, depth: u8, system_tokens_used: usize) -> usize {
         let allocation = self.allocation_for_depth(depth);
-        allocation.context_tokens.saturating_sub(system_tokens_used.saturating_sub(allocation.system_tokens))
+        allocation
+            .context_tokens
+            .saturating_sub(system_tokens_used.saturating_sub(allocation.system_tokens))
     }
 
     /// Get the disclosure level for a specific depth
@@ -329,7 +334,9 @@ impl ContextWindow {
 
     /// Get remaining token capacity
     pub fn remaining_tokens(&self) -> usize {
-        self.allocation.total_input().saturating_sub(self.token_count())
+        self.allocation
+            .total_input()
+            .saturating_sub(self.token_count())
     }
 
     /// Check if the window is at or near capacity
@@ -400,7 +407,9 @@ impl ContextWindow {
 
         for message in &self.context_messages {
             if current_role != Some(message.role) {
-                if !current_content.is_empty() && let Some(role) = current_role {
+                if !current_content.is_empty()
+                    && let Some(role) = current_role
+                {
                     result.push(Message::new(role, summarize_text(&current_content)));
                 }
                 current_content.clear();
@@ -414,7 +423,9 @@ impl ContextWindow {
         }
 
         // Add final accumulated content
-        if !current_content.is_empty() && let Some(role) = current_role {
+        if !current_content.is_empty()
+            && let Some(role) = current_role
+        {
             result.push(Message::new(role, summarize_text(&current_content)));
         }
 
@@ -576,7 +587,11 @@ fn extract_key_points(text: &str) -> String {
             trimmed.starts_with('-')
                 || trimmed.starts_with('*')
                 || trimmed.starts_with("•")
-                || trimmed.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                || trimmed
+                    .chars()
+                    .next()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or(false)
                 || trimmed.to_lowercase().starts_with("important")
                 || trimmed.to_lowercase().starts_with("note")
                 || trimmed.to_lowercase().starts_with("key")
@@ -788,7 +803,10 @@ mod tests {
 
         let original_count = window.context_messages.len();
         let original_tokens = window.context_tokens;
-        assert!(original_tokens > 100, "Need more tokens to test compression");
+        assert!(
+            original_tokens > 100,
+            "Need more tokens to test compression"
+        );
 
         window.compress_to(100);
 

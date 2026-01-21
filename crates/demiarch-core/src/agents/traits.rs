@@ -5,8 +5,8 @@ use std::pin::Pin;
 
 use serde::{Deserialize, Serialize};
 
-use super::context::AgentContext;
 use super::AgentType;
+use super::context::AgentContext;
 use crate::error::Result;
 use crate::llm::Message;
 
@@ -368,8 +368,7 @@ mod tests {
         assert!(parent.all_succeeded());
 
         let failed_child = AgentResult::failure("oops");
-        let parent_with_failure =
-            AgentResult::success("parent").with_child_result(failed_child);
+        let parent_with_failure = AgentResult::success("parent").with_child_result(failed_child);
         assert!(!parent_with_failure.all_succeeded());
     }
 

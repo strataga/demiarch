@@ -122,7 +122,9 @@ impl LearnedSkill {
     /// Check if this skill matches given tags
     pub fn matches_tags(&self, query_tags: &[String]) -> bool {
         query_tags.iter().any(|qt| {
-            self.tags.iter().any(|t| t.to_lowercase().contains(&qt.to_lowercase()))
+            self.tags
+                .iter()
+                .any(|t| t.to_lowercase().contains(&qt.to_lowercase()))
         })
     }
 
@@ -131,7 +133,10 @@ impl LearnedSkill {
         let query_lower = query.to_lowercase();
         self.name.to_lowercase().contains(&query_lower)
             || self.description.to_lowercase().contains(&query_lower)
-            || self.tags.iter().any(|t| t.to_lowercase().contains(&query_lower))
+            || self
+                .tags
+                .iter()
+                .any(|t| t.to_lowercase().contains(&query_lower))
             || self.category.as_str().to_lowercase().contains(&query_lower)
     }
 }
@@ -186,7 +191,7 @@ impl SkillCategory {
     }
 
     /// Parse from string
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "code_generation" | "codegen" => Self::CodeGeneration,
             "refactoring" | "refactor" => Self::Refactoring,
@@ -452,7 +457,7 @@ impl SkillConfidence {
     }
 
     /// Parse from string
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "low" => Self::Low,
             "high" => Self::High,
@@ -635,10 +640,16 @@ mod tests {
 
     #[test]
     fn test_skill_category_parsing() {
-        assert_eq!(SkillCategory::from_str("code_generation"), SkillCategory::CodeGeneration);
-        assert_eq!(SkillCategory::from_str("codegen"), SkillCategory::CodeGeneration);
-        assert_eq!(SkillCategory::from_str("testing"), SkillCategory::Testing);
-        assert_eq!(SkillCategory::from_str("unknown"), SkillCategory::Other);
+        assert_eq!(
+            SkillCategory::parse("code_generation"),
+            SkillCategory::CodeGeneration
+        );
+        assert_eq!(
+            SkillCategory::parse("codegen"),
+            SkillCategory::CodeGeneration
+        );
+        assert_eq!(SkillCategory::parse("testing"), SkillCategory::Testing);
+        assert_eq!(SkillCategory::parse("unknown"), SkillCategory::Other);
     }
 
     #[test]
@@ -649,8 +660,8 @@ mod tests {
 
     #[test]
     fn test_pattern_variable() {
-        let var = PatternVariable::required("type_name", "The name of the type")
-            .with_example("MyStruct");
+        let var =
+            PatternVariable::required("type_name", "The name of the type").with_example("MyStruct");
 
         assert!(var.required);
         assert_eq!(var.example, Some("MyStruct".into()));

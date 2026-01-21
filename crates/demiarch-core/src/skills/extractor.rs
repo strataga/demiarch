@@ -172,7 +172,11 @@ impl SkillExtractor {
     }
 
     /// Build the extraction prompt for an artifact
-    fn build_extraction_prompt(&self, artifact: &AgentArtifact, context: &ExtractionContext) -> String {
+    fn build_extraction_prompt(
+        &self,
+        artifact: &AgentArtifact,
+        context: &ExtractionContext,
+    ) -> String {
         let artifact_type = match artifact.artifact_type {
             ArtifactType::Code => "code",
             ArtifactType::Review => "code review",
@@ -223,7 +227,10 @@ Return your analysis as JSON with the following structure:
     ]
 }}"#,
             artifact_type = artifact_type,
-            task_context = context.task_description.as_deref().unwrap_or("General task"),
+            task_context = context
+                .task_description
+                .as_deref()
+                .unwrap_or("General task"),
             name = artifact.name,
             content = truncate_content(&artifact.content, 4000),
         )
@@ -261,7 +268,7 @@ Return your analysis as JSON with the following structure:
         artifact: &AgentArtifact,
         context: &ExtractionContext,
     ) -> LearnedSkill {
-        let category = SkillCategory::from_str(&extracted.category);
+        let category = SkillCategory::parse(&extracted.category);
 
         let pattern_type = match extracted.pattern_type.as_str() {
             "technique" => PatternType::Technique,
@@ -465,10 +472,10 @@ fn extract_json_from_response(response: &str) -> String {
     }
 
     // Try to find raw JSON object
-    if let Some(start) = response.find('{') {
-        if let Some(end) = response.rfind('}') {
-            return response[start..=end].to_string();
-        }
+    if let Some(start) = response.find('{')
+        && let Some(end) = response.rfind('}')
+    {
+        return response[start..=end].to_string();
     }
 
     // Return as-is if no JSON found
@@ -491,8 +498,10 @@ fn detect_language(content: &str) -> Option<String> {
 
     // TypeScript/JavaScript indicators
     if content.contains("const ") || content.contains("let ") || content.contains("function ") {
-        if content.contains(": ") && (content.contains("interface ") || content.contains(": string")
-            || content.contains(": number"))
+        if content.contains(": ")
+            && (content.contains("interface ")
+                || content.contains(": string")
+                || content.contains(": number"))
         {
             return Some("typescript".to_string());
         }
@@ -532,7 +541,10 @@ mod tests {
         assert_eq!(ctx.project_id, Some("proj-123".into()));
         assert_eq!(ctx.feature_id, Some("feat-456".into()));
         assert_eq!(ctx.agent_type, Some("Coder".into()));
-        assert_eq!(ctx.task_description, Some("Implement error handling".into()));
+        assert_eq!(
+            ctx.task_description,
+            Some("Implement error handling".into())
+        );
     }
 
     #[test]

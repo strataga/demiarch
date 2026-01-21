@@ -9,11 +9,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use super::context::AgentContext;
-use super::traits::{
-    Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus,
-};
 use super::AgentType;
+use super::context::AgentContext;
+use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
 use crate::error::Result;
 use crate::llm::Message;
 
@@ -85,9 +83,9 @@ impl CodeReview {
 
     /// Create a review with issues
     pub fn with_issues(summary: impl Into<String>, issues: Vec<ReviewIssue>) -> Self {
-        let has_blocking = issues.iter().any(|i| {
-            matches!(i.severity, IssueSeverity::Critical | IssueSeverity::Major)
-        });
+        let has_blocking = issues
+            .iter()
+            .any(|i| matches!(i.severity, IssueSeverity::Critical | IssueSeverity::Major));
 
         Self {
             approved: !has_blocking,
@@ -105,7 +103,10 @@ impl CodeReview {
 
     /// Count issues by severity
     pub fn issue_count(&self, severity: IssueSeverity) -> usize {
-        self.issues.iter().filter(|i| i.severity == severity).count()
+        self.issues
+            .iter()
+            .filter(|i| i.severity == severity)
+            .count()
     }
 }
 
@@ -210,12 +211,12 @@ impl ReviewerAgent {
     /// Parse the LLM response into a CodeReview
     fn parse_review(&self, response: &str) -> CodeReview {
         // Try to parse JSON if present
-        if let Some(json_start) = response.find('{') {
-            if let Some(json_end) = response.rfind('}') {
-                let json_str = &response[json_start..=json_end];
-                if let Ok(parsed) = serde_json::from_str::<CodeReview>(json_str) {
-                    return parsed;
-                }
+        if let Some(json_start) = response.find('{')
+            && let Some(json_end) = response.rfind('}')
+        {
+            let json_str = &response[json_start..=json_end];
+            if let Ok(parsed) = serde_json::from_str::<CodeReview>(json_str) {
+                return parsed;
             }
         }
 
@@ -226,7 +227,9 @@ impl ReviewerAgent {
         let text_approved = !lower.contains("critical")
             && !lower.contains("must fix")
             && !lower.contains("blocking")
-            && (lower.contains("approved") || lower.contains("lgtm") || lower.contains("looks good"));
+            && (lower.contains("approved")
+                || lower.contains("lgtm")
+                || lower.contains("looks good"));
 
         let mut issues = Vec::new();
 
@@ -374,9 +377,11 @@ mod tests {
         let reviewer = ReviewerAgent::new();
         assert_eq!(reviewer.agent_type(), AgentType::Reviewer);
         assert_eq!(reviewer.status(), AgentStatus::Ready);
-        assert!(reviewer
-            .capabilities()
-            .contains(&AgentCapability::CodeReview));
+        assert!(
+            reviewer
+                .capabilities()
+                .contains(&AgentCapability::CodeReview)
+        );
     }
 
     #[test]
@@ -400,16 +405,14 @@ mod tests {
 
     #[test]
     fn test_code_review_with_issues() {
-        let issues = vec![
-            ReviewIssue {
-                severity: IssueSeverity::Minor,
-                category: "style".to_string(),
-                description: "Use snake_case".to_string(),
-                file: None,
-                line: None,
-                suggestion: Some("Rename variable".to_string()),
-            },
-        ];
+        let issues = vec![ReviewIssue {
+            severity: IssueSeverity::Minor,
+            category: "style".to_string(),
+            description: "Use snake_case".to_string(),
+            file: None,
+            line: None,
+            suggestion: Some("Rename variable".to_string()),
+        }];
 
         let review = CodeReview::with_issues("Minor issues found", issues);
         assert!(review.approved); // Minor issues don't block

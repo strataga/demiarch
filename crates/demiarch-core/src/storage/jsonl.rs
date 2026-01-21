@@ -40,8 +40,8 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use crate::error::Error;
 use crate::Result;
+use crate::error::Error;
 
 /// Default sync directory name within project
 pub const SYNC_DIR: &str = ".demiarch/sync";
@@ -396,7 +396,9 @@ async fn export_table(pool: &SqlitePool, table: &str, file_path: &Path) -> Resul
         "document_versions" => export_document_versions(pool, &mut writer).await?,
         "llm_costs" => export_llm_costs(pool, &mut writer).await?,
         "daily_cost_summaries" => export_daily_cost_summaries(pool, &mut writer).await?,
-        "feature_extraction_history" => export_feature_extraction_history(pool, &mut writer).await?,
+        "feature_extraction_history" => {
+            export_feature_extraction_history(pool, &mut writer).await?
+        }
         "learned_skills" => export_learned_skills(pool, &mut writer).await?,
         _ => return Err(Error::Other(format!("Unknown table: {}", table))),
     };
@@ -788,8 +790,8 @@ async fn import_projects<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<usi
         if line.trim().is_empty() {
             continue;
         }
-        let record: ProjectRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: ProjectRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -821,8 +823,8 @@ async fn import_phases<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<usize
         if line.trim().is_empty() {
             continue;
         }
-        let record: PhaseRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: PhaseRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -854,8 +856,8 @@ async fn import_features<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<usi
         if line.trim().is_empty() {
             continue;
         }
-        let record: FeatureRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: FeatureRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -891,8 +893,8 @@ async fn import_conversations<R: BufRead>(pool: &SqlitePool, reader: R) -> Resul
         if line.trim().is_empty() {
             continue;
         }
-        let record: ConversationRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: ConversationRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -921,8 +923,8 @@ async fn import_messages<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<usi
         if line.trim().is_empty() {
             continue;
         }
-        let record: MessageRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: MessageRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -953,8 +955,8 @@ async fn import_checkpoints<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<
         if line.trim().is_empty() {
             continue;
         }
-        let record: CheckpointRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: CheckpointRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         // Decode base64 signature back to bytes
         let signature = base64::engine::general_purpose::STANDARD
@@ -991,8 +993,8 @@ async fn import_generated_files<R: BufRead>(pool: &SqlitePool, reader: R) -> Res
         if line.trim().is_empty() {
             continue;
         }
-        let record: GeneratedFileRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: GeneratedFileRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         let edit_detected: i32 = if record.edit_detected { 1 } else { 0 };
 
@@ -1028,8 +1030,8 @@ async fn import_documents<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<us
         if line.trim().is_empty() {
             continue;
         }
-        let record: DocumentRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: DocumentRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -1068,8 +1070,8 @@ async fn import_document_versions<R: BufRead>(pool: &SqlitePool, reader: R) -> R
         if line.trim().is_empty() {
             continue;
         }
-        let record: DocumentVersionRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: DocumentVersionRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -1100,8 +1102,8 @@ async fn import_llm_costs<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<us
         if line.trim().is_empty() {
             continue;
         }
-        let record: LlmCostRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: LlmCostRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -1135,8 +1137,8 @@ async fn import_daily_cost_summaries<R: BufRead>(pool: &SqlitePool, reader: R) -
         if line.trim().is_empty() {
             continue;
         }
-        let record: DailyCostSummaryRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: DailyCostSummaryRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -1172,8 +1174,8 @@ async fn import_feature_extraction_history<R: BufRead>(
         if line.trim().is_empty() {
             continue;
         }
-        let record: FeatureExtractionHistoryRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: FeatureExtractionHistoryRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -1208,8 +1210,8 @@ async fn import_learned_skills<R: BufRead>(pool: &SqlitePool, reader: R) -> Resu
         if line.trim().is_empty() {
             continue;
         }
-        let record: LearnedSkillRecord =
-            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+        let record: LearnedSkillRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
 
         sqlx::query(
             r#"
@@ -1423,9 +1425,7 @@ mod tests {
     async fn test_sync_status_no_previous_export() {
         let (db, temp_dir) = setup_test_db().await;
 
-        let status = check_sync_status(db.pool(), temp_dir.path())
-            .await
-            .unwrap();
+        let status = check_sync_status(db.pool(), temp_dir.path()).await.unwrap();
 
         assert!(status.dirty);
         assert!(status.last_sync_at.is_none());
@@ -1439,9 +1439,7 @@ mod tests {
         export_to_jsonl(db.pool(), temp_dir.path()).await.unwrap();
 
         // Check status (should be clean)
-        let status = check_sync_status(db.pool(), temp_dir.path())
-            .await
-            .unwrap();
+        let status = check_sync_status(db.pool(), temp_dir.path()).await.unwrap();
 
         assert!(!status.dirty);
         assert!(status.last_sync_at.is_some());
@@ -1467,9 +1465,7 @@ mod tests {
             .unwrap();
 
         // Check status (should be dirty)
-        let status = check_sync_status(db.pool(), temp_dir.path())
-            .await
-            .unwrap();
+        let status = check_sync_status(db.pool(), temp_dir.path()).await.unwrap();
 
         assert!(status.dirty);
         assert_eq!(status.pending_changes, 1);

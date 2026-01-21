@@ -9,6 +9,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
+use super::AgentType;
 use super::coder::CoderAgent;
 use super::context::{AgentContext, SharedAgentState};
 use super::orchestrator::OrchestratorAgent;
@@ -16,7 +17,6 @@ use super::planner::PlannerAgent;
 use super::reviewer::ReviewerAgent;
 use super::tester::TesterAgent;
 use super::traits::{Agent, AgentInput, AgentResult};
-use super::AgentType;
 use crate::error::{Error, Result};
 use crate::llm::LlmClient;
 use crate::skills::{ExtractionContext, LearnedSkill, SkillExtractor};
@@ -266,11 +266,16 @@ impl AgentTool {
             );
 
         // Extract from the main result
-        let mut all_skills = extractor.extract_from_result(result, context.clone()).await?;
+        let mut all_skills = extractor
+            .extract_from_result(result, context.clone())
+            .await?;
 
         // Recursively extract from child results
         for child_result in &result.child_results {
-            match self.extract_skills_recursive(&extractor, child_result, &context).await {
+            match self
+                .extract_skills_recursive(&extractor, child_result, &context)
+                .await
+            {
                 Ok(mut child_skills) => {
                     all_skills.append(&mut child_skills);
                 }
@@ -301,7 +306,9 @@ impl AgentTool {
                 return Ok(Vec::new());
             }
 
-            let mut skills = extractor.extract_from_result(result, context.clone()).await?;
+            let mut skills = extractor
+                .extract_from_result(result, context.clone())
+                .await?;
 
             for child_result in &result.child_results {
                 match self
@@ -340,10 +347,12 @@ impl AgentTool {
 
         // Extract skills if the execution was successful
         let skills = if result.success {
-            self.extract_skills(&result, &task).await.unwrap_or_else(|e| {
-                warn!(error = %e, "Skill extraction failed, continuing without skills");
-                Vec::new()
-            })
+            self.extract_skills(&result, &task)
+                .await
+                .unwrap_or_else(|e| {
+                    warn!(error = %e, "Skill extraction failed, continuing without skills");
+                    Vec::new()
+                })
         } else {
             Vec::new()
         };
@@ -394,15 +403,13 @@ mod tests {
 
     #[test]
     fn test_agent_tool_with_project() {
-        let tool = AgentTool::new(test_llm_client())
-            .with_project(uuid::Uuid::new_v4());
+        let tool = AgentTool::new(test_llm_client()).with_project(uuid::Uuid::new_v4());
         assert!(tool.shared_state().project_id.is_some());
     }
 
     #[test]
     fn test_agent_tool_with_feature() {
-        let tool = AgentTool::new(test_llm_client())
-            .with_feature(uuid::Uuid::new_v4());
+        let tool = AgentTool::new(test_llm_client()).with_feature(uuid::Uuid::new_v4());
         assert!(tool.shared_state().feature_id.is_some());
     }
 

@@ -323,7 +323,9 @@ mod tests {
     use crate::storage::Database;
 
     async fn create_test_db() -> SqlitePool {
-        let db = Database::in_memory().await.expect("Failed to create test database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create test database");
         db.pool().clone()
     }
 
@@ -386,7 +388,10 @@ mod tests {
             repo.save(&checkpoint).await.expect("Failed to save");
         }
 
-        let checkpoints = repo.list_by_project(project_id).await.expect("Failed to list");
+        let checkpoints = repo
+            .list_by_project(project_id)
+            .await
+            .expect("Failed to list");
         assert_eq!(checkpoints.len(), 3);
 
         // Should be ordered by created_at DESC (newest first)
@@ -424,7 +429,10 @@ mod tests {
         let repo = CheckpointRepository::new(pool);
 
         // Initially 0
-        let count = repo.count_by_project(project_id).await.expect("Failed to count");
+        let count = repo
+            .count_by_project(project_id)
+            .await
+            .expect("Failed to count");
         assert_eq!(count, 0);
 
         // Add checkpoints
@@ -439,7 +447,10 @@ mod tests {
             repo.save(&checkpoint).await.expect("Failed to save");
         }
 
-        let count = repo.count_by_project(project_id).await.expect("Failed to count");
+        let count = repo
+            .count_by_project(project_id)
+            .await
+            .expect("Failed to count");
         assert_eq!(count, 5);
     }
 }

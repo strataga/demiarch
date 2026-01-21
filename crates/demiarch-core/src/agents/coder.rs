@@ -8,11 +8,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use tracing::{debug, info};
 
-use super::context::AgentContext;
-use super::traits::{
-    Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus,
-};
 use super::AgentType;
+use super::context::AgentContext;
+use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
 use crate::error::Result;
 use crate::llm::Message;
 
@@ -73,10 +71,7 @@ impl CoderAgent {
             }
         };
 
-        debug!(
-            tokens = response.tokens_used,
-            "Coder received LLM response"
-        );
+        debug!(tokens = response.tokens_used, "Coder received LLM response");
 
         // Extract code blocks from the response
         let code_blocks = extract_code_blocks(&response.content);
@@ -267,9 +262,11 @@ mod tests {
         let coder = CoderAgent::new();
         assert_eq!(coder.agent_type(), AgentType::Coder);
         assert_eq!(coder.status(), AgentStatus::Ready);
-        assert!(coder
-            .capabilities()
-            .contains(&AgentCapability::CodeGeneration));
+        assert!(
+            coder
+                .capabilities()
+                .contains(&AgentCapability::CodeGeneration)
+        );
     }
 
     #[test]

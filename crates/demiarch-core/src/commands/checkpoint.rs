@@ -12,7 +12,9 @@ use uuid::Uuid;
 
 /// List all checkpoints for a project
 pub async fn list_checkpoints(project_id: Uuid) -> Result<Vec<CheckpointInfo>> {
-    let db = Database::default().await.map_err(|e| crate::error::Error::Other(e.to_string()))?;
+    let db = Database::default()
+        .await
+        .map_err(|e| crate::error::Error::Other(e.to_string()))?;
     let signer = get_or_create_signer()?;
     let manager = CheckpointManager::new(db.pool().clone(), signer);
 
@@ -21,7 +23,9 @@ pub async fn list_checkpoints(project_id: Uuid) -> Result<Vec<CheckpointInfo>> {
 
 /// Get checkpoint statistics for a project
 pub async fn get_checkpoint_stats(project_id: Uuid) -> Result<CheckpointStats> {
-    let db = Database::default().await.map_err(|e| crate::error::Error::Other(e.to_string()))?;
+    let db = Database::default()
+        .await
+        .map_err(|e| crate::error::Error::Other(e.to_string()))?;
     let signer = get_or_create_signer()?;
     let manager = CheckpointManager::new(db.pool().clone(), signer);
 
@@ -30,7 +34,9 @@ pub async fn get_checkpoint_stats(project_id: Uuid) -> Result<CheckpointStats> {
 
 /// Delete a specific checkpoint
 pub async fn delete_checkpoint(checkpoint_id: Uuid) -> Result<bool> {
-    let db = Database::default().await.map_err(|e| crate::error::Error::Other(e.to_string()))?;
+    let db = Database::default()
+        .await
+        .map_err(|e| crate::error::Error::Other(e.to_string()))?;
     let signer = get_or_create_signer()?;
     let manager = CheckpointManager::new(db.pool().clone(), signer);
 
@@ -39,7 +45,9 @@ pub async fn delete_checkpoint(checkpoint_id: Uuid) -> Result<bool> {
 
 /// Delete all checkpoints for a project
 pub async fn delete_all_checkpoints(project_id: Uuid) -> Result<u64> {
-    let db = Database::default().await.map_err(|e| crate::error::Error::Other(e.to_string()))?;
+    let db = Database::default()
+        .await
+        .map_err(|e| crate::error::Error::Other(e.to_string()))?;
     let signer = get_or_create_signer()?;
     let manager = CheckpointManager::new(db.pool().clone(), signer);
 
@@ -48,14 +56,18 @@ pub async fn delete_all_checkpoints(project_id: Uuid) -> Result<u64> {
 
 /// Verify a checkpoint's signature integrity
 pub async fn verify_checkpoint(checkpoint_id: Uuid) -> Result<bool> {
-    let db = Database::default().await.map_err(|e| crate::error::Error::Other(e.to_string()))?;
+    let db = Database::default()
+        .await
+        .map_err(|e| crate::error::Error::Other(e.to_string()))?;
     let signer = get_or_create_signer()?;
     let manager = CheckpointManager::new(db.pool().clone(), signer);
 
     let checkpoint = manager
         .get_checkpoint(checkpoint_id)
         .await?
-        .ok_or_else(|| crate::error::Error::NotFound(format!("Checkpoint {} not found", checkpoint_id)))?;
+        .ok_or_else(|| {
+            crate::error::Error::NotFound(format!("Checkpoint {} not found", checkpoint_id))
+        })?;
 
     match manager.verify_checkpoint(&checkpoint) {
         Ok(()) => Ok(true),
@@ -69,7 +81,9 @@ pub async fn create_checkpoint(
     description: String,
     feature_id: Option<Uuid>,
 ) -> Result<CheckpointInfo> {
-    let db = Database::default().await.map_err(|e| crate::error::Error::Other(e.to_string()))?;
+    let db = Database::default()
+        .await
+        .map_err(|e| crate::error::Error::Other(e.to_string()))?;
     let signer = get_or_create_signer()?;
     let manager = CheckpointManager::new(db.pool().clone(), signer);
 
@@ -90,7 +104,9 @@ pub async fn create_checkpoint(
 ///
 /// Returns a RestoreResult containing details about what was restored.
 pub async fn restore_checkpoint(checkpoint_id: Uuid) -> Result<RestoreResult> {
-    let db = Database::default().await.map_err(|e| crate::error::Error::Other(e.to_string()))?;
+    let db = Database::default()
+        .await
+        .map_err(|e| crate::error::Error::Other(e.to_string()))?;
     let signer = get_or_create_signer()?;
     let manager = CheckpointManager::new(db.pool().clone(), signer);
 

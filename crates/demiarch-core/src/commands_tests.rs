@@ -214,7 +214,9 @@ async fn test_sync_flush_returns_result() {
     use crate::storage::Database;
     use tempfile::TempDir;
 
-    let db = Database::in_memory().await.expect("Failed to create test database");
+    let db = Database::in_memory()
+        .await
+        .expect("Failed to create test database");
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
 
     let result = sync::flush(db.pool(), temp_dir.path()).await;
@@ -228,7 +230,9 @@ async fn test_sync_import_returns_result() {
     use crate::storage::Database;
     use tempfile::TempDir;
 
-    let db = Database::in_memory().await.expect("Failed to create test database");
+    let db = Database::in_memory()
+        .await
+        .expect("Failed to create test database");
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
 
     // First export to create the sync directory
@@ -261,7 +265,9 @@ async fn test_sync_status_returns_result() {
     use crate::storage::Database;
     use tempfile::TempDir;
 
-    let db = Database::in_memory().await.expect("Failed to create test database");
+    let db = Database::in_memory()
+        .await
+        .expect("Failed to create test database");
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
 
     // Before any export, status should show dirty

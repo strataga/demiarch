@@ -61,7 +61,11 @@ impl CheckpointManager {
     }
 
     /// Create a checkpoint manager with custom configuration
-    pub fn with_config(pool: SqlitePool, signer: CheckpointSigner, config: CheckpointConfig) -> Self {
+    pub fn with_config(
+        pool: SqlitePool,
+        signer: CheckpointSigner,
+        config: CheckpointConfig,
+    ) -> Self {
         Self {
             repository: CheckpointRepository::new(pool),
             signer,
@@ -120,12 +124,14 @@ impl CheckpointManager {
     ) -> Result<Checkpoint> {
         // Capture current project state
         let snapshot_data = self.capture_project_state(project_id).await?;
-        let snapshot_json = serde_json::to_value(&snapshot_data)
-            .map_err(|e| crate::error::Error::Other(format!("Failed to serialize snapshot: {}", e)))?;
+        let snapshot_json = serde_json::to_value(&snapshot_data).map_err(|e| {
+            crate::error::Error::Other(format!("Failed to serialize snapshot: {}", e))
+        })?;
 
         // Sign the snapshot data
-        let snapshot_bytes = serde_json::to_vec(&snapshot_json)
-            .map_err(|e| crate::error::Error::Other(format!("Failed to serialize for signing: {}", e)))?;
+        let snapshot_bytes = serde_json::to_vec(&snapshot_json).map_err(|e| {
+            crate::error::Error::Other(format!("Failed to serialize for signing: {}", e))
+        })?;
         let signature = self.signer.sign(&snapshot_bytes);
 
         // Create the checkpoint
@@ -163,7 +169,10 @@ impl CheckpointManager {
     }
 
     /// Verify a checkpoint's signature
-    pub fn verify_checkpoint(&self, checkpoint: &Checkpoint) -> std::result::Result<(), SigningError> {
+    pub fn verify_checkpoint(
+        &self,
+        checkpoint: &Checkpoint,
+    ) -> std::result::Result<(), SigningError> {
         let snapshot_bytes = serde_json::to_vec(&checkpoint.snapshot_data)
             .map_err(|e| SigningError::SigningFailed(format!("Failed to serialize: {}", e)))?;
 
