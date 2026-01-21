@@ -80,10 +80,10 @@ jobs:
           key: security-${{ runner.os }}-${{ matrix.workspace }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
+        run: which cargo-deny || cargo install cargo-deny --locked
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        run: which cargo-audit || cargo install cargo-audit --locked
 
       - name: Cargo deny
         working-directory: ${{ matrix.workspace }}
