@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn test_bandit_select_single_candidate() {
         let mut bandit = ThompsonSamplingBandit::with_seed(42);
-        let candidates = vec![ModelCandidate::new("only-model")];
+        let candidates = [ModelCandidate::new("only-model")];
         let refs: Vec<&ModelCandidate> = candidates.iter().collect();
 
         let result = bandit.select("test:simple", &refs, RoutingPreference::Balanced);
@@ -383,10 +383,9 @@ mod tests {
         for _ in 0..50 {
             if let Some((model, _, _)) =
                 bandit.select("test:simple", &refs, RoutingPreference::Balanced)
+                && model.model_id == "model-a"
             {
-                if model.model_id == "model-a" {
-                    a_count += 1;
-                }
+                a_count += 1;
             }
         }
 
@@ -415,10 +414,9 @@ mod tests {
         for _ in 0..100 {
             if let Some((model, _, _)) =
                 bandit.select("test:simple", &refs, RoutingPreference::Fast)
+                && model.model_id == "model-b"
             {
-                if model.model_id == "model-b" {
-                    b_count += 1;
-                }
+                b_count += 1;
             }
         }
 
@@ -447,10 +445,9 @@ mod tests {
         for _ in 0..100 {
             if let Some((model, _, _)) =
                 bandit.select("test:simple", &refs, RoutingPreference::Quality)
+                && model.model_id == "model-c"
             {
-                if model.model_id == "model-c" {
-                    c_count += 1;
-                }
+                c_count += 1;
             }
         }
 
@@ -479,10 +476,9 @@ mod tests {
         for _ in 0..100 {
             if let Some((model, _, _)) =
                 bandit.select("test:simple", &refs, RoutingPreference::Cost)
+                && model.model_id == "model-b"
             {
-                if model.model_id == "model-b" {
-                    b_count += 1;
-                }
+                b_count += 1;
             }
         }
 
