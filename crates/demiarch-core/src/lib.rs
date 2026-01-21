@@ -25,6 +25,7 @@ pub mod llm;
 pub mod routing;
 pub mod skills;
 pub mod storage;
+pub mod visualization;
 
 pub use error::{Error, Result};
 

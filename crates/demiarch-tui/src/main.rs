@@ -2,6 +2,7 @@
 //!
 //! This TUI provides a live view of:
 //! - Active agent executions across all projects
+//! - Agent hierarchy tree with status indicators
 //! - Token usage and costs in real-time
 //! - Generation progress and status
 //! - Skill activations
@@ -12,14 +13,64 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use demiarch_core::visualization::{
+    AgentStatusBar, HierarchyTreeWidget, RenderOptions, TreeBuilder, TreeColors,
+};
 use ratatui::{
     Terminal,
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    widgets::{Block, Borders, Paragraph, Tabs},
 };
 use std::io;
+
+/// Application state
+struct App {
+    /// Currently selected tab
+    current_tab: usize,
+    /// Tab titles
+    tabs: Vec<&'static str>,
+    /// Scroll offset for agent tree
+    tree_scroll: usize,
+    /// Whether to use ASCII mode
+    ascii_mode: bool,
+}
+
+impl App {
+    fn new() -> Self {
+        Self {
+            current_tab: 1, // Start on Agents tab
+            tabs: vec!["Projects", "Agents", "Stats", "Help"],
+            tree_scroll: 0,
+            ascii_mode: false,
+        }
+    }
+
+    fn next_tab(&mut self) {
+        self.current_tab = (self.current_tab + 1) % self.tabs.len();
+    }
+
+    fn prev_tab(&mut self) {
+        if self.current_tab == 0 {
+            self.current_tab = self.tabs.len() - 1;
+        } else {
+            self.current_tab -= 1;
+        }
+    }
+
+    fn scroll_up(&mut self) {
+        self.tree_scroll = self.tree_scroll.saturating_sub(1);
+    }
+
+    fn scroll_down(&mut self) {
+        self.tree_scroll = self.tree_scroll.saturating_add(1);
+    }
+
+    fn toggle_ascii(&mut self) {
+        self.ascii_mode = !self.ascii_mode;
+    }
+}
 
 fn main() -> anyhow::Result<()> {
     // Setup terminal
@@ -29,8 +80,11 @@ fn main() -> anyhow::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // Create app state
+    let mut app = App::new();
+
     // Run app
-    let result = run_app(&mut terminal);
+    let result = run_app(&mut terminal, &mut app);
 
     // Restore terminal
     disable_raw_mode()?;
@@ -40,74 +94,282 @@ fn main() -> anyhow::Result<()> {
     result
 }
 
-fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> anyhow::Result<()> {
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+) -> anyhow::Result<()> {
     loop {
         terminal.draw(|frame| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Length(3), // Header
+                    Constraint::Length(3), // Header with tabs
                     Constraint::Min(10),   // Main content
-                    Constraint::Length(3), // Footer
+                    Constraint::Length(3), // Status bar
                 ])
                 .split(frame.area());
 
-            // Header
-            let header = Paragraph::new("Demiarch Monitor")
-                .style(Style::default().fg(Color::Cyan))
-                .block(Block::default().borders(Borders::ALL).title("Demiarch TUI"));
-            frame.render_widget(header, chunks[0]);
-
-            // Main content - split into panels
-            let main_chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(30), // Projects
-                    Constraint::Percentage(40), // Agents
-                    Constraint::Percentage(30), // Stats
-                ])
-                .split(chunks[1]);
-
-            // Projects panel
-            let projects = Paragraph::new("No active projects\n\nRun: demiarch new <name>")
-                .block(Block::default().borders(Borders::ALL).title("Projects"));
-            frame.render_widget(projects, main_chunks[0]);
-
-            // Agents panel
-            let agents =
-                Paragraph::new("No active agents\n\nAgents appear here when generating code")
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("Active Agents"),
-                    );
-            frame.render_widget(agents, main_chunks[1]);
-
-            // Stats panel
-            let stats = Paragraph::new("Tokens: 0\nCost: $0.00\nSkills: 0\n\nPress 'q' to quit")
+            // Header with tabs
+            let tabs = Tabs::new(app.tabs.to_vec())
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title("Session Stats"),
+                        .title("Demiarch Monitor"),
+                )
+                .select(app.current_tab)
+                .style(Style::default().fg(Color::White))
+                .highlight_style(
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 );
-            frame.render_widget(stats, main_chunks[2]);
+            frame.render_widget(tabs, chunks[0]);
 
-            // Footer
-            let footer =
-                Paragraph::new("q: Quit | r: Refresh | p: Projects | a: Agents | s: Skills")
-                    .style(Style::default().fg(Color::DarkGray))
-                    .block(Block::default().borders(Borders::ALL));
-            frame.render_widget(footer, chunks[2]);
+            // Main content based on selected tab
+            match app.current_tab {
+                0 => render_projects_tab(frame, chunks[1]),
+                1 => render_agents_tab(frame, chunks[1], app),
+                2 => render_stats_tab(frame, chunks[1]),
+                3 => render_help_tab(frame, chunks[1]),
+                _ => {}
+            }
+
+            // Status bar
+            render_status_bar(frame, chunks[2], app);
         })?;
 
         // Handle input
         if event::poll(std::time::Duration::from_millis(100))?
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
-            && key.code == KeyCode::Char('q')
         {
-            return Ok(());
+            match key.code {
+                KeyCode::Char('q') => return Ok(()),
+                KeyCode::Tab | KeyCode::Right => app.next_tab(),
+                KeyCode::BackTab | KeyCode::Left => app.prev_tab(),
+                KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
+                KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
+                KeyCode::Char('a') => app.toggle_ascii(),
+                KeyCode::Char('1') => app.current_tab = 0,
+                KeyCode::Char('2') => app.current_tab = 1,
+                KeyCode::Char('3') => app.current_tab = 2,
+                KeyCode::Char('4') | KeyCode::Char('?') => app.current_tab = 3,
+                _ => {}
+            }
         }
     }
+}
+
+fn render_projects_tab(frame: &mut ratatui::Frame, area: Rect) {
+    let content = Paragraph::new(
+        "No active projects\n\n\
+         Projects will appear here during code generation.\n\n\
+         To create a project:\n\
+         $ demiarch new <name> --framework <framework>\n\n\
+         To start code generation:\n\
+         $ demiarch generate \"description\"",
+    )
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Projects")
+            .style(Style::default()),
+    );
+    frame.render_widget(content, area);
+}
+
+fn render_agents_tab(frame: &mut ratatui::Frame, area: Rect, app: &App) {
+    // Split into tree and details panels
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .split(area);
+
+    // Build demo tree for visualization
+    let tree = TreeBuilder::demo_tree();
+
+    // Configure options based on app state
+    let options = if app.ascii_mode {
+        RenderOptions::ascii()
+    } else {
+        RenderOptions::default()
+    };
+
+    // Agent hierarchy tree
+    let tree_widget = HierarchyTreeWidget::new(&tree)
+        .options(options)
+        .colors(TreeColors::default())
+        .scroll(app.tree_scroll)
+        .show_header(true)
+        .show_footer(true)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Agent Hierarchy")
+                .style(Style::default()),
+        );
+    frame.render_widget(tree_widget, chunks[0]);
+
+    // Agent details panel
+    let details = Paragraph::new(
+        "Agent Details\n\
+         ─────────────\n\n\
+         Select an agent to view details.\n\n\
+         During execution:\n\
+         • Active agents shown with ●\n\
+         • Completed agents shown with ✓\n\
+         • Failed agents shown with ✗\n\n\
+         Agent Types:\n\
+         🎭 Orchestrator - Session director\n\
+         📋 Planner - Task coordinator\n\
+         💻 Coder - Code generation\n\
+         🔍 Reviewer - Code review\n\
+         🧪 Tester - Test generation\n\n\
+         Use ↑/↓ or j/k to scroll\n\
+         Press 'a' to toggle ASCII mode",
+    )
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Details")
+            .style(Style::default()),
+    );
+    frame.render_widget(details, chunks[1]);
+}
+
+fn render_stats_tab(frame: &mut ratatui::Frame, area: Rect) {
+    // Split into multiple stat panels
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(7), // Session stats
+            Constraint::Length(7), // Token usage
+            Constraint::Min(5),    // Recent activity
+        ])
+        .split(area);
+
+    // Session stats
+    let session_stats = Paragraph::new(
+        "Session Duration: 00:00:00\n\
+         Total Agents: 0\n\
+         Active Agents: 0\n\
+         Completed: 0\n\
+         Failed: 0",
+    )
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Session Statistics"),
+    );
+    frame.render_widget(session_stats, chunks[0]);
+
+    // Token usage
+    let token_stats = Paragraph::new(
+        "Input Tokens: 0\n\
+         Output Tokens: 0\n\
+         Total Tokens: 0\n\
+         Estimated Cost: $0.00\n\
+         Budget Remaining: $10.00",
+    )
+    .block(Block::default().borders(Borders::ALL).title("Token Usage"));
+    frame.render_widget(token_stats, chunks[1]);
+
+    // Recent activity
+    let activity = Paragraph::new(
+        "No recent activity\n\n\
+         Events will appear here during code generation:\n\
+         • Agent spawned\n\
+         • Agent completed\n\
+         • File created\n\
+         • Skill applied",
+    )
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Recent Activity"),
+    );
+    frame.render_widget(activity, chunks[2]);
+}
+
+fn render_help_tab(frame: &mut ratatui::Frame, area: Rect) {
+    let help_text = "\
+Demiarch TUI - Agent Monitoring Dashboard
+═══════════════════════════════════════════
+
+NAVIGATION
+  Tab / →      Next tab
+  Shift+Tab / ←  Previous tab
+  1-4          Jump to tab
+  ↑ / k        Scroll up
+  ↓ / j        Scroll down
+
+DISPLAY
+  a            Toggle ASCII/Unicode mode
+
+GENERAL
+  q            Quit
+  ?            Show this help
+
+AGENT HIERARCHY
+  The agent tree shows the Russian Doll hierarchy:
+
+  Level 1: Orchestrator (Session Director)
+    └─ Spawns: Planner
+
+  Level 2: Planner (Task Coordinator)
+    └─ Spawns: Coder, Reviewer, Tester
+
+  Level 3: Workers (Leaf Nodes)
+    • Coder - Generates code
+    • Reviewer - Reviews code
+    • Tester - Creates tests
+
+STATUS ICONS
+  ○ Ready       ● Running      ◐ Waiting
+  ✓ Completed   ✗ Failed       ⊘ Cancelled
+
+For more information, visit:
+  https://github.com/demiarch/demiarch";
+
+    let help = Paragraph::new(help_text).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Help")
+            .style(Style::default()),
+    );
+    frame.render_widget(help, area);
+}
+
+fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &App) {
+    // Build tree for status bar
+    let tree = TreeBuilder::demo_tree();
+
+    // Split status bar into agent status and key hints
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(area);
+
+    // Agent status bar
+    let status_block = Block::default().borders(Borders::ALL);
+    let inner_status = status_block.inner(chunks[0]);
+    frame.render_widget(status_block, chunks[0]);
+
+    let status_bar = AgentStatusBar::new(&tree).colors(TreeColors::default());
+    frame.render_widget(status_bar, inner_status);
+
+    // Key hints
+    let mode_hint = if app.ascii_mode {
+        "[ASCII]"
+    } else {
+        "[Unicode]"
+    };
+    let hints = Paragraph::new(format!(
+        "q: Quit | Tab: Switch | ↑↓: Scroll | a: Toggle {} | ?: Help",
+        mode_hint
+    ))
+    .style(Style::default().fg(Color::DarkGray))
+    .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(hints, chunks[1]);
 }

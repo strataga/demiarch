@@ -36,6 +36,7 @@ hex.workspace = true
 async-trait.workspace = true
 rand.workspace = true
 rand_distr.workspace = true
+ratatui.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
