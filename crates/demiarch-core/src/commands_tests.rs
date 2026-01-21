@@ -123,7 +123,9 @@ async fn test_project_create_returns_result() {
     let result: Result<String> =
         project::create("my-project", "nextjs", "https://github.com/user/repo").await;
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "project-placeholder-id");
+    // The create function now returns a valid UUID instead of a placeholder
+    let id = result.unwrap();
+    assert!(uuid::Uuid::parse_str(&id).is_ok(), "Should return a valid UUID");
 }
 
 #[tokio::test]
@@ -137,19 +139,47 @@ async fn test_project_list_returns_result() {
 async fn test_project_get_returns_result() {
     let result: Result<Option<String>> = project::get("project-id").await;
     assert!(result.is_ok());
+    // Invalid UUID format returns None
     assert!(result.unwrap().is_none());
 }
 
 #[tokio::test]
+async fn test_project_get_with_valid_uuid() {
+    // Valid UUID should return the ID
+    let valid_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    let result: Result<Option<String>> = project::get(valid_uuid).await;
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), Some(valid_uuid.to_string()));
+}
+
+#[tokio::test]
 async fn test_project_archive_returns_result() {
-    let result: Result<()> = project::archive("project-id").await;
+    // Archive now requires a valid UUID format
+    let valid_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    let result: Result<()> = project::archive(valid_uuid).await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
+async fn test_project_archive_invalid_uuid() {
+    // Invalid UUID should return an error
+    let result: Result<()> = project::archive("invalid-id").await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
 async fn test_project_delete_returns_result() {
-    let result: Result<()> = project::delete("project-id", false).await;
+    // Delete now requires a valid UUID format
+    let valid_uuid = "550e8400-e29b-41d4-a716-446655440000";
+    let result: Result<()> = project::delete(valid_uuid, false).await;
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn test_project_delete_invalid_uuid() {
+    // Invalid UUID should return an error
+    let result: Result<()> = project::delete("invalid-id", false).await;
+    assert!(result.is_err());
 }
 
 #[tokio::test]

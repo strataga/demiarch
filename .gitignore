@@ -34,18 +34,20 @@ build/
 # Node
 **/node_modules/
 
-# Tauri
-gui/src-tauri/target/
-
-# WSL build artifacts
-\\wsl.localhost\Ubuntu\home\jason\projects\demiarch\demiarch\target
+# Tauri build artifacts
+**/demiarch/target/**
+**/demiarch/demiarch/target/**
+**/demiarch/demiarch-gui/target/**
+**/demiarch/demiarch-core/target/**
+**/demiarch/demiarch-cli/target/**
+**/demiarch/demiarch-tui/target/**
+**/demiarch/demiarch-plugins/target/**
 
 # Test artifacts
 *.profraw
 coverage/
 **/coverage-report/
 coverage-report.txt
-TEST_COVERAGE_REPORT.md
 lcov.info
 tarpaulin-report.html
 

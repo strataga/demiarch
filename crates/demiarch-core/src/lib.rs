@@ -10,14 +10,17 @@
 //! - Progressive disclosure context management
 //! - Dynamic model routing
 //! - Lifecycle hooks
+//! - Encrypted API key storage (AES-256-GCM)
 
 pub mod agents;
 pub mod commands;
 pub mod config;
 pub mod context;
 pub mod cost;
+pub mod domain;
 pub mod error;
 pub mod hooks;
+pub mod infrastructure;
 pub mod llm;
 pub mod routing;
 pub mod skills;
@@ -29,6 +32,18 @@ pub use error::{Error, Result};
 pub mod prelude {
     pub use crate::config::Config;
     pub use crate::error::{Error, Result};
+}
+
+/// Re-export security types for convenient access
+pub mod security {
+    pub use crate::domain::security::{
+        EncryptedKey, KeyError, KeyInfo, KeyRepository, KeyService, MasterKey,
+        MasterKeyRepository, SecureString,
+    };
+    pub use crate::infrastructure::security::{
+        InMemoryKeyRepository, InMemoryMasterKeyRepository, KeyringMasterKeyRepository,
+        SqliteKeyRepository, CREATE_ENCRYPTED_KEYS_TABLE_SQL,
+    };
 }
 
 #[cfg(test)]

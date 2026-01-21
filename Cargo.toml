@@ -21,7 +21,7 @@ rust-version = "1.85"
 tokio = { version = "1.43", features = ["full"] }
 
 # Database
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate", "chrono"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -52,6 +52,11 @@ aes-gcm = "0.10"
 ed25519-dalek = "2.1"
 sha2 = "0.10"
 base64 = "0.22"
+rand_chacha = "0.3"
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+keyring = "2.3"
+hex = "0.4"
+async-trait = "0.1"
 
 # Git
 git2 = "0.19"

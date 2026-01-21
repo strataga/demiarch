@@ -1,14 +1,14 @@
 {
-  "id": "e27f423c-be48-4a3f-b3d7-7f3184ef720e",
+  "id": "813ece7a-228a-4553-acc8-18b93db12dc5",
   "status": "running",
-  "startedAt": "2026-01-21T04:07:59.410Z",
-  "updatedAt": "2026-01-21T04:07:59.410Z",
+  "startedAt": "2026-01-21T06:57:33.833Z",
+  "updatedAt": "2026-01-21T07:33:13.778Z",
   "agentPlugin": "claude",
-  "trackerPlugin": "json",
-  "prdPath": ".ralph-tui/prd.json",
-  "currentIteration": 0,
+  "trackerPlugin": "beads-bv",
+  "epicId": "demiarch-2f9",
+  "currentIteration": 6,
   "maxIterations": 10,
   "totalTasks": 0,
-  "tasksCompleted": 0,
+  "tasksCompleted": 6,
   "cwd": "/home/jason/projects/demiarch"
 }

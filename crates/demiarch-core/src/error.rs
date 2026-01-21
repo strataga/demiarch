@@ -66,6 +66,12 @@ pub enum Error {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    #[error("Validation error: {0}")]
+    Validation(String),
+
+    #[error("{0}")]
+    NotFound(String),
+
     // Skill errors (E900-E999)
     #[error("Skill '{0}' not found. Run `demiarch skills list` to see all skills.")]
     SkillNotFound(String),
@@ -121,6 +127,8 @@ impl Error {
             Self::ConfigError(_) => "E600",
             Self::UserCancelled => "E700",
             Self::InvalidInput(_) => "E800",
+            Self::Validation(_) => "E801",
+            Self::NotFound(_) => "E802",
             Self::SkillNotFound(_) => "E900",
             Self::SkillExtractionFailed(_) => "E901",
             Self::HookFailed(_) => "E1000",
