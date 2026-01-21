@@ -211,13 +211,33 @@ async fn test_project_delete_invalid_uuid() {
 
 #[tokio::test]
 async fn test_sync_flush_returns_result() {
-    let result: Result<()> = sync::flush().await;
+    use crate::storage::Database;
+    use tempfile::TempDir;
+
+    let db = Database::in_memory().await.expect("Failed to create test database");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+
+    let result = sync::flush(db.pool(), temp_dir.path()).await;
     assert!(result.is_ok());
+    let export_result = result.unwrap();
+    assert!(export_result.sync_dir.exists());
 }
 
 #[tokio::test]
 async fn test_sync_import_returns_result() {
-    let result: Result<()> = sync::import().await;
+    use crate::storage::Database;
+    use tempfile::TempDir;
+
+    let db = Database::in_memory().await.expect("Failed to create test database");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+
+    // First export to create the sync directory
+    sync::flush(db.pool(), temp_dir.path())
+        .await
+        .expect("Export should succeed");
+
+    // Then import
+    let result = sync::import(db.pool(), temp_dir.path()).await;
     assert!(result.is_ok());
 }
 
@@ -227,18 +247,37 @@ async fn test_sync_status_structure() {
         dirty: false,
         last_sync_at: Some("2024-01-01T00:00:00Z".to_string()),
         pending_changes: 10,
+        message: "Test status".to_string(),
     };
 
     assert_eq!(status.pending_changes, 10);
     assert!(status.last_sync_at.is_some());
     assert!(!status.last_sync_at.clone().unwrap().is_empty());
+    assert!(!status.message.is_empty());
 }
 
 #[tokio::test]
 async fn test_sync_status_returns_result() {
-    let result: Result<SyncStatus> = sync::status().await;
+    use crate::storage::Database;
+    use tempfile::TempDir;
+
+    let db = Database::in_memory().await.expect("Failed to create test database");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+
+    // Before any export, status should show dirty
+    let result = sync::status(db.pool(), temp_dir.path()).await;
     assert!(result.is_ok());
     let status = result.unwrap();
-    assert_eq!(status.pending_changes, 0);
-    assert!(!status.dirty);
+    assert!(status.dirty); // No previous export, so dirty
+
+    // After export, should be clean
+    sync::flush(db.pool(), temp_dir.path())
+        .await
+        .expect("Export should succeed");
+
+    let status_after = sync::status(db.pool(), temp_dir.path())
+        .await
+        .expect("Status check should succeed");
+    assert!(!status_after.dirty);
+    assert_eq!(status_after.pending_changes, 0);
 }

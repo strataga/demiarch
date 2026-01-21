@@ -27,4 +27,9 @@ pub mod migrations;
 
 // Re-export commonly used types
 pub use database::{Database, DatabaseConfig, DatabaseManager};
+pub use jsonl::{
+    ExportResult, ImportResult, SyncMetadata, SyncStatus,
+    export_to_jsonl, import_from_jsonl, check_sync_status,
+    EXPORTABLE_TABLES, SYNC_DIR,
+};
 pub use migrations::{CURRENT_VERSION, MigrationStatus, migration_status, run_migrations};
