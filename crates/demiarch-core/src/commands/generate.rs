@@ -538,7 +538,8 @@ pub async fn generate_with_tracker(
 /// This is the recommended entry point for code generation as it:
 /// 1. Creates a checkpoint of the project state before generation
 /// 2. Generates the code
-/// 3. Returns the checkpoint ID along with the generation result
+/// 3. Tracks generated files for edit detection
+/// 4. Returns the checkpoint ID along with the generation result
 ///
 /// If `dry_run` is true, no checkpoint is created and no files are written.
 pub async fn generate_with_checkpoint(
@@ -548,17 +549,24 @@ pub async fn generate_with_checkpoint(
     description: &str,
     dry_run: bool,
 ) -> Result<GenerationResultWithCheckpoint> {
-    use crate::domain::recovery::{CheckpointManager, CheckpointSigner};
+    use crate::domain::recovery::{CheckpointManager, CheckpointSigner, EditDetectionService};
     use crate::storage::Database;
 
     let config = Config::load().map_err(|e| Error::ConfigError(e.to_string()))?;
     let cost_tracker = Arc::new(CostTracker::from_config(&config.cost));
 
     // Create checkpoint before generation (unless dry run)
-    let checkpoint_id = if !dry_run {
-        let db = Database::default()
-            .await
-            .map_err(|e| Error::Other(e.to_string()))?;
+    let db = if !dry_run {
+        Some(
+            Database::default()
+                .await
+                .map_err(|e| Error::Other(e.to_string()))?,
+        )
+    } else {
+        None
+    };
+
+    let checkpoint_id = if let Some(ref db) = db {
         let signer = CheckpointSigner::generate();
         let manager = CheckpointManager::new(db.pool().clone(), signer);
 
@@ -582,9 +590,35 @@ pub async fn generate_with_checkpoint(
     let generator = CodeGenerator::new(config, Some(cost_tracker))?;
     let result = generator.generate(description, dry_run).await?;
 
+    // Track generated files for edit detection (unless dry run)
+    let tracked_file_count = if let Some(ref db) = db {
+        let edit_service = EditDetectionService::new(db.pool().clone());
+
+        let files_to_track: Vec<(String, String)> = result
+            .files
+            .iter()
+            .map(|f| (f.path.to_string_lossy().to_string(), f.content.clone()))
+            .collect();
+
+        let tracked = edit_service
+            .track_generated_files(project_id, feature_id, &files_to_track)
+            .await?;
+
+        info!(
+            project_id = %project_id,
+            tracked_count = tracked.len(),
+            "Tracked generated files for edit detection"
+        );
+
+        tracked.len()
+    } else {
+        0
+    };
+
     Ok(GenerationResultWithCheckpoint {
         result,
         checkpoint_id,
+        tracked_file_count,
     })
 }
 
@@ -596,6 +630,9 @@ pub struct GenerationResultWithCheckpoint {
 
     /// The checkpoint ID created before generation (None if dry-run)
     pub checkpoint_id: Option<uuid::Uuid>,
+
+    /// Number of generated files tracked for edit detection
+    pub tracked_file_count: usize,
 }
 
 #[cfg(test)]
