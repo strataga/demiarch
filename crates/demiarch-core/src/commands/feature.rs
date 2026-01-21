@@ -57,11 +57,15 @@ pub struct Feature {
     pub title: String,
     /// Feature description
     pub description: Option<String>,
+    /// Acceptance criteria for the feature
+    pub acceptance_criteria: Option<String>,
+    /// Labels/tags for categorization (stored as JSON array)
+    pub labels: Option<Vec<String>>,
     /// Phase ID (for grouping features)
     pub phase_id: Option<String>,
     /// Feature status
     pub status: FeatureStatus,
-    /// Priority (0 = highest)
+    /// Priority (1-5, where 1 is highest)
     pub priority: i32,
     /// When the feature was created
     pub created_at: DateTime<Utc>,
@@ -78,9 +82,11 @@ impl Feature {
             project_id: project_id.into(),
             title: title.into(),
             description: None,
+            acceptance_criteria: None,
+            labels: None,
             phase_id: None,
             status: FeatureStatus::Backlog,
-            priority: 0,
+            priority: 3, // Default to medium priority (1-5 scale)
             created_at: now,
             updated_at: now,
         }
@@ -92,15 +98,33 @@ impl Feature {
         self
     }
 
+    /// Set acceptance criteria
+    pub fn with_acceptance_criteria(mut self, criteria: impl Into<String>) -> Self {
+        self.acceptance_criteria = Some(criteria.into());
+        self
+    }
+
+    /// Set labels
+    pub fn with_labels(mut self, labels: Vec<String>) -> Self {
+        self.labels = Some(labels);
+        self
+    }
+
     /// Set the phase ID
     pub fn with_phase(mut self, phase_id: impl Into<String>) -> Self {
         self.phase_id = Some(phase_id.into());
         self
     }
 
-    /// Set the priority
+    /// Set the priority (1-5, where 1 is highest)
     pub fn with_priority(mut self, priority: i32) -> Self {
-        self.priority = priority;
+        self.priority = priority.clamp(1, 5);
+        self
+    }
+
+    /// Set the status
+    pub fn with_status(mut self, status: FeatureStatus) -> Self {
+        self.status = status;
         self
     }
 }
@@ -118,16 +142,23 @@ impl<'a> FeatureRepository<'a> {
 
     /// Create a new feature in the database
     pub async fn create(&self, feature: &Feature) -> Result<()> {
+        let labels_json = feature
+            .labels
+            .as_ref()
+            .map(|l| serde_json::to_string(l).unwrap_or_default());
+
         sqlx::query(
             r#"
-            INSERT INTO features (id, project_id, title, description, phase_id, status, priority, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO features (id, project_id, title, description, acceptance_criteria, labels, phase_id, status, priority, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&feature.id)
         .bind(&feature.project_id)
         .bind(&feature.title)
         .bind(&feature.description)
+        .bind(&feature.acceptance_criteria)
+        .bind(&labels_json)
         .bind(&feature.phase_id)
         .bind(feature.status.as_str())
         .bind(feature.priority)
@@ -142,7 +173,7 @@ impl<'a> FeatureRepository<'a> {
     /// Get a feature by ID
     pub async fn get(&self, id: &str) -> Result<Option<Feature>> {
         let row = sqlx::query(
-            "SELECT id, project_id, title, description, phase_id, status, priority, created_at, updated_at FROM features WHERE id = ?",
+            "SELECT id, project_id, title, description, acceptance_criteria, labels, phase_id, status, priority, created_at, updated_at FROM features WHERE id = ?",
         )
         .bind(id)
         .fetch_optional(self.db.pool())
@@ -159,7 +190,7 @@ impl<'a> FeatureRepository<'a> {
     ) -> Result<Vec<Feature>> {
         let rows = if let Some(status) = status {
             sqlx::query(
-                "SELECT id, project_id, title, description, phase_id, status, priority, created_at, updated_at FROM features WHERE project_id = ? AND status = ? ORDER BY priority, created_at",
+                "SELECT id, project_id, title, description, acceptance_criteria, labels, phase_id, status, priority, created_at, updated_at FROM features WHERE project_id = ? AND status = ? ORDER BY priority, created_at",
             )
             .bind(project_id)
             .bind(status.as_str())
@@ -167,7 +198,7 @@ impl<'a> FeatureRepository<'a> {
             .await?
         } else {
             sqlx::query(
-                "SELECT id, project_id, title, description, phase_id, status, priority, created_at, updated_at FROM features WHERE project_id = ? ORDER BY priority, created_at",
+                "SELECT id, project_id, title, description, acceptance_criteria, labels, phase_id, status, priority, created_at, updated_at FROM features WHERE project_id = ? ORDER BY priority, created_at",
             )
             .bind(project_id)
             .fetch_all(self.db.pool())
@@ -177,17 +208,36 @@ impl<'a> FeatureRepository<'a> {
         Ok(rows.into_iter().map(|r| self.row_to_feature(r)).collect())
     }
 
+    /// List features for a phase
+    pub async fn list_by_phase(&self, phase_id: &str) -> Result<Vec<Feature>> {
+        let rows = sqlx::query(
+            "SELECT id, project_id, title, description, acceptance_criteria, labels, phase_id, status, priority, created_at, updated_at FROM features WHERE phase_id = ? ORDER BY priority, created_at",
+        )
+        .bind(phase_id)
+        .fetch_all(self.db.pool())
+        .await?;
+
+        Ok(rows.into_iter().map(|r| self.row_to_feature(r)).collect())
+    }
+
     /// Update a feature
     pub async fn update(&self, feature: &Feature) -> Result<()> {
+        let labels_json = feature
+            .labels
+            .as_ref()
+            .map(|l| serde_json::to_string(l).unwrap_or_default());
+
         sqlx::query(
             r#"
             UPDATE features
-            SET title = ?, description = ?, phase_id = ?, status = ?, priority = ?, updated_at = ?
+            SET title = ?, description = ?, acceptance_criteria = ?, labels = ?, phase_id = ?, status = ?, priority = ?, updated_at = ?
             WHERE id = ?
             "#,
         )
         .bind(&feature.title)
         .bind(&feature.description)
+        .bind(&feature.acceptance_criteria)
+        .bind(&labels_json)
         .bind(&feature.phase_id)
         .bind(feature.status.as_str())
         .bind(feature.priority)
@@ -195,6 +245,18 @@ impl<'a> FeatureRepository<'a> {
         .bind(&feature.id)
         .execute(self.db.pool())
         .await?;
+
+        Ok(())
+    }
+
+    /// Move feature to a different phase
+    pub async fn move_to_phase(&self, feature_id: &str, phase_id: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE features SET phase_id = ?, updated_at = ? WHERE id = ?")
+            .bind(phase_id)
+            .bind(Utc::now())
+            .bind(feature_id)
+            .execute(self.db.pool())
+            .await?;
 
         Ok(())
     }
@@ -223,11 +285,17 @@ impl<'a> FeatureRepository<'a> {
 
     /// Convert a database row to a Feature
     fn row_to_feature(&self, row: sqlx::sqlite::SqliteRow) -> Feature {
+        let labels_str: Option<String> = row.get("labels");
+        let labels = labels_str
+            .and_then(|s| serde_json::from_str(&s).ok());
+
         Feature {
             id: row.get("id"),
             project_id: row.get("project_id"),
             title: row.get("title"),
             description: row.get("description"),
+            acceptance_criteria: row.get("acceptance_criteria"),
+            labels,
             phase_id: row.get("phase_id"),
             status: FeatureStatus::parse(row.get("status")).unwrap_or_default(),
             priority: row.get("priority"),
@@ -352,19 +420,32 @@ mod tests {
         assert_eq!(feature.project_id, "proj-123");
         assert_eq!(feature.title, "Test Feature");
         assert_eq!(feature.status, FeatureStatus::Backlog);
-        assert_eq!(feature.priority, 0);
+        assert_eq!(feature.priority, 3); // Default medium priority
     }
 
     #[test]
     fn test_feature_builders() {
         let feature = Feature::new("proj-123", "Test Feature")
             .with_description("A test feature")
+            .with_acceptance_criteria("Given X When Y Then Z")
+            .with_labels(vec!["backend".to_string(), "api".to_string()])
             .with_phase("phase-1")
-            .with_priority(5);
+            .with_priority(1);
 
         assert_eq!(feature.description, Some("A test feature".to_string()));
+        assert_eq!(feature.acceptance_criteria, Some("Given X When Y Then Z".to_string()));
+        assert_eq!(feature.labels, Some(vec!["backend".to_string(), "api".to_string()]));
         assert_eq!(feature.phase_id, Some("phase-1".to_string()));
-        assert_eq!(feature.priority, 5);
+        assert_eq!(feature.priority, 1);
+    }
+
+    #[test]
+    fn test_priority_clamping() {
+        let feature = Feature::new("proj-123", "Test Feature").with_priority(10);
+        assert_eq!(feature.priority, 5); // Clamped to max
+
+        let feature = Feature::new("proj-123", "Test Feature").with_priority(0);
+        assert_eq!(feature.priority, 1); // Clamped to min
     }
 
     #[tokio::test]

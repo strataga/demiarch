@@ -45,7 +45,7 @@ async fn test_llm_error() {
 #[tokio::test]
 async fn test_rate_limited_error() {
     let error = Error::RateLimited(30);
-    assert_eq!(error.code(), "E102");
+    assert_eq!(error.code(), "E103");
     assert_eq!(error.suggestion(), None);
     assert!(error.to_string().contains("30"));
 }

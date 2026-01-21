@@ -198,7 +198,10 @@ impl<'a> ConversationRepository<'a> {
         .fetch_all(self.db.pool())
         .await?;
 
-        Ok(rows.into_iter().map(|r| self.row_to_conversation(r)).collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| self.row_to_conversation(r))
+            .collect())
     }
 
     /// Update a conversation's title
@@ -346,18 +349,18 @@ impl<'a> MessageRepository<'a> {
         .fetch_all(self.db.pool())
         .await?;
 
-        let mut messages: Vec<ChatMessage> = rows.into_iter().map(|r| self.row_to_message(r)).collect();
+        let mut messages: Vec<ChatMessage> =
+            rows.into_iter().map(|r| self.row_to_message(r)).collect();
         messages.reverse();
         Ok(messages)
     }
 
     /// Count messages in a conversation
     pub async fn count_by_conversation(&self, conversation_id: &str) -> Result<i64> {
-        let row: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM messages WHERE conversation_id = ?")
-                .bind(conversation_id)
-                .fetch_one(self.db.pool())
-                .await?;
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages WHERE conversation_id = ?")
+            .bind(conversation_id)
+            .fetch_one(self.db.pool())
+            .await?;
 
         Ok(row.0)
     }
@@ -558,7 +561,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_conversation() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // First create a project
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -578,7 +583,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_conversation_project_not_found() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         let result = create_conversation(&db, "nonexistent-project", None).await;
         assert!(result.is_err());
@@ -586,7 +593,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_and_retrieve_messages() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Create a project
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -602,9 +611,14 @@ mod tests {
             .expect("Failed to create conversation");
 
         // Send messages
-        let msg1 = send_message(&db, &conversation.id, MessageRole::User, "Hello, assistant!")
-            .await
-            .expect("Failed to send user message");
+        let msg1 = send_message(
+            &db,
+            &conversation.id,
+            MessageRole::User,
+            "Hello, assistant!",
+        )
+        .await
+        .expect("Failed to send user message");
 
         let msg2 = send_message(
             &db,
@@ -615,9 +629,14 @@ mod tests {
         .await
         .expect("Failed to send assistant message");
 
-        let _msg3 = send_message(&db, &conversation.id, MessageRole::User, "Help me build a feature")
-            .await
-            .expect("Failed to send second user message");
+        let _msg3 = send_message(
+            &db,
+            &conversation.id,
+            MessageRole::User,
+            "Help me build a feature",
+        )
+        .await
+        .expect("Failed to send second user message");
 
         // Verify message properties
         assert_eq!(msg1.role, MessageRole::User);
@@ -636,7 +655,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_recent_messages() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Create project and conversation
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -675,7 +696,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_conversations() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Create a project
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -705,7 +728,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_conversation_cascades_messages() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Create project and conversation
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -750,7 +775,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_message_with_model_and_tokens() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Create project and conversation
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -780,7 +807,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_conversation_updated_at() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Create project
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -805,14 +834,19 @@ mod tests {
             .unwrap();
 
         // Retrieve updated conversation
-        let updated = get_conversation(&db, &conversation.id).await.unwrap().unwrap();
+        let updated = get_conversation(&db, &conversation.id)
+            .await
+            .unwrap()
+            .unwrap();
 
         assert!(updated.updated_at > original_updated);
     }
 
     #[tokio::test]
     async fn test_paginated_history() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Create project and conversation
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -857,7 +891,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_conversation_title() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Create project
         sqlx::query("INSERT INTO projects (id, name) VALUES (?, ?)")
@@ -878,7 +914,10 @@ mod tests {
             .unwrap();
 
         // Verify
-        let updated = get_conversation(&db, &conversation.id).await.unwrap().unwrap();
+        let updated = get_conversation(&db, &conversation.id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated.title, Some("New Title".to_string()));
     }
 
@@ -889,7 +928,10 @@ mod tests {
         assert_eq!(MessageRole::System.as_str(), "system");
 
         assert_eq!(MessageRole::parse("user"), Some(MessageRole::User));
-        assert_eq!(MessageRole::parse("assistant"), Some(MessageRole::Assistant));
+        assert_eq!(
+            MessageRole::parse("assistant"),
+            Some(MessageRole::Assistant)
+        );
         assert_eq!(MessageRole::parse("system"), Some(MessageRole::System));
         assert_eq!(MessageRole::parse("invalid"), None);
     }

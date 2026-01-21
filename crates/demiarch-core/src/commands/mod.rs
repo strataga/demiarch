@@ -6,5 +6,7 @@ pub mod chat;
 pub mod document;
 pub mod feature;
 pub mod generate;
+pub mod phase;
+pub mod planner;
 pub mod project;
 pub mod sync;

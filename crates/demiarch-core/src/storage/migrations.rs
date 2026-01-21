@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 2;
+pub const CURRENT_VERSION: i32 = 3;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -150,6 +150,7 @@ const MIGRATION_V1: &str = r#"
 "#;
 
 /// Migration 2: Documents table for PRD and architecture document generation
+#[allow(dead_code)]
 const MIGRATION_V2: &str = r#"
     -- Documents table for auto-generated PRDs, architecture docs, etc.
     CREATE TABLE IF NOT EXISTS documents (
@@ -186,6 +187,49 @@ const MIGRATION_V2: &str = r#"
 
     CREATE INDEX IF NOT EXISTS idx_document_versions_document_id ON document_versions(document_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_document_versions_unique ON document_versions(document_id, version_number);
+"#;
+
+/// Migration 3: Phase planning and feature breakdown enhancements
+const MIGRATION_V3: &str = r#"
+    -- Update phases table to support phase planning workflow
+    ALTER TABLE phases ADD COLUMN status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'complete', 'skipped'));
+
+    -- Add acceptance_criteria and labels columns to features table
+    ALTER TABLE features ADD COLUMN acceptance_criteria TEXT;
+    ALTER TABLE features ADD COLUMN labels TEXT;
+
+    -- Create phase_templates table for default phase structures
+    CREATE TABLE IF NOT EXISTS phase_templates (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        order_index INTEGER NOT NULL DEFAULT 0,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Insert default phase templates
+    INSERT INTO phase_templates (id, name, description, order_index, is_default) VALUES
+        ('discovery', 'Discovery', 'Requirements gathering and ideation', 0, 1),
+        ('planning', 'Planning', 'Technical design and architecture', 1, 1),
+        ('building', 'Building', 'Implementation and development', 2, 1),
+        ('complete', 'Complete', 'Finished and deployed', 3, 1);
+
+    -- Create feature_extraction_history for tracking LLM-generated feature breakdowns
+    CREATE TABLE IF NOT EXISTS feature_extraction_history (
+        id TEXT PRIMARY KEY NOT NULL,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+        model_used TEXT NOT NULL,
+        tokens_used INTEGER,
+        cost_usd REAL,
+        phases_created INTEGER NOT NULL DEFAULT 0,
+        features_created INTEGER NOT NULL DEFAULT 0,
+        raw_response TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_feature_extraction_history_project_id ON feature_extraction_history(project_id);
 "#;
 
 /// Get the current schema version from the database
@@ -236,6 +280,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v2: Documents table");
         sqlx::raw_sql(MIGRATION_V2).execute(pool).await?;
         record_migration(pool, 2).await?;
+    }
+
+    if current_version < 3 {
+        tracing::info!("Applying migration v3: Phase planning enhancements");
+        sqlx::raw_sql(MIGRATION_V3).execute(pool).await?;
+        record_migration(pool, 3).await?;
     }
 
     tracing::info!("Database migrations completed");
@@ -331,6 +381,8 @@ mod tests {
             "checkpoints",
             "documents",
             "document_versions",
+            "phase_templates",
+            "feature_extraction_history",
         ];
 
         for table in tables {
@@ -338,8 +390,13 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap_or_else(|_| panic!("Table {} should exist", table));
-            // Just checking the query succeeds, count should be 0
-            assert_eq!(result.0, 0);
+            // Just checking the query succeeds
+            // phase_templates has 4 default rows, others should be 0
+            if table == "phase_templates" {
+                assert_eq!(result.0, 4, "phase_templates should have 4 default entries");
+            } else {
+                assert_eq!(result.0, 0, "Table {} should be empty", table);
+            }
         }
     }
 }

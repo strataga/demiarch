@@ -27,6 +27,9 @@ pub enum Error {
     )]
     LLMError(String),
 
+    #[error("LLM error: {0}")]
+    LlmError(String),
+
     #[error("Rate limited. Waiting {0} seconds before retry.")]
     RateLimited(u64),
 
@@ -68,6 +71,9 @@ pub enum Error {
 
     #[error("Validation error: {0}")]
     Validation(String),
+
+    #[error("Parse error: {0}")]
+    Parse(String),
 
     #[error("{0}")]
     NotFound(String),
@@ -117,7 +123,8 @@ impl Error {
             Self::PhaseNotFound(_) => "E003",
             Self::NetworkError(_) => "E100",
             Self::LLMError(_) => "E101",
-            Self::RateLimited(_) => "E102",
+            Self::LlmError(_) => "E102",
+            Self::RateLimited(_) => "E103",
             Self::BudgetExceeded(..) => "E200",
             Self::LockTimeout(_) => "E300",
             Self::DatabaseError(_) => "E400",
@@ -128,7 +135,8 @@ impl Error {
             Self::UserCancelled => "E700",
             Self::InvalidInput(_) => "E800",
             Self::Validation(_) => "E801",
-            Self::NotFound(_) => "E802",
+            Self::Parse(_) => "E802",
+            Self::NotFound(_) => "E803",
             Self::SkillNotFound(_) => "E900",
             Self::SkillExtractionFailed(_) => "E901",
             Self::HookFailed(_) => "E1000",
