@@ -54,3 +54,9 @@ tarpaulin-report.html
 # Backup files
 *.bak
 *.backup
+
+# Claude Code
+.claude/
+
+# Windows named pipes (WSL artifacts)
+**/\\.\pipe/
