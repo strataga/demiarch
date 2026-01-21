@@ -315,6 +315,89 @@ impl From<&Session> for SessionInfo {
     }
 }
 
+/// Information about a recovered session
+///
+/// Provides context about the session state before recovery and
+/// whether the shutdown was clean (proper pause) or unclean (crash/force quit).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecoveryInfo {
+    /// The recovered session
+    pub session: Session,
+
+    /// The status the session had before recovery
+    pub previous_status: SessionStatus,
+
+    /// Whether this was an unclean shutdown (session was Active, not Paused)
+    ///
+    /// An unclean shutdown indicates the application crashed or was force-quit
+    /// without properly pausing the session first.
+    pub was_unclean_shutdown: bool,
+
+    /// Time since last activity before recovery
+    pub idle_duration: chrono::Duration,
+
+    /// Whether the session has a checkpoint available for code recovery
+    pub has_checkpoint: bool,
+}
+
+impl RecoveryInfo {
+    /// Create recovery info for a recovered session
+    pub fn new(session: Session, previous_status: SessionStatus) -> Self {
+        let was_unclean_shutdown = previous_status == SessionStatus::Active;
+        let idle_duration = Utc::now() - session.last_activity;
+        let has_checkpoint = session.last_checkpoint_id.is_some();
+
+        Self {
+            session,
+            previous_status,
+            was_unclean_shutdown,
+            idle_duration,
+            has_checkpoint,
+        }
+    }
+
+    /// Check if the session was idle for longer than the given duration
+    pub fn was_idle_longer_than(&self, duration: chrono::Duration) -> bool {
+        self.idle_duration > duration
+    }
+
+    /// Get a human-readable summary of the recovery
+    pub fn summary(&self) -> String {
+        let shutdown_type = if self.was_unclean_shutdown {
+            "unclean shutdown (crash/force quit)"
+        } else {
+            "clean shutdown"
+        };
+
+        let idle_hours = self.idle_duration.num_hours();
+        let idle_mins = self.idle_duration.num_minutes() % 60;
+
+        let idle_str = if idle_hours > 0 {
+            format!("{}h {}m", idle_hours, idle_mins)
+        } else {
+            format!("{}m", idle_mins)
+        };
+
+        format!(
+            "Recovered session {} after {} (idle for {})",
+            self.session.id, shutdown_type, idle_str
+        )
+    }
+}
+
+/// Result of attempting session recovery on restart
+#[derive(Debug, Clone)]
+pub enum RecoveryResult {
+    /// A session was recovered
+    Recovered(RecoveryInfo),
+
+    /// No session needed recovery (none existed or all were properly ended)
+    NoneToRecover,
+
+    /// A new session was created (no recoverable session found)
+    CreatedNew(Session),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,5 +482,71 @@ mod tests {
         assert_eq!(info.id, session.id);
         assert_eq!(info.status, session.status);
         assert_eq!(info.description, session.description);
+    }
+
+    // ========== RecoveryInfo Tests ==========
+
+    #[test]
+    fn test_recovery_info_unclean_shutdown() {
+        let session = Session::new(None, None, Some("Test".to_string()));
+        // Session is active, simulating unclean shutdown
+        let info = RecoveryInfo::new(session, SessionStatus::Active);
+
+        assert!(info.was_unclean_shutdown);
+        assert_eq!(info.previous_status, SessionStatus::Active);
+        assert!(!info.has_checkpoint);
+    }
+
+    #[test]
+    fn test_recovery_info_clean_shutdown() {
+        let mut session = Session::new(None, None, None);
+        session.pause();
+        // Simulating recovery after pause
+        let info = RecoveryInfo::new(session, SessionStatus::Paused);
+
+        assert!(!info.was_unclean_shutdown);
+        assert_eq!(info.previous_status, SessionStatus::Paused);
+    }
+
+    #[test]
+    fn test_recovery_info_with_checkpoint() {
+        let mut session = Session::new(None, None, None);
+        let checkpoint_id = Uuid::new_v4();
+        session.set_checkpoint(checkpoint_id);
+
+        let info = RecoveryInfo::new(session, SessionStatus::Paused);
+
+        assert!(info.has_checkpoint);
+        assert_eq!(info.session.last_checkpoint_id, Some(checkpoint_id));
+    }
+
+    #[test]
+    fn test_recovery_info_summary_unclean() {
+        let session = Session::new(None, None, None);
+        let info = RecoveryInfo::new(session, SessionStatus::Active);
+
+        let summary = info.summary();
+        assert!(summary.contains("unclean shutdown"));
+        assert!(summary.contains(&info.session.id.to_string()));
+    }
+
+    #[test]
+    fn test_recovery_info_summary_clean() {
+        let session = Session::new(None, None, None);
+        let info = RecoveryInfo::new(session, SessionStatus::Paused);
+
+        let summary = info.summary();
+        assert!(summary.contains("clean shutdown"));
+    }
+
+    #[test]
+    fn test_recovery_result_variants() {
+        // Test that all variants can be created
+        let session = Session::new(None, None, None);
+        let info = RecoveryInfo::new(session.clone(), SessionStatus::Paused);
+
+        let _recovered = RecoveryResult::Recovered(info);
+        let _none = RecoveryResult::NoneToRecover;
+        let _created = RecoveryResult::CreatedNew(session);
     }
 }

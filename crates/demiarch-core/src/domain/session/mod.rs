@@ -52,4 +52,4 @@ pub use event::{SessionEvent, SessionEventType};
 pub use locked_manager::LockedSessionManager;
 pub use manager::SessionManager;
 pub use repository::SessionRepository;
-pub use session::{Session, SessionInfo, SessionPhase, SessionStatus};
+pub use session::{RecoveryInfo, RecoveryResult, Session, SessionInfo, SessionPhase, SessionStatus};

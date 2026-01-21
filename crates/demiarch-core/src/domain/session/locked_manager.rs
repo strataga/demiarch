@@ -6,7 +6,7 @@
 
 use super::event::SessionEvent;
 use super::manager::SessionManager;
-use super::session::{Session, SessionInfo, SessionPhase, SessionStatus};
+use super::session::{RecoveryInfo, RecoveryResult, Session, SessionInfo, SessionPhase, SessionStatus};
 use crate::domain::locking::{LockConfig, LockManager, SessionLockGuard};
 use crate::error::{Error, Result};
 use sqlx::SqlitePool;
@@ -134,6 +134,54 @@ impl LockedSessionManager {
             .map_err(|e| Error::LockTimeout(format!("session-get-or-create: {}", e)))?;
 
         self.inner.get_or_create(project_id, description).await
+    }
+
+    /// Recover a session after application restart with locking
+    ///
+    /// This should be called when the application starts to restore any ongoing session.
+    /// See `SessionManager::recover` for detailed documentation.
+    pub async fn recover(&self) -> Result<RecoveryResult> {
+        // Acquire workspace lock for recovery
+        let _lock = self
+            .lock_manager
+            .acquire_resource_lock(
+                crate::domain::locking::ResourceType::Workspace,
+                "session-recover",
+                "session-manager:recover",
+                Some(self.lock_timeout),
+            )
+            .await
+            .map_err(|e| Error::LockTimeout(format!("session-recover: {}", e)))?;
+
+        self.inner.recover().await
+    }
+
+    /// Recover a session or create a new one with locking
+    ///
+    /// See `SessionManager::recover_or_create` for detailed documentation.
+    pub async fn recover_or_create(
+        &self,
+        project_id: Option<Uuid>,
+        description: Option<String>,
+    ) -> Result<RecoveryResult> {
+        // Acquire workspace lock for recovery/creation
+        let _lock = self
+            .lock_manager
+            .acquire_resource_lock(
+                crate::domain::locking::ResourceType::Workspace,
+                "session-recover",
+                "session-manager:recover-or-create",
+                Some(self.lock_timeout),
+            )
+            .await
+            .map_err(|e| Error::LockTimeout(format!("session-recover-or-create: {}", e)))?;
+
+        self.inner.recover_or_create(project_id, description).await
+    }
+
+    /// Check if there's a recoverable session without recovering it (read-only, no lock needed)
+    pub async fn check_recoverable(&self) -> Result<Option<RecoveryInfo>> {
+        self.inner.check_recoverable().await
     }
 
     /// Pause a session with locking
@@ -503,5 +551,83 @@ mod tests {
         let cleaned = manager.cleanup_old_sessions(365).await.unwrap();
         // Sessions from today won't be cleaned up with 365 days threshold
         assert_eq!(cleaned, 0);
+    }
+
+    // ========== Session Recovery Tests ==========
+
+    #[tokio::test]
+    async fn test_recover_with_lock() {
+        let (manager, _temp) = create_test_manager().await;
+
+        // Create and pause a session
+        let session = manager.create(None, None, None).await.unwrap();
+        manager.pause(session.id).await.unwrap();
+
+        // Recover with locking
+        let result = manager.recover().await.unwrap();
+
+        match result {
+            RecoveryResult::Recovered(info) => {
+                assert_eq!(info.session.id, session.id);
+                assert!(info.session.is_active());
+            }
+            _ => panic!("Expected RecoveryResult::Recovered"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_recover_or_create_with_lock() {
+        let (manager, _temp) = create_test_manager().await;
+
+        // No session - should create new
+        let result = manager
+            .recover_or_create(None, Some("Test".to_string()))
+            .await
+            .unwrap();
+
+        match result {
+            RecoveryResult::CreatedNew(session) => {
+                assert!(session.is_active());
+            }
+            _ => panic!("Expected RecoveryResult::CreatedNew"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_recoverable_no_lock() {
+        let (manager, _temp) = create_test_manager().await;
+
+        // Create a session
+        let session = manager.create(None, None, None).await.unwrap();
+        manager.pause(session.id).await.unwrap();
+
+        // Check recoverable is read-only, no lock needed
+        let info = manager.check_recoverable().await.unwrap();
+        assert!(info.is_some());
+        assert_eq!(info.unwrap().session.id, session.id);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_recovery_operations() {
+        let (manager, _temp) = create_test_manager().await;
+        let manager = Arc::new(manager);
+
+        // Create a session to recover
+        let session = manager.create(None, None, None).await.unwrap();
+        manager.pause(session.id).await.unwrap();
+
+        // Spawn multiple concurrent recovery attempts
+        let m1 = manager.clone();
+        let m2 = manager.clone();
+
+        let handle1 = tokio::spawn(async move { m1.recover().await });
+        let handle2 = tokio::spawn(async move { m2.check_recoverable().await });
+
+        // Both should succeed (check_recoverable is read-only)
+        let result1 = handle1.await.expect("Task panicked");
+        assert!(result1.is_ok());
+
+        let result2 = handle2.await.expect("Task panicked");
+        assert!(result2.is_ok());
     }
 }

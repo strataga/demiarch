@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 9;
+pub const CURRENT_VERSION: i32 = 10;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -578,6 +578,42 @@ const MIGRATION_V9: &str = r#"
     END;
 "#;
 
+/// Migration 10: Add 'recovered' event type for session recovery
+///
+/// Adds support for tracking session recovery events when the application
+/// restarts and needs to resume a previously active or paused session.
+/// SQLite doesn't support ALTER TABLE for CHECK constraints, so we need
+/// to recreate the table with the new constraint.
+const MIGRATION_V10: &str = r#"
+    -- Create new session_events table with updated CHECK constraint
+    CREATE TABLE IF NOT EXISTS session_events_new (
+        id TEXT PRIMARY KEY NOT NULL,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL CHECK (event_type IN (
+            'started', 'paused', 'resumed', 'recovered', 'completed', 'abandoned',
+            'project_switched', 'feature_switched', 'phase_changed',
+            'checkpoint_created', 'error', 'custom'
+        )),
+        data TEXT,  -- JSON event data
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Copy existing data to new table
+    INSERT INTO session_events_new (id, session_id, event_type, data, created_at)
+    SELECT id, session_id, event_type, data, created_at FROM session_events;
+
+    -- Drop old table
+    DROP TABLE session_events;
+
+    -- Rename new table to original name
+    ALTER TABLE session_events_new RENAME TO session_events;
+
+    -- Recreate indexes
+    CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events(session_id);
+    CREATE INDEX IF NOT EXISTS idx_session_events_event_type ON session_events(event_type);
+    CREATE INDEX IF NOT EXISTS idx_session_events_created_at ON session_events(created_at);
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -668,6 +704,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v9: Cross-project search with privacy controls");
         sqlx::raw_sql(MIGRATION_V9).execute(pool).await?;
         record_migration(pool, 9).await?;
+    }
+
+    if current_version < 10 {
+        tracing::info!("Applying migration v10: Add 'recovered' event type for session recovery");
+        sqlx::raw_sql(MIGRATION_V10).execute(pool).await?;
+        record_migration(pool, 10).await?;
     }
 
     tracing::info!("Database migrations completed");

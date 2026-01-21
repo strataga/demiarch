@@ -5,7 +5,7 @@
 
 use super::event::SessionEvent;
 use super::repository::SessionRepository;
-use super::session::{Session, SessionInfo, SessionPhase, SessionStatus};
+use super::session::{RecoveryInfo, RecoveryResult, Session, SessionInfo, SessionPhase, SessionStatus};
 use crate::error::{Error, Result};
 use sqlx::SqlitePool;
 use tracing::{info, warn};
@@ -103,6 +103,122 @@ impl SessionManager {
 
         // Create new session
         self.create(project_id, None, description).await
+    }
+
+    /// Recover a session after application restart
+    ///
+    /// This method should be called when the application starts to restore
+    /// any ongoing session. It provides detailed recovery information including:
+    /// - Whether the shutdown was clean (session was paused) or unclean (crash)
+    /// - How long the session has been idle
+    /// - Whether a checkpoint is available for code recovery
+    ///
+    /// # Recovery Behavior
+    ///
+    /// - If an active session exists (unclean shutdown), it's recovered and marked
+    /// - If a paused session exists (clean shutdown), it's resumed
+    /// - If no ongoing session exists, returns `NoneToRecover`
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let result = manager.recover().await?;
+    /// match result {
+    ///     RecoveryResult::Recovered(info) => {
+    ///         if info.was_unclean_shutdown {
+    ///             warn!("Recovered from crash: {}", info.summary());
+    ///         }
+    ///         // Continue with recovered session
+    ///     }
+    ///     RecoveryResult::NoneToRecover => {
+    ///         // No session to recover, can create new one
+    ///     }
+    ///     RecoveryResult::CreatedNew(session) => {
+    ///         // A new session was created
+    ///     }
+    /// }
+    /// ```
+    pub async fn recover(&self) -> Result<RecoveryResult> {
+        // Look for any ongoing session (active or paused)
+        let Some(mut session) = self.repository.get_ongoing().await? else {
+            info!("No session to recover");
+            return Ok(RecoveryResult::NoneToRecover);
+        };
+
+        let previous_status = session.status;
+        let was_unclean = previous_status == SessionStatus::Active;
+
+        // If session was active (unclean shutdown), mark it as recovered
+        // If session was paused (clean shutdown), just resume it
+        session.resume();
+        self.repository.update(&session).await?;
+
+        // Record the appropriate event
+        self.repository
+            .save_event(&SessionEvent::recovered(
+                session.id,
+                previous_status.as_str(),
+                was_unclean,
+            ))
+            .await?;
+
+        let recovery_info = RecoveryInfo::new(session, previous_status);
+
+        if was_unclean {
+            warn!(
+                session_id = %recovery_info.session.id,
+                idle_mins = recovery_info.idle_duration.num_minutes(),
+                "Recovered session after unclean shutdown"
+            );
+        } else {
+            info!(
+                session_id = %recovery_info.session.id,
+                idle_mins = recovery_info.idle_duration.num_minutes(),
+                "Recovered paused session"
+            );
+        }
+
+        Ok(RecoveryResult::Recovered(recovery_info))
+    }
+
+    /// Recover a session or create a new one
+    ///
+    /// Convenience method that combines recovery and creation. Use this when
+    /// you want to ensure there's always an active session after restart.
+    ///
+    /// # Arguments
+    ///
+    /// * `project_id` - Optional project ID for new sessions
+    /// * `description` - Optional description for new sessions
+    ///
+    /// # Returns
+    ///
+    /// Returns `RecoveryResult::Recovered` if a session was recovered,
+    /// or `RecoveryResult::CreatedNew` if a new session was created.
+    pub async fn recover_or_create(
+        &self,
+        project_id: Option<Uuid>,
+        description: Option<String>,
+    ) -> Result<RecoveryResult> {
+        match self.recover().await? {
+            RecoveryResult::NoneToRecover => {
+                let session = self.create(project_id, None, description).await?;
+                Ok(RecoveryResult::CreatedNew(session))
+            }
+            result => Ok(result),
+        }
+    }
+
+    /// Check if there's a recoverable session without recovering it
+    ///
+    /// Use this to check if recovery is needed before deciding how to proceed.
+    pub async fn check_recoverable(&self) -> Result<Option<RecoveryInfo>> {
+        let Some(session) = self.repository.get_ongoing().await? else {
+            return Ok(None);
+        };
+
+        let previous_status = session.status;
+        Ok(Some(RecoveryInfo::new(session, previous_status)))
     }
 
     /// Pause a session
@@ -619,5 +735,210 @@ mod tests {
         // Should fail to switch project in completed session
         let result = manager.switch_project(session.id, None).await;
         assert!(result.is_err());
+    }
+
+    // ========== Session Recovery Tests ==========
+
+    #[tokio::test]
+    async fn test_recover_no_session() {
+        let manager = create_test_manager().await;
+
+        // No session exists
+        let result = manager.recover().await.unwrap();
+        assert!(matches!(result, RecoveryResult::NoneToRecover));
+    }
+
+    #[tokio::test]
+    async fn test_recover_paused_session_clean_shutdown() {
+        let manager = create_test_manager().await;
+
+        // Create and pause a session (simulates clean shutdown)
+        let session = manager.create(None, None, Some("Test".to_string())).await.unwrap();
+        manager.pause(session.id).await.unwrap();
+
+        // Recover should resume the paused session
+        let result = manager.recover().await.unwrap();
+
+        match result {
+            RecoveryResult::Recovered(info) => {
+                assert_eq!(info.session.id, session.id);
+                assert!(!info.was_unclean_shutdown);
+                assert_eq!(info.previous_status, SessionStatus::Paused);
+                assert!(info.session.is_active());
+            }
+            _ => panic!("Expected RecoveryResult::Recovered"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_recover_active_session_unclean_shutdown() {
+        let manager = create_test_manager().await;
+
+        // Create a session and leave it active (simulates unclean shutdown/crash)
+        let session = manager.create(None, None, Some("Crashed".to_string())).await.unwrap();
+        assert!(session.is_active());
+
+        // Recover should detect unclean shutdown
+        let result = manager.recover().await.unwrap();
+
+        match result {
+            RecoveryResult::Recovered(info) => {
+                assert_eq!(info.session.id, session.id);
+                assert!(info.was_unclean_shutdown);
+                assert_eq!(info.previous_status, SessionStatus::Active);
+                assert!(info.session.is_active());
+            }
+            _ => panic!("Expected RecoveryResult::Recovered"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_recover_records_event() {
+        let manager = create_test_manager().await;
+
+        // Create and pause a session
+        let session = manager.create(None, None, None).await.unwrap();
+        manager.pause(session.id).await.unwrap();
+
+        // Recover
+        manager.recover().await.unwrap();
+
+        // Check that recovered event was recorded
+        let events = manager.get_events(session.id, None).await.unwrap();
+        let recovered_events: Vec<_> = events
+            .iter()
+            .filter(|e| e.event_type == super::super::event::SessionEventType::Recovered)
+            .collect();
+
+        assert_eq!(recovered_events.len(), 1);
+        let data = recovered_events[0].data.as_ref().unwrap();
+        assert_eq!(data["previous_status"], "paused");
+        assert_eq!(data["was_unclean_shutdown"], false);
+    }
+
+    #[tokio::test]
+    async fn test_recover_or_create_with_existing() {
+        let manager = create_test_manager().await;
+
+        // Create and pause a session
+        let session = manager.create(None, None, None).await.unwrap();
+        manager.pause(session.id).await.unwrap();
+
+        // Should recover existing session
+        let result = manager.recover_or_create(None, None).await.unwrap();
+
+        match result {
+            RecoveryResult::Recovered(info) => {
+                assert_eq!(info.session.id, session.id);
+            }
+            _ => panic!("Expected RecoveryResult::Recovered"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_recover_or_create_new() {
+        let manager = create_test_manager().await;
+
+        // No existing session - should create new
+        let result = manager.recover_or_create(None, Some("New".to_string())).await.unwrap();
+
+        match result {
+            RecoveryResult::CreatedNew(session) => {
+                assert!(session.is_active());
+                assert_eq!(session.description, Some("New".to_string()));
+            }
+            _ => panic!("Expected RecoveryResult::CreatedNew"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_recoverable_exists() {
+        let manager = create_test_manager().await;
+
+        // Create a session
+        let session = manager.create(None, None, None).await.unwrap();
+        manager.pause(session.id).await.unwrap();
+
+        // Should find recoverable session
+        let info = manager.check_recoverable().await.unwrap();
+        assert!(info.is_some());
+        let info = info.unwrap();
+        assert_eq!(info.session.id, session.id);
+    }
+
+    #[tokio::test]
+    async fn test_check_recoverable_none() {
+        let manager = create_test_manager().await;
+
+        // No session - should return None
+        let info = manager.check_recoverable().await.unwrap();
+        assert!(info.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_check_recoverable_completed_not_recoverable() {
+        let manager = create_test_manager().await;
+
+        // Create and complete a session
+        let session = manager.create(None, None, None).await.unwrap();
+        manager.complete(session.id).await.unwrap();
+
+        // Completed sessions are not recoverable
+        let info = manager.check_recoverable().await.unwrap();
+        assert!(info.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_recovery_info_summary() {
+        let manager = create_test_manager().await;
+
+        // Create and leave active (unclean shutdown)
+        let _session = manager.create(None, None, None).await.unwrap();
+
+        let result = manager.recover().await.unwrap();
+
+        if let RecoveryResult::Recovered(info) = result {
+            let summary = info.summary();
+            assert!(summary.contains("unclean shutdown"));
+            assert!(summary.contains(&info.session.id.to_string()));
+        } else {
+            panic!("Expected RecoveryResult::Recovered");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_recovery_with_checkpoint() {
+        let manager = create_test_manager().await;
+
+        // Create session - we can't actually record a checkpoint without a valid
+        // checkpoint in the checkpoints table (foreign key constraint), so we test
+        // by creating a session and checking recovery works with checkpoint_id = None
+        let session = manager.create(None, None, None).await.unwrap();
+        manager.pause(session.id).await.unwrap();
+
+        // Recovery info should work correctly (has_checkpoint = false since no checkpoint)
+        let result = manager.recover().await.unwrap();
+
+        if let RecoveryResult::Recovered(info) = result {
+            assert!(!info.has_checkpoint);
+            assert_eq!(info.session.last_checkpoint_id, None);
+        } else {
+            panic!("Expected RecoveryResult::Recovered");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_recovery_has_checkpoint_detection() {
+        // Test the RecoveryInfo has_checkpoint field logic directly
+        let mut session = super::super::session::Session::new(None, None, None);
+
+        // Without checkpoint
+        let info = super::super::session::RecoveryInfo::new(session.clone(), SessionStatus::Paused);
+        assert!(!info.has_checkpoint);
+
+        // With checkpoint
+        session.last_checkpoint_id = Some(Uuid::new_v4());
+        let info = super::super::session::RecoveryInfo::new(session, SessionStatus::Paused);
+        assert!(info.has_checkpoint);
     }
 }

@@ -16,6 +16,8 @@ pub enum SessionEventType {
     Paused,
     /// Session was resumed
     Resumed,
+    /// Session was recovered after application restart
+    Recovered,
     /// Session was completed
     Completed,
     /// Session was abandoned
@@ -41,6 +43,7 @@ impl SessionEventType {
             "started" => Some(Self::Started),
             "paused" => Some(Self::Paused),
             "resumed" => Some(Self::Resumed),
+            "recovered" => Some(Self::Recovered),
             "completed" => Some(Self::Completed),
             "abandoned" => Some(Self::Abandoned),
             "project_switched" => Some(Self::ProjectSwitched),
@@ -59,6 +62,7 @@ impl SessionEventType {
             Self::Started => "started",
             Self::Paused => "paused",
             Self::Resumed => "resumed",
+            Self::Recovered => "recovered",
             Self::Completed => "completed",
             Self::Abandoned => "abandoned",
             Self::ProjectSwitched => "project_switched",
@@ -121,6 +125,15 @@ impl SessionEvent {
     /// Create a resumed event
     pub fn resumed(session_id: Uuid) -> Self {
         Self::new(session_id, SessionEventType::Resumed, None)
+    }
+
+    /// Create a recovered event (session recovered after application restart)
+    pub fn recovered(session_id: Uuid, previous_status: &str, was_unclean: bool) -> Self {
+        let data = serde_json::json!({
+            "previous_status": previous_status,
+            "was_unclean_shutdown": was_unclean,
+        });
+        Self::new(session_id, SessionEventType::Recovered, Some(data))
     }
 
     /// Create a completed event
