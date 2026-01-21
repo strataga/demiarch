@@ -183,11 +183,8 @@ pub fn create_schema_version_table_sql() -> &'static str {
 }
 
 /// Insert schema version record
-pub fn insert_schema_version_sql(version: &str, description: &str) -> String {
-    format!(
-        "INSERT OR REPLACE INTO schema_version (version, description) VALUES ('{}', '{}')",
-        version, description
-    )
+pub fn insert_schema_version_sql() -> &'static str {
+    "INSERT OR REPLACE INTO schema_version (version, description) VALUES (?, ?)"
 }
 
 /// Get current schema version
@@ -232,10 +229,9 @@ mod tests {
 
     #[test]
     fn test_insert_schema_version_sql() {
-        let sql = insert_schema_version_sql("001", "Initial schema");
+        let sql = insert_schema_version_sql();
         assert!(sql.contains("INSERT OR REPLACE INTO schema_version"));
-        assert!(sql.contains("001"));
-        assert!(sql.contains("Initial schema"));
+        assert!(sql.contains("?"));
     }
 
     #[test]

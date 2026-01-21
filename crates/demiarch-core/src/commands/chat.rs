@@ -4,15 +4,15 @@ use crate::Result;
 
 /// Send a chat message
 pub async fn send(_project_id: &str, _message: &str) -> Result<String> {
-    todo!("Implement chat message handling")
+    Ok("Chat message received. (Not yet implemented)".to_string())
 }
 
 /// Get chat history
 pub async fn history(_project_id: &str, _limit: usize) -> Result<Vec<ChatMessage>> {
-    todo!("Implement chat history")
+    Ok(Vec::new())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChatMessage {
     pub id: String,
     pub role: String,

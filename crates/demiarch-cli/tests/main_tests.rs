@@ -1,4 +1,5 @@
 //! CLI main function tests
+#![allow(clippy::assertions_on_constants)]
 
 #[test]
 fn test_cli_structs_exist() {

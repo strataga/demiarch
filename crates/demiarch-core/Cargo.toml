@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 description = "Core library for Demiarch - commands, agents, and storage"
 
+[features]
+integration-tests = []
+
 [dependencies]
 tokio.workspace = true
 sqlx.workspace = true
@@ -19,7 +22,6 @@ reqwest.workspace = true
 aes-gcm.workspace = true
 ed25519-dalek.workspace = true
 git2.workspace = true
-lru.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

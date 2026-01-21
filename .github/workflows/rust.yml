@@ -1,4 +1,4 @@
-name: Rust
+name: Rust CI
 
 on:
   push:
@@ -10,13 +10,79 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  lint-test:
+    name: Lint, format, and test (${{ matrix.workspace }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [".", "demiarch"]
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ matrix.workspace }}/target
+          key: rust-${{ runner.os }}-${{ matrix.workspace }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cargo fmt
+        working-directory: ${{ matrix.workspace }}
+        run: cargo fmt --all --check
+
+      - name: Cargo clippy
+        working-directory: ${{ matrix.workspace }}
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Cargo test
+        working-directory: ${{ matrix.workspace }}
+        run: cargo test --workspace --all-targets --locked
+
+  security:
+    name: Security audit (${{ matrix.workspace }})
+    runs-on: ubuntu-latest
+    needs: lint-test
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [".", "demiarch"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ matrix.workspace }}/target
+          key: security-${{ runner.os }}-${{ matrix.workspace }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Cargo deny
+        working-directory: ${{ matrix.workspace }}
+        run: cargo deny check --workspace --all-features
+
+      - name: Cargo audit
+        working-directory: ${{ matrix.workspace }}
+        run: cargo audit --quiet

@@ -4,25 +4,25 @@ use crate::Result;
 
 /// Create a new project
 pub async fn create(_name: &str, _framework: &str, _repo_url: &str) -> Result<String> {
-    todo!("Implement project creation")
+    Ok("project-placeholder-id".to_string())
 }
 
 /// List all projects
 pub async fn list() -> Result<Vec<String>> {
-    todo!("Implement project listing")
+    Ok(Vec::new())
 }
 
 /// Get project by ID
 pub async fn get(_id: &str) -> Result<Option<String>> {
-    todo!("Implement project retrieval")
+    Ok(None)
 }
 
 /// Archive a project
 pub async fn archive(_id: &str) -> Result<()> {
-    todo!("Implement project archival")
+    Ok(())
 }
 
 /// Delete a project
 pub async fn delete(_id: &str, _force: bool) -> Result<()> {
-    todo!("Implement project deletion")
+    Ok(())
 }

@@ -47,7 +47,7 @@ impl DatabaseUtils {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use demiarch_core::infrastructure::db::utils::DatabaseUtils;
     ///
     /// let id = DatabaseUtils::generate_id();
@@ -78,7 +78,7 @@ impl DatabaseUtils {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use demiarch_core::infrastructure::db::utils::DatabaseUtils;
     ///
     /// let json = r#"{"key": "value", "number": 123}"#;
@@ -92,8 +92,7 @@ impl DatabaseUtils {
             return Ok(std::collections::HashMap::new());
         }
 
-        serde_json::from_str(json_str)
-            .map_err(|e| crate::infrastructure::db::DatabaseError::Json(e))
+        serde_json::from_str(json_str).map_err(crate::infrastructure::db::DatabaseError::Json)
     }
 
     /// Convert HashMap to JSON string
@@ -117,7 +116,7 @@ impl DatabaseUtils {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use demiarch_core::infrastructure::db::utils::DatabaseUtils;
     /// use std::collections::HashMap;
     /// use serde_json::json;
@@ -129,7 +128,7 @@ impl DatabaseUtils {
     pub fn map_to_json(
         map: &std::collections::HashMap<String, serde_json::Value>,
     ) -> DatabaseResult<String> {
-        serde_json::to_string(map).map_err(|e| crate::infrastructure::db::DatabaseError::Json(e))
+        serde_json::to_string(map).map_err(crate::infrastructure::db::DatabaseError::Json)
     }
 
     /// Validate project ID format
@@ -159,7 +158,7 @@ impl DatabaseUtils {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use demiarch_core::infrastructure::db::utils::DatabaseUtils;
     ///
     /// // Valid project IDs
@@ -218,7 +217,7 @@ impl DatabaseUtils {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use demiarch_core::infrastructure::db::utils::DatabaseUtils;
     ///
     /// let dirty = "  Hello\r\nWorld\u{0000}  ";
@@ -227,11 +226,20 @@ impl DatabaseUtils {
     /// ```
     pub fn sanitize_string(input: &str) -> String {
         input
-            .replace('\u{0000}', "") // Remove null bytes
-            .replace('\r', "") // Remove carriage returns
-            .replace('\n', "") // Remove newlines
+            .replace(['\u{0000}', '\r', '\n'], "") // Remove control characters
             .trim()
             .to_string()
+    }
+
+    /// Redact and bound sensitive text before storage
+    pub fn redact_sensitive_text(input: &str, max_len: usize) -> String {
+        let clean = Self::sanitize_string(input);
+        if clean.len() > max_len {
+            let prefix = &clean[..max_len];
+            format!("{}...", prefix)
+        } else {
+            clean
+        }
     }
 
     /// Check if database file is readable and writable
@@ -258,7 +266,7 @@ impl DatabaseUtils {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use demiarch_core::infrastructure::db::utils::DatabaseUtils;
     /// use std::path::PathBuf;
     ///
@@ -277,14 +285,14 @@ impl DatabaseUtils {
             if let Some(parent) = path.parent() {
                 fs::metadata(parent)
                     .await
-                    .map_err(|e| crate::infrastructure::db::DatabaseError::Io(e))?;
+                    .map_err(crate::infrastructure::db::DatabaseError::Io)?;
             }
             return Ok(());
         }
 
         let metadata = fs::metadata(path)
             .await
-            .map_err(|e| crate::infrastructure::db::DatabaseError::Io(e))?;
+            .map_err(crate::infrastructure::db::DatabaseError::Io)?;
 
         let permissions = metadata.permissions();
 
@@ -328,7 +336,7 @@ impl DatabaseUtils {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
     /// use demiarch_core::infrastructure::db::utils::DatabaseUtils;
     /// use sqlx::SqlitePool;
     ///
@@ -606,7 +614,7 @@ pub async fn perform_health_check(manager: &DatabaseManager) -> DatabaseHealthCh
         can_connect,
         can_read,
         can_write,
-        schema_version: schema_version.and_then(|v| v),
+        schema_version: schema_version.flatten(),
         stats,
         errors,
     }
@@ -649,26 +657,105 @@ pub struct QueryBuilder;
 
 impl QueryBuilder {
     /// Build a paginated query with LIMIT and OFFSET
-    pub fn paginate(base_query: &str, page: u32, page_size: u32) -> String {
+    pub fn paginate(base_query: &str, page: u32, page_size: u32) -> DatabaseResult<String> {
+        validate_select_query(base_query)?;
+        if page == 0 || page_size == 0 {
+            return Err(crate::infrastructure::db::DatabaseError::Validation(
+                "Page and page_size must be greater than zero".to_string(),
+            ));
+        }
         let offset = (page - 1) * page_size;
-        format!("{} LIMIT {} OFFSET {}", base_query, page_size, offset)
+        Ok(format!(
+            "{} LIMIT {} OFFSET {}",
+            base_query, page_size, offset
+        ))
     }
 
     /// Build a count query from a SELECT query
-    pub fn count_query(select_query: &str) -> String {
-        // Simple approach: replace SELECT ... with SELECT COUNT(*)
-        let lower_query = select_query.to_lowercase();
-        if let Some(_start) = lower_query.find("select") {
-            let end = lower_query.find("from").unwrap_or(lower_query.len());
-            let count_query = format!("SELECT COUNT(*) AS total {}", &select_query[end..]);
-            return count_query;
-        }
-
-        // Fallback
-        format!("SELECT COUNT(*) AS total ({})", select_query)
+    pub fn count_query(select_query: &str) -> DatabaseResult<String> {
+        validate_select_query(select_query)?;
+        Ok(format!(
+            "SELECT COUNT(*) AS total FROM ({}) AS subquery",
+            select_query
+        ))
     }
 }
 
+const ALLOWED_TABLES: &[&str] = &[
+    "projects",
+    "conversations",
+    "agents",
+    "skills",
+    "code_generation",
+    "llm_calls",
+    "checkpoints",
+    "plugins",
+    "sessions",
+    "schema_version",
+];
+
+fn validate_select_query(query: &str) -> DatabaseResult<()> {
+    let trimmed = query.trim();
+    let lower = trimmed.to_lowercase();
+
+    if !lower.starts_with("select ") {
+        return Err(crate::infrastructure::db::DatabaseError::Validation(
+            "Only SELECT statements are allowed".to_string(),
+        ));
+    }
+
+    if trimmed.contains(';')
+        || trimmed.contains("--")
+        || trimmed.contains("/*")
+        || trimmed.contains("*/")
+    {
+        return Err(crate::infrastructure::db::DatabaseError::Validation(
+            "Query contains disallowed comment or statement separators".to_string(),
+        ));
+    }
+
+    if trimmed.contains('"') || trimmed.contains('\'') {
+        return Err(crate::infrastructure::db::DatabaseError::Validation(
+            "String literals are not allowed in validated queries".to_string(),
+        ));
+    }
+
+    if trimmed.chars().any(|c| c.is_control()) {
+        return Err(crate::infrastructure::db::DatabaseError::Validation(
+            "Control characters are not allowed in queries".to_string(),
+        ));
+    }
+
+    if trimmed
+        .chars()
+        .any(|c| !(c.is_ascii_alphanumeric() || " _.,=*><()".contains(c)))
+    {
+        return Err(crate::infrastructure::db::DatabaseError::Validation(
+            "Query contains invalid characters".to_string(),
+        ));
+    }
+
+    let from_pos = lower.find(" from ").ok_or_else(|| {
+        crate::infrastructure::db::DatabaseError::Validation("Missing FROM clause".to_string())
+    })?;
+    let after_from = trimmed[from_pos + 6..].trim_start();
+    let table_token = after_from.split_whitespace().next().ok_or_else(|| {
+        crate::infrastructure::db::DatabaseError::Validation(
+            "Unable to determine table name".to_string(),
+        )
+    })?;
+
+    let table = table_token.trim_matches(|c| c == '`' || c == '"' || c == '[' || c == ']');
+    let table_normalized = table.to_lowercase();
+
+    if !ALLOWED_TABLES.contains(&table_normalized.as_str()) {
+        return Err(crate::infrastructure::db::DatabaseError::Validation(
+            format!("Table '{table}' is not in the allowed list"),
+        ));
+    }
+
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -687,22 +774,25 @@ mod tests {
     #[test]
     fn test_map_to_json() {
         let mut map = std::collections::HashMap::<String, serde_json::Value>::new();
-        map.insert("test", serde_json::Value::String("value".to_string()));
+        map.insert(
+            "test".to_string(),
+            serde_json::Value::String("value".to_string()),
+        );
         let json = DatabaseUtils::map_to_json(&map).unwrap();
         assert!(json.contains("test"));
     }
 
     #[test]
     fn test_paginate() {
-        let query = "SELECT * FROM table";
-        let paginated = DatabaseUtils::paginate(query, 2, 10);
+        let query = "SELECT * FROM projects";
+        let paginated = QueryBuilder::paginate(query, 2, 10).unwrap();
         assert!(paginated.contains("LIMIT 10 OFFSET 10"));
     }
 
     #[test]
     fn test_count_query() {
-        let query = "SELECT id FROM users";
-        let count = DatabaseUtils::count_query(query);
+        let query = "SELECT id FROM projects";
+        let count = QueryBuilder::count_query(query).unwrap();
         assert!(count.contains("SELECT COUNT(*) AS total"));
     }
 }

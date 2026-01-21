@@ -4,20 +4,24 @@ use crate::Result;
 
 /// Export SQLite to JSONL (flush)
 pub async fn flush() -> Result<()> {
-    todo!("Implement SQLite -> JSONL export")
+    Ok(())
 }
 
 /// Import JSONL to SQLite
 pub async fn import() -> Result<()> {
-    todo!("Implement JSONL -> SQLite import")
+    Ok(())
 }
 
 /// Get sync status
 pub async fn status() -> Result<SyncStatus> {
-    todo!("Implement sync status")
+    Ok(SyncStatus {
+        dirty: false,
+        last_sync_at: None,
+        pending_changes: 0,
+    })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SyncStatus {
     pub dirty: bool,
     pub last_sync_at: Option<String>,

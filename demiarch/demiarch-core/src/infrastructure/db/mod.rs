@@ -16,8 +16,8 @@ pub use types::*;
 pub use utils::*;
 
 use anyhow::Result;
-use sqlx::SqlitePool;
-use std::path::PathBuf;
+use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+use std::path::{Path, PathBuf};
 use tracing::info;
 
 /// Database configuration for a project
@@ -90,14 +90,21 @@ impl DatabaseManager {
 
     /// Create a new connection pool
     async fn create_pool(&self) -> Result<SqlitePool> {
-        let database_url = format!("sqlite:{}", self.config.path.display());
+        crate::infrastructure::db::connection::validate_database_path(&self.config.path)?;
 
-        // Ensure database directory exists
-        if let Some(parent) = self.config.path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
+        crate::infrastructure::db::connection::ensure_database_directory(&self.config.path).await?;
 
-        let pool = sqlx::SqlitePool::connect(&database_url).await?;
+        let options =
+            crate::infrastructure::db::connection::create_connection_options(&self.config.path)?;
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(self.config.max_connections)
+            .min_connections(self.config.min_connections)
+            .acquire_timeout(std::time::Duration::from_secs(self.config.connect_timeout))
+            .connect_with(options)
+            .await?;
+
+        crate::infrastructure::db::connection::ensure_secure_permissions(&self.config.path)?;
 
         Ok(pool)
     }
@@ -109,34 +116,45 @@ impl DatabaseManager {
     }
 
     /// Create database backup
-    pub async fn create_backup(&self, backup_path: &PathBuf) -> Result<()> {
+    pub async fn create_backup(&self, backup_path: &Path) -> Result<()> {
         let pool = self.pool()?;
+        let target = self.normalize_backup_path(backup_path).await?;
 
-        // Create backup directory if it doesn't exist
-        if let Some(parent) = backup_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        // Use SQLite backup API
+        // Use SQLite backup API with parameterized path
         let mut conn = pool.begin().await?;
-        let backup_path_str = backup_path.to_string_lossy();
 
-        sqlx::query(&format!("VACUUM INTO '{}'", backup_path_str))
+        sqlx::query("VACUUM INTO ?")
+            .bind(target.to_string_lossy().to_string())
             .execute(&mut *conn)
             .await?;
 
         conn.commit().await?;
+
+        // Harden permissions (0600 file, 0700 dir)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            if let Some(parent) = target.parent() {
+                let mut perms = tokio::fs::metadata(parent).await?.permissions();
+                perms.set_mode(0o700);
+                tokio::fs::set_permissions(parent, perms).await?;
+            }
+
+            let mut perms = tokio::fs::metadata(&target).await?.permissions();
+            perms.set_mode(0o600);
+            tokio::fs::set_permissions(&target, perms).await?;
+        }
+
         Ok(())
     }
 
     /// Restore database from backup
-    pub async fn restore_from_backup(&mut self, backup_path: &PathBuf) -> Result<()> {
-        if !backup_path.exists() {
-            return Err(anyhow::anyhow!(
-                "Backup file does not exist: {:?}",
-                backup_path
-            ));
-        }
+    pub async fn restore_from_backup(&mut self, backup_path: &Path) -> Result<()> {
+        let validated_backup = self
+            .validate_backup_source(backup_path)
+            .await
+            .map_err(|e| anyhow::anyhow!("Backup file validation failed: {e}"))?;
 
         // Close existing connections
         if let Some(pool) = &self.pool {
@@ -144,7 +162,16 @@ impl DatabaseManager {
         }
 
         // Copy backup file to database location
-        tokio::fs::copy(backup_path, &self.config.path).await?;
+        tokio::fs::copy(&validated_backup, &self.config.path).await?;
+
+        // Reset permissions to 0600
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = tokio::fs::metadata(&self.config.path).await?.permissions();
+            perms.set_mode(0o600);
+            tokio::fs::set_permissions(&self.config.path, perms).await?;
+        }
 
         // Reinitialize the pool
         self.initialize().await?;
@@ -153,6 +180,104 @@ impl DatabaseManager {
         self.run_migrations().await?;
 
         Ok(())
+    }
+
+    async fn validate_backup_source(&self, backup_path: &Path) -> Result<PathBuf> {
+        if !backup_path.exists() {
+            return Err(anyhow::anyhow!(
+                "Backup file does not exist: {:?}",
+                backup_path
+            ));
+        }
+
+        let metadata = tokio::fs::symlink_metadata(backup_path).await?;
+        if metadata.file_type().is_symlink() {
+            return Err(anyhow::anyhow!("Backup path cannot be a symlink"));
+        }
+        if !metadata.file_type().is_file() {
+            return Err(anyhow::anyhow!("Backup path must be a regular file"));
+        }
+
+        let canonical_backup = tokio::fs::canonicalize(backup_path).await?;
+
+        ensure_not_symlink(&canonical_backup)?;
+
+        let base_dir = self
+            .config
+            .path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("backups");
+
+        let canonical_base = tokio::fs::canonicalize(&base_dir)
+            .await
+            .unwrap_or(base_dir.clone());
+
+        ensure_not_symlink(&canonical_base)?;
+
+        if !canonical_backup.starts_with(&canonical_base) {
+            return Err(anyhow::anyhow!(
+                "Backup must reside under the project's backups directory: {:?}",
+                canonical_base
+            ));
+        }
+
+        let ext = canonical_backup
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("");
+        const ALLOWED_EXTENSIONS: &[&str] = &["sqlite", "db", "bak"];
+        if !ALLOWED_EXTENSIONS.contains(&ext) {
+            return Err(anyhow::anyhow!(
+                "Backup file must use one of the allowed extensions: {:?}",
+                ALLOWED_EXTENSIONS
+            ));
+        }
+
+        Ok(canonical_backup)
+    }
+
+    async fn normalize_backup_path(&self, backup_path: &Path) -> Result<PathBuf> {
+        use std::path::{Path, PathBuf as StdPathBuf};
+
+        let base_dir: StdPathBuf = self
+            .config
+            .path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("backups");
+
+        ensure_not_symlink(&base_dir)?;
+        tokio::fs::create_dir_all(&base_dir).await?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut dir_perms = tokio::fs::metadata(&base_dir).await?.permissions();
+            dir_perms.set_mode(0o700);
+            tokio::fs::set_permissions(&base_dir, dir_perms).await?;
+        }
+
+        let file_name = backup_path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Backup file name is required"))?;
+
+        let candidate = base_dir.join(file_name);
+
+        const ALLOWED_EXTENSIONS: &[&str] = &["sqlite", "db", "bak"];
+        let ext = candidate.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !ALLOWED_EXTENSIONS.contains(&ext) {
+            return Err(anyhow::anyhow!(
+                "Backup file must use one of the allowed extensions: {:?}",
+                ALLOWED_EXTENSIONS
+            ));
+        }
+
+        if candidate.to_string_lossy().contains('\'') {
+            return Err(anyhow::anyhow!("Backup path contains invalid characters"));
+        }
+
+        Ok(candidate)
     }
 
     /// Get database health status
@@ -174,10 +299,23 @@ impl DatabaseManager {
         Ok(DatabaseHealth {
             is_healthy,
             table_count,
-            connection_count: pool.size() as u32,
+            connection_count: pool.size(),
             idle_connection_count: pool.num_idle() as u32,
         })
     }
+}
+
+fn ensure_not_symlink(path: &Path) -> Result<()> {
+    if path.exists() {
+        let meta = std::fs::symlink_metadata(path)?;
+        if meta.file_type().is_symlink() {
+            return Err(anyhow::anyhow!(
+                "Symlinks are not allowed for database paths"
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 /// Database health status
@@ -194,16 +332,26 @@ pub struct DatabaseHealth {
 }
 
 /// Create a database config for a project
-pub fn create_project_config(project_id: &str) -> DatabaseConfig {
-    let home_dir = dirs::home_dir().expect("Failed to get home directory");
-    let project_dir = home_dir.join(".demiarch").join("projects").join(project_id);
+pub fn create_project_config(project_id: &str) -> anyhow::Result<DatabaseConfig> {
+    crate::infrastructure::db::utils::DatabaseUtils::validate_project_id(project_id)
+        .map_err(|e| anyhow::anyhow!("Invalid project id: {}", e))?;
 
-    DatabaseConfig {
-        path: project_dir.join("database.sqlite"),
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Failed to get home directory"))?;
+    let base_dir = home_dir.join(".demiarch").join("projects");
+    let project_dir = base_dir.join(project_id);
+    let path = project_dir.join("database.sqlite");
+
+    if !path.starts_with(&base_dir) {
+        return Err(anyhow::anyhow!("Database path escaped base directory"));
+    }
+
+    Ok(DatabaseConfig {
+        path,
         max_connections: 10,
         min_connections: 2,
         connect_timeout: 30,
-    }
+    })
 }
 
 /// Create a new project database with proper permissions
@@ -231,30 +379,24 @@ pub fn create_project_config(project_id: &str) -> DatabaseConfig {
 /// }
 /// ```
 pub async fn create_project_database(project_id: &str) -> Result<()> {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-
-    let config = create_project_config(project_id);
+    let config = create_project_config(project_id)?;
     let db_path = &config.path;
 
-    // Create parent directory if it doesn't exist
-    if let Some(parent) = db_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
+    crate::infrastructure::db::connection::validate_database_path(db_path)?;
+
+    crate::infrastructure::db::connection::ensure_database_directory(db_path).await?;
 
     // Create the database file by connecting to it (SQLite creates the file on first connection)
-    let database_url = format!("sqlite:{}", db_path.display());
-    let pool = sqlx::sqlite::SqlitePoolOptions::new()
+    let options = crate::infrastructure::db::connection::create_connection_options(db_path)?;
+    let pool = SqlitePoolOptions::new()
         .max_connections(1)
         .min_connections(0)
         .acquire_timeout(std::time::Duration::from_secs(10))
-        .connect(&database_url)
+        .connect_with(options)
         .await?;
 
     // Set file permissions to 0600 (user read/write only)
-    let mut perms = fs::metadata(db_path)?.permissions();
-    perms.set_mode(0o600);
-    fs::set_permissions(db_path, perms)?;
+    crate::infrastructure::db::connection::ensure_secure_permissions(db_path)?;
 
     // Close pool
     pool.close().await;
@@ -281,7 +423,7 @@ pub async fn initialize_project_database(project_id: &str) -> Result<DatabaseMan
     create_project_database(project_id).await?;
 
     // Create database manager and initialize
-    let config = create_project_config(project_id);
+    let config = create_project_config(project_id)?;
     let mut manager = DatabaseManager::new(config);
     manager.initialize().await?;
 

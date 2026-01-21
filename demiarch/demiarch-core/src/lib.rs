@@ -1,11 +1,11 @@
 //! Demiarch Core Library
-//! 
+//!
 //! This is the shared core library containing all business logic,
 //! domain entities, and common functionality used by both
 //! the CLI and GUI interfaces.
 
-pub mod domain;
 pub mod application;
+pub mod domain;
 pub mod infrastructure;
 pub mod interfaces;
 

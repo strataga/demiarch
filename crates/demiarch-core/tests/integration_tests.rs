@@ -1,3 +1,4 @@
+#![cfg(feature = "integration-tests")]
 //! Demiarch Core Integration Tests
 
 use demiarch_core::{

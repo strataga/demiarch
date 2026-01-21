@@ -21,17 +21,12 @@ pub struct ProjectRecord {
 }
 
 /// Project status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ProjectStatus {
+    #[default]
     Active,
     Archived,
     Deleted,
-}
-
-impl Default for ProjectStatus {
-    fn default() -> Self {
-        Self::Active
-    }
 }
 
 impl From<String> for ProjectStatus {
@@ -44,12 +39,12 @@ impl From<String> for ProjectStatus {
     }
 }
 
-impl Into<String> for ProjectStatus {
-    fn into(self) -> String {
-        match self {
-            Self::Active => "active".to_string(),
-            Self::Archived => "archived".to_string(),
-            Self::Deleted => "deleted".to_string(),
+impl From<ProjectStatus> for String {
+    fn from(value: ProjectStatus) -> Self {
+        match value {
+            ProjectStatus::Active => "active".to_string(),
+            ProjectStatus::Archived => "archived".to_string(),
+            ProjectStatus::Deleted => "deleted".to_string(),
         }
     }
 }
@@ -94,12 +89,12 @@ impl From<String> for MessageRole {
     }
 }
 
-impl Into<String> for MessageRole {
-    fn into(self) -> String {
-        match self {
-            Self::User => "user".to_string(),
-            Self::Assistant => "assistant".to_string(),
-            Self::System => "system".to_string(),
+impl From<MessageRole> for String {
+    fn from(value: MessageRole) -> Self {
+        match value {
+            MessageRole::User => "user".to_string(),
+            MessageRole::Assistant => "assistant".to_string(),
+            MessageRole::System => "system".to_string(),
         }
     }
 }
@@ -119,18 +114,13 @@ pub struct AgentRecord {
 }
 
 /// Agent status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum AgentStatus {
+    #[default]
     Active,
     Inactive,
     Paused,
     Error,
-}
-
-impl Default for AgentStatus {
-    fn default() -> Self {
-        Self::Active
-    }
 }
 
 impl From<String> for AgentStatus {
@@ -144,13 +134,13 @@ impl From<String> for AgentStatus {
     }
 }
 
-impl Into<String> for AgentStatus {
-    fn into(self) -> String {
-        match self {
-            Self::Active => "active".to_string(),
-            Self::Inactive => "inactive".to_string(),
-            Self::Paused => "paused".to_string(),
-            Self::Error => "error".to_string(),
+impl From<AgentStatus> for String {
+    fn from(value: AgentStatus) -> Self {
+        match value {
+            AgentStatus::Active => "active".to_string(),
+            AgentStatus::Inactive => "inactive".to_string(),
+            AgentStatus::Paused => "paused".to_string(),
+            AgentStatus::Error => "error".to_string(),
         }
     }
 }
@@ -207,18 +197,13 @@ pub struct LlmCallRecord {
 }
 
 /// LLM call status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum CallStatus {
+    #[default]
     Success,
     Error,
     Timeout,
     Cancelled,
-}
-
-impl Default for CallStatus {
-    fn default() -> Self {
-        Self::Success
-    }
 }
 
 impl From<String> for CallStatus {
@@ -232,13 +217,13 @@ impl From<String> for CallStatus {
     }
 }
 
-impl Into<String> for CallStatus {
-    fn into(self) -> String {
-        match self {
-            Self::Success => "success".to_string(),
-            Self::Error => "error".to_string(),
-            Self::Timeout => "timeout".to_string(),
-            Self::Cancelled => "cancelled".to_string(),
+impl From<CallStatus> for String {
+    fn from(value: CallStatus) -> Self {
+        match value {
+            CallStatus::Success => "success".to_string(),
+            CallStatus::Error => "error".to_string(),
+            CallStatus::Timeout => "timeout".to_string(),
+            CallStatus::Cancelled => "cancelled".to_string(),
         }
     }
 }
@@ -285,17 +270,12 @@ pub struct SessionRecord {
 }
 
 /// Session status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum SessionStatus {
+    #[default]
     Active,
     Expired,
     Revoked,
-}
-
-impl Default for SessionStatus {
-    fn default() -> Self {
-        Self::Active
-    }
 }
 
 impl From<String> for SessionStatus {
@@ -308,12 +288,12 @@ impl From<String> for SessionStatus {
     }
 }
 
-impl Into<String> for SessionStatus {
-    fn into(self) -> String {
-        match self {
-            Self::Active => "active".to_string(),
-            Self::Expired => "expired".to_string(),
-            Self::Revoked => "revoked".to_string(),
+impl From<SessionStatus> for String {
+    fn from(value: SessionStatus) -> Self {
+        match value {
+            SessionStatus::Active => "active".to_string(),
+            SessionStatus::Expired => "expired".to_string(),
+            SessionStatus::Revoked => "revoked".to_string(),
         }
     }
 }
@@ -399,13 +379,13 @@ mod tests {
 
     #[test]
     fn test_project_status_to_string() {
-        let status: String = <ProjectStatus as Into<String>>::into(ProjectStatus::Active);
+        let status: String = String::from(ProjectStatus::Active);
         assert_eq!(status, "active".to_string());
 
-        let status: String = <ProjectStatus as Into<String>>::into(ProjectStatus::Archived);
+        let status: String = String::from(ProjectStatus::Archived);
         assert_eq!(status, "archived".to_string());
 
-        let status: String = <ProjectStatus as Into<String>>::into(ProjectStatus::Deleted);
+        let status: String = String::from(ProjectStatus::Deleted);
         assert_eq!(status, "deleted".to_string());
     }
 
@@ -422,13 +402,13 @@ mod tests {
 
     #[test]
     fn test_message_role_to_string() {
-        let role: String = <MessageRole as Into<String>>::into(MessageRole::User);
+        let role: String = String::from(MessageRole::User);
         assert_eq!(role, "user".to_string());
 
-        let role: String = <MessageRole as Into<String>>::into(MessageRole::Assistant);
+        let role: String = String::from(MessageRole::Assistant);
         assert_eq!(role, "assistant".to_string());
 
-        let role: String = <MessageRole as Into<String>>::into(MessageRole::System);
+        let role: String = String::from(MessageRole::System);
         assert_eq!(role, "system".to_string());
     }
 
@@ -454,16 +434,16 @@ mod tests {
 
     #[test]
     fn test_agent_status_to_string() {
-        let status: String = <AgentStatus as Into<String>>::into(AgentStatus::Active);
+        let status: String = String::from(AgentStatus::Active);
         assert_eq!(status, "active".to_string());
 
-        let status: String = <AgentStatus as Into<String>>::into(AgentStatus::Inactive);
+        let status: String = String::from(AgentStatus::Inactive);
         assert_eq!(status, "inactive".to_string());
 
-        let status: String = <AgentStatus as Into<String>>::into(AgentStatus::Paused);
+        let status: String = String::from(AgentStatus::Paused);
         assert_eq!(status, "paused".to_string());
 
-        let status: String = <AgentStatus as Into<String>>::into(AgentStatus::Error);
+        let status: String = String::from(AgentStatus::Error);
         assert_eq!(status, "error".to_string());
     }
 
@@ -486,16 +466,16 @@ mod tests {
 
     #[test]
     fn test_call_status_to_string() {
-        let status: String = <CallStatus as Into<String>>::into(CallStatus::Success);
+        let status: String = String::from(CallStatus::Success);
         assert_eq!(status, "success".to_string());
 
-        let status: String = <CallStatus as Into<String>>::into(CallStatus::Error);
+        let status: String = String::from(CallStatus::Error);
         assert_eq!(status, "error".to_string());
 
-        let status: String = <CallStatus as Into<String>>::into(CallStatus::Timeout);
+        let status: String = String::from(CallStatus::Timeout);
         assert_eq!(status, "timeout".to_string());
 
-        let status: String = <CallStatus as Into<String>>::into(CallStatus::Cancelled);
+        let status: String = String::from(CallStatus::Cancelled);
         assert_eq!(status, "cancelled".to_string());
     }
 
@@ -526,13 +506,13 @@ mod tests {
 
     #[test]
     fn test_session_status_to_string() {
-        let status: String = <SessionStatus as Into<String>>::into(SessionStatus::Active);
+        let status: String = String::from(SessionStatus::Active);
         assert_eq!(status, "active".to_string());
 
-        let status: String = <SessionStatus as Into<String>>::into(SessionStatus::Expired);
+        let status: String = String::from(SessionStatus::Expired);
         assert_eq!(status, "expired".to_string());
 
-        let status: String = <SessionStatus as Into<String>>::into(SessionStatus::Revoked);
+        let status: String = String::from(SessionStatus::Revoked);
         assert_eq!(status, "revoked".to_string());
     }
 

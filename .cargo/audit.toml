@@ -1,0 +1,5 @@
+[advisories]
+ignore = [
+    # rsa 0.9.10 via optional sqlx-mysql; mysql feature is disabled and not used in this workspace.
+    "RUSTSEC-2023-0071",
+]

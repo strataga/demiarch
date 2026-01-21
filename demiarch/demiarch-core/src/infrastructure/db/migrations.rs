@@ -21,6 +21,12 @@ pub struct Migrations {
     migrations: HashMap<&'static str, Migration>,
 }
 
+impl Default for Migrations {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Migrations {
     /// Create new migrations registry
     pub fn new() -> Self {
@@ -56,6 +62,12 @@ impl Migrations {
 /// Migration manager
 pub struct MigrationManager {
     migrations: Migrations,
+}
+
+impl Default for MigrationManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MigrationManager {
@@ -128,13 +140,14 @@ impl MigrationManager {
             // Apply migration
             sqlx::raw_sql(migration.up).execute(&mut *tx).await?;
 
-            // Record migration
-            let insert_sql = crate::infrastructure::db::schema::insert_schema_version_sql(
-                migration.version,
-                migration.description,
-            );
-
-            sqlx::raw_sql(&insert_sql).execute(&mut *tx).await?;
+            // Record migration with parameterized insert
+            sqlx::query(
+                "INSERT OR REPLACE INTO schema_version (version, description) VALUES (?, ?)",
+            )
+            .bind(migration.version)
+            .bind(migration.description)
+            .execute(&mut *tx)
+            .await?;
 
             tx.commit().await?;
 

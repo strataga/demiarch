@@ -4,11 +4,16 @@ use crate::Result;
 
 /// Generate code for a feature
 pub async fn generate(_feature_id: &str, _dry_run: bool) -> Result<GenerationResult> {
-    todo!("Implement code generation")
+    Ok(GenerationResult {
+        files_created: 0,
+        files_modified: 0,
+        tokens_used: 0,
+        cost_usd: 0.0,
+    })
 }
 
 /// Generation result
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GenerationResult {
     pub files_created: usize,
     pub files_modified: usize,
