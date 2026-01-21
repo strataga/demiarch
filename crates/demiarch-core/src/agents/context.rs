@@ -5,6 +5,7 @@
 //! - Shared resources (LLM client, cost tracker, etc.)
 //! - Execution path for debugging and observability
 //! - Message history and context for child agents
+//! - Progressive disclosure settings for token management
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -16,6 +17,9 @@ use uuid::Uuid;
 
 use super::traits::{AgentResult, AgentStatus};
 use super::AgentType;
+use crate::context::{
+    ContextBudget, ContextWindow, DisclosureLevel, TokenAllocation, estimate_messages_tokens,
+};
 use crate::cost::CostTracker;
 use crate::llm::{LlmClient, Message};
 
@@ -154,6 +158,8 @@ pub struct SharedAgentState {
     counter: Arc<AtomicU64>,
     /// Registry of all active agents
     agent_registry: Arc<RwLock<HashMap<AgentId, ChildAgentInfo>>>,
+    /// Context budget for token allocation
+    context_budget: Arc<ContextBudget>,
 }
 
 impl SharedAgentState {
@@ -166,7 +172,26 @@ impl SharedAgentState {
             feature_id: None,
             counter: Arc::new(AtomicU64::new(0)),
             agent_registry: Arc::new(RwLock::new(HashMap::new())),
+            context_budget: Arc::new(ContextBudget::default()),
         }
+    }
+
+    /// Create new shared state with custom context budget
+    pub fn with_context_budget(llm_client: Arc<LlmClient>, budget: ContextBudget) -> Self {
+        Self {
+            llm_client,
+            cost_tracker: None,
+            project_id: None,
+            feature_id: None,
+            counter: Arc::new(AtomicU64::new(0)),
+            agent_registry: Arc::new(RwLock::new(HashMap::new())),
+            context_budget: Arc::new(budget),
+        }
+    }
+
+    /// Get the context budget
+    pub fn context_budget(&self) -> &ContextBudget {
+        &self.context_budget
     }
 
     /// Set the cost tracker
@@ -252,6 +277,7 @@ impl std::fmt::Debug for SharedAgentState {
             .field("project_id", &self.project_id)
             .field("feature_id", &self.feature_id)
             .field("has_cost_tracker", &self.cost_tracker.is_some())
+            .field("context_budget_tokens", &self.context_budget.total_tokens)
             .finish()
     }
 }
@@ -391,6 +417,157 @@ impl AgentContext {
     /// Check if we're at maximum depth
     pub fn at_max_depth(&self) -> bool {
         self.depth >= 2
+    }
+
+    // Progressive Disclosure Methods
+
+    /// Get the disclosure level for this agent based on its depth
+    pub fn disclosure_level(&self) -> DisclosureLevel {
+        DisclosureLevel::for_depth(self.depth)
+    }
+
+    /// Get the token allocation for this agent based on its depth
+    pub fn token_allocation(&self) -> TokenAllocation {
+        self.shared_state.context_budget.allocation_for_depth(self.depth)
+    }
+
+    /// Create a context window for this agent
+    ///
+    /// Returns a ContextWindow configured with the appropriate token allocation
+    /// and disclosure level for this agent's depth in the hierarchy.
+    pub fn create_context_window(&self) -> ContextWindow {
+        let allocation = self.token_allocation();
+        ContextWindow::new(allocation).with_disclosure_level(self.disclosure_level())
+    }
+
+    /// Estimate total tokens used by inherited messages
+    pub fn estimate_inherited_tokens(&self) -> usize {
+        estimate_messages_tokens(&self.inherited_messages)
+    }
+
+    /// Get the remaining context budget for inherited messages
+    ///
+    /// Returns the number of tokens available for context after accounting
+    /// for the token allocation strategy at this depth.
+    pub fn remaining_context_budget(&self) -> usize {
+        let allocation = self.token_allocation();
+        allocation.context_tokens.saturating_sub(self.estimate_inherited_tokens())
+    }
+
+    /// Check if inherited messages exceed the context budget
+    pub fn is_context_over_budget(&self) -> bool {
+        let allocation = self.token_allocation();
+        self.estimate_inherited_tokens() > allocation.context_tokens
+    }
+
+    /// Create a child context with progressive disclosure applied
+    ///
+    /// This method creates a child context where the inherited messages
+    /// are compressed according to the child's disclosure level to manage
+    /// token limits as context flows down the hierarchy.
+    pub fn child_context_with_disclosure(&self, child_type: AgentType) -> Self {
+        let counter = self.shared_state.next_counter();
+        let child_name = format!("{}-{}", child_type, counter);
+        let child_depth = self.depth + 1;
+
+        // Get the disclosure level and allocation for the child
+        let child_disclosure = DisclosureLevel::for_depth(child_depth);
+        let child_allocation = self.shared_state.context_budget.allocation_for_depth(child_depth);
+
+        // Create a context window for the parent to compress inherited messages
+        let mut parent_window = self.create_context_window();
+        for msg in &self.inherited_messages {
+            parent_window.add_context_message(msg.clone());
+        }
+
+        // Create child window with compressed context
+        let child_window = parent_window.child_window(child_allocation, child_depth);
+        let compressed_messages = child_window.messages();
+
+        // Log compression if significant
+        let original_tokens = self.estimate_inherited_tokens();
+        let compressed_tokens = estimate_messages_tokens(&compressed_messages);
+        if original_tokens > 0 && compressed_tokens < original_tokens {
+            tracing::debug!(
+                parent_depth = self.depth,
+                child_depth,
+                disclosure = %child_disclosure,
+                original_tokens,
+                compressed_tokens,
+                compression_ratio = %((compressed_tokens as f32 / original_tokens as f32 * 100.0).round()),
+                "Progressive disclosure applied to child context"
+            );
+        }
+
+        Self {
+            id: AgentId::new(),
+            agent_type: child_type,
+            path: self.path.child(&child_name),
+            parent_id: Some(self.id),
+            depth: child_depth,
+            inherited_messages: compressed_messages,
+            shared_state: Arc::clone(&self.shared_state),
+            child_results: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
+    /// Get a summary of the current context state for debugging
+    pub fn context_summary(&self) -> ContextSummary {
+        let allocation = self.token_allocation();
+        let inherited_tokens = self.estimate_inherited_tokens();
+
+        ContextSummary {
+            agent_id: self.id,
+            agent_type: self.agent_type,
+            depth: self.depth,
+            disclosure_level: self.disclosure_level(),
+            inherited_message_count: self.inherited_messages.len(),
+            inherited_tokens,
+            context_budget: allocation.context_tokens,
+            budget_utilization: if allocation.context_tokens > 0 {
+                inherited_tokens as f32 / allocation.context_tokens as f32
+            } else {
+                0.0
+            },
+        }
+    }
+}
+
+/// Summary of context state for an agent
+#[derive(Debug, Clone)]
+pub struct ContextSummary {
+    /// Agent ID
+    pub agent_id: AgentId,
+    /// Agent type
+    pub agent_type: AgentType,
+    /// Depth in hierarchy
+    pub depth: u8,
+    /// Disclosure level at this depth
+    pub disclosure_level: DisclosureLevel,
+    /// Number of inherited messages
+    pub inherited_message_count: usize,
+    /// Estimated tokens in inherited messages
+    pub inherited_tokens: usize,
+    /// Token budget for context
+    pub context_budget: usize,
+    /// Budget utilization (0.0 to 1.0+)
+    pub budget_utilization: f32,
+}
+
+impl std::fmt::Display for ContextSummary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Agent {} ({}): depth={}, disclosure={}, messages={}, tokens={}/{} ({:.1}%)",
+            self.agent_id,
+            self.agent_type,
+            self.depth,
+            self.disclosure_level,
+            self.inherited_message_count,
+            self.inherited_tokens,
+            self.context_budget,
+            self.budget_utilization * 100.0
+        )
     }
 }
 
@@ -551,5 +728,149 @@ mod tests {
 
         let results = ctx.get_child_results().await;
         assert_eq!(results.len(), 2);
+    }
+
+    // Progressive Disclosure Tests
+
+    #[test]
+    fn test_disclosure_level_by_depth() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+
+        let orchestrator = AgentContext::root(AgentType::Orchestrator, shared.clone());
+        assert_eq!(orchestrator.disclosure_level(), DisclosureLevel::Full);
+
+        let planner = orchestrator.child_context(AgentType::Planner);
+        assert_eq!(planner.disclosure_level(), DisclosureLevel::Summary);
+
+        let coder = planner.child_context(AgentType::Coder);
+        assert_eq!(coder.disclosure_level(), DisclosureLevel::Essential);
+    }
+
+    #[test]
+    fn test_token_allocation_by_depth() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+
+        let orchestrator = AgentContext::root(AgentType::Orchestrator, shared.clone());
+        let planner = orchestrator.child_context(AgentType::Planner);
+        let coder = planner.child_context(AgentType::Coder);
+
+        // Orchestrator should have more context budget than planner
+        assert!(orchestrator.token_allocation().context_tokens > planner.token_allocation().context_tokens);
+        // Planner should have more context budget than coder
+        assert!(planner.token_allocation().context_tokens > coder.token_allocation().context_tokens);
+    }
+
+    #[test]
+    fn test_create_context_window() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+        let ctx = AgentContext::root(AgentType::Orchestrator, shared);
+
+        let window = ctx.create_context_window();
+        assert_eq!(window.disclosure_level(), DisclosureLevel::Full);
+    }
+
+    #[test]
+    fn test_estimate_inherited_tokens() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+        let ctx = AgentContext::root(AgentType::Orchestrator, shared)
+            .with_inherited_messages(vec![
+                Message::user("Hello, this is a test message."),
+                Message::assistant("This is a response."),
+            ]);
+
+        let tokens = ctx.estimate_inherited_tokens();
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_remaining_context_budget() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+        let ctx = AgentContext::root(AgentType::Orchestrator, shared.clone());
+
+        let budget = ctx.remaining_context_budget();
+        assert!(budget > 0);
+
+        // Add messages and check budget decreases
+        let ctx_with_messages = AgentContext::root(AgentType::Orchestrator, shared)
+            .with_inherited_messages(vec![
+                Message::user("Hello, this is a test message."),
+            ]);
+
+        assert!(ctx_with_messages.remaining_context_budget() < budget);
+    }
+
+    #[test]
+    fn test_is_context_over_budget() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+
+        let ctx = AgentContext::root(AgentType::Orchestrator, shared.clone());
+        assert!(!ctx.is_context_over_budget());
+
+        // Create a context with very long messages to exceed budget
+        let long_message = "A".repeat(50000); // Very long message
+        let ctx_over_budget = AgentContext::root(AgentType::Orchestrator, shared)
+            .with_inherited_messages(vec![Message::user(&long_message)]);
+
+        assert!(ctx_over_budget.is_context_over_budget());
+    }
+
+    #[test]
+    fn test_child_context_with_disclosure() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+
+        let orchestrator = AgentContext::root(AgentType::Orchestrator, shared)
+            .with_inherited_messages(vec![
+                Message::user("First message with important context."),
+                Message::assistant("Response with details. Key point: use progressive disclosure."),
+                Message::user("Another message with more context."),
+            ]);
+
+        let planner = orchestrator.child_context_with_disclosure(AgentType::Planner);
+
+        // Child should have correct depth and disclosure level
+        assert_eq!(planner.depth, 1);
+        assert_eq!(planner.disclosure_level(), DisclosureLevel::Summary);
+
+        // Child should have parent reference
+        assert_eq!(planner.parent_id, Some(orchestrator.id));
+    }
+
+    #[test]
+    fn test_context_summary() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+
+        let ctx = AgentContext::root(AgentType::Orchestrator, shared)
+            .with_inherited_messages(vec![
+                Message::user("Test message."),
+            ]);
+
+        let summary = ctx.context_summary();
+
+        assert_eq!(summary.agent_type, AgentType::Orchestrator);
+        assert_eq!(summary.depth, 0);
+        assert_eq!(summary.disclosure_level, DisclosureLevel::Full);
+        assert_eq!(summary.inherited_message_count, 1);
+        assert!(summary.inherited_tokens > 0);
+        assert!(summary.context_budget > 0);
+    }
+
+    #[test]
+    fn test_context_summary_display() {
+        let shared = Arc::new(SharedAgentState::new(test_llm_client()));
+        let ctx = AgentContext::root(AgentType::Orchestrator, shared);
+        let summary = ctx.context_summary();
+
+        let display = summary.to_string();
+        assert!(display.contains("orchestrator")); // AgentType displays as lowercase
+        assert!(display.contains("depth=0"));
+        assert!(display.contains("full"));
+    }
+
+    #[test]
+    fn test_shared_state_with_context_budget() {
+        let budget = ContextBudget::new(16384); // 16k context
+        let state = SharedAgentState::with_context_budget(test_llm_client(), budget);
+
+        assert_eq!(state.context_budget().total_tokens, 16384);
     }
 }

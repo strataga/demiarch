@@ -12,6 +12,19 @@ pub struct Config {
     pub llm: LlmConfig,
     pub cost: CostConfig,
     pub routing: RoutingConfig,
+    #[serde(default)]
+    pub context: ContextConfig,
+}
+
+/// Configuration for progressive disclosure context management
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextConfig {
+    /// Total token budget for context window
+    pub total_tokens: usize,
+    /// Percentage of tokens reserved for output (0.0 to 1.0)
+    pub output_reserve: f32,
+    /// Whether to enable progressive disclosure compression
+    pub enable_compression: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +79,23 @@ impl Default for RoutingConfig {
         Self {
             preference: "balanced".to_string(),
         }
+    }
+}
+
+impl Default for ContextConfig {
+    fn default() -> Self {
+        Self {
+            total_tokens: 8192,
+            output_reserve: 0.375,
+            enable_compression: true,
+        }
+    }
+}
+
+impl ContextConfig {
+    /// Create a context budget from this configuration
+    pub fn to_context_budget(&self) -> crate::context::ContextBudget {
+        crate::context::ContextBudget::new(self.total_tokens)
     }
 }
 
@@ -175,6 +205,11 @@ impl Config {
             // Routing settings
             "routing.preference" => Ok(self.routing.preference.clone()),
 
+            // Context settings
+            "context.total_tokens" => Ok(self.context.total_tokens.to_string()),
+            "context.output_reserve" => Ok(self.context.output_reserve.to_string()),
+            "context.enable_compression" => Ok(self.context.enable_compression.to_string()),
+
             // API key (special handling - show redacted)
             "llm.api_key" | "api_key" => match self.llm.redacted_api_key()? {
                 Some(redacted) => Ok(redacted),
@@ -257,6 +292,32 @@ impl Config {
                 self.routing.preference = value.to_string();
             }
 
+            // Context settings
+            "context.total_tokens" => {
+                let tokens: usize = value
+                    .parse()
+                    .with_context(|| format!("Invalid total_tokens value: {}", value))?;
+                if tokens < 1024 {
+                    return Err(anyhow!("total_tokens must be at least 1024"));
+                }
+                self.context.total_tokens = tokens;
+            }
+            "context.output_reserve" => {
+                let reserve: f32 = value
+                    .parse()
+                    .with_context(|| format!("Invalid output_reserve value: {}", value))?;
+                if !(0.0..=0.9).contains(&reserve) {
+                    return Err(anyhow!("output_reserve must be between 0.0 and 0.9"));
+                }
+                self.context.output_reserve = reserve;
+            }
+            "context.enable_compression" => {
+                let enabled: bool = value
+                    .parse()
+                    .with_context(|| format!("Invalid enable_compression value: {}", value))?;
+                self.context.enable_compression = enabled;
+            }
+
             // API key cannot be set via config
             "llm.api_key" | "api_key" => {
                 return Err(anyhow!(
@@ -287,6 +348,9 @@ impl Config {
             "cost.daily_limit_usd",
             "cost.alert_threshold",
             "routing.preference",
+            "context.total_tokens",
+            "context.output_reserve",
+            "context.enable_compression",
         ];
 
         keys.into_iter()
