@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 7;
+pub const CURRENT_VERSION: i32 = 8;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -400,6 +400,59 @@ const MIGRATION_V7: &str = r#"
     -- This avoids potential trigger conflicts with FTS5 external content tables
 "#;
 
+/// Migration 8: Global session management
+///
+/// Provides global session tracking across multiple projects for workspace
+/// continuity, session recovery, and cross-project context switching.
+const MIGRATION_V8: &str = r#"
+    -- Sessions table for global session management
+    CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_activity TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+        -- Context
+        current_project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+        current_feature_id TEXT REFERENCES features(id) ON DELETE SET NULL,
+
+        -- State
+        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'abandoned')),
+        phase TEXT NOT NULL DEFAULT 'unknown' CHECK (phase IN ('discovery', 'planning', 'building', 'testing', 'review', 'unknown')),
+        description TEXT,
+
+        -- Recovery
+        last_checkpoint_id TEXT REFERENCES checkpoints(id) ON DELETE SET NULL,
+
+        -- Metadata (JSON for extensibility)
+        metadata TEXT
+    );
+
+    -- Indexes for efficient querying
+    CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+    CREATE INDEX IF NOT EXISTS idx_sessions_current_project_id ON sessions(current_project_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_activity);
+
+    -- Session events for audit trail
+    CREATE TABLE IF NOT EXISTS session_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL CHECK (event_type IN (
+            'started', 'paused', 'resumed', 'completed', 'abandoned',
+            'project_switched', 'feature_switched', 'phase_changed',
+            'checkpoint_created', 'error', 'custom'
+        )),
+        data TEXT,  -- JSON event data
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Indexes for event querying
+    CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events(session_id);
+    CREATE INDEX IF NOT EXISTS idx_session_events_event_type ON session_events(event_type);
+    CREATE INDEX IF NOT EXISTS idx_session_events_created_at ON session_events(created_at);
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -478,6 +531,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v7: Semantic search embeddings");
         sqlx::raw_sql(MIGRATION_V7).execute(pool).await?;
         record_migration(pool, 7).await?;
+    }
+
+    if current_version < 8 {
+        tracing::info!("Applying migration v8: Global session management");
+        sqlx::raw_sql(MIGRATION_V8).execute(pool).await?;
+        record_migration(pool, 8).await?;
     }
 
     tracing::info!("Database migrations completed");
@@ -578,6 +637,8 @@ mod tests {
             "generated_files",
             "learned_skills",
             "skill_embeddings",
+            "sessions",
+            "session_events",
         ];
 
         for table in tables {

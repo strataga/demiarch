@@ -4,10 +4,12 @@ use clap::{Parser, Subcommand};
 use demiarch_core::commands::{checkpoint, document, feature, generate, project};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
+use demiarch_core::domain::session::{SessionManager, SessionStatus};
 use demiarch_core::storage::{Database, DatabaseManager};
 use demiarch_core::visualization::{HierarchyTree, NodeStyle, RenderOptions, TreeBuilder};
 use std::sync::Arc;
 use tracing::{info, warn};
+use uuid::Uuid;
 
 #[derive(Parser)]
 #[command(name = "demiarch")]
@@ -135,6 +137,12 @@ enum Commands {
     Agents {
         #[command(subcommand)]
         action: AgentAction,
+    },
+
+    /// Manage global sessions
+    Sessions {
+        #[command(subcommand)]
+        action: SessionAction,
     },
 }
 
@@ -423,6 +431,71 @@ enum AgentAction {
     Types,
 }
 
+#[derive(Subcommand)]
+enum SessionAction {
+    /// List all sessions
+    List {
+        /// Filter by status (active, paused, completed, abandoned)
+        #[arg(short, long)]
+        status: Option<String>,
+        /// Maximum number of sessions to show
+        #[arg(short, long)]
+        limit: Option<i32>,
+    },
+    /// Show session details
+    Show { id: String },
+    /// Start a new session
+    Start {
+        /// Project ID to associate with the session
+        #[arg(short, long)]
+        project: Option<String>,
+        /// Description of what you're working on
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// Pause the current session
+    Pause {
+        /// Session ID (defaults to active session)
+        #[arg(short, long)]
+        id: Option<String>,
+    },
+    /// Resume a paused session
+    Resume {
+        /// Session ID to resume
+        id: String,
+    },
+    /// Complete a session
+    Complete {
+        /// Session ID (defaults to active session)
+        #[arg(short, long)]
+        id: Option<String>,
+    },
+    /// Abandon a session
+    Abandon {
+        /// Session ID (defaults to active session)
+        #[arg(short, long)]
+        id: Option<String>,
+    },
+    /// Show current active session
+    Current,
+    /// Show session statistics
+    Stats,
+    /// Show session events/history
+    Events {
+        /// Session ID
+        id: String,
+        /// Maximum number of events to show
+        #[arg(short, long)]
+        limit: Option<i32>,
+    },
+    /// Clean up old sessions
+    Cleanup {
+        /// Delete sessions older than this many days
+        #[arg(long, default_value = "30")]
+        days: i64,
+    },
+}
+
 fn validate_license_key_on_startup() -> anyhow::Result<()> {
     use std::env;
 
@@ -557,6 +630,11 @@ async fn main() -> anyhow::Result<()> {
         Commands::Watch => cmd_watch(cli.quiet),
 
         Commands::Agents { action } => cmd_agents(action, cli.quiet),
+
+        Commands::Sessions { action } => {
+            let db = get_db().await?;
+            cmd_sessions(&db, action, cli.quiet).await
+        }
     }
 }
 
@@ -1798,5 +1876,297 @@ fn format_agent_type(agent_type: demiarch_core::agents::AgentType) -> String {
         AgentType::Coder => "💻 Coder".to_string(),
         AgentType::Reviewer => "🔍 Reviewer".to_string(),
         AgentType::Tester => "🧪 Tester".to_string(),
+    }
+}
+
+// ============================================================================
+// Session Commands
+// ============================================================================
+
+async fn cmd_sessions(db: &Database, action: SessionAction, quiet: bool) -> anyhow::Result<()> {
+    let manager = SessionManager::new(db.pool().clone());
+
+    match action {
+        SessionAction::List { status, limit } => {
+            let sessions = if let Some(status_str) = status {
+                let status = SessionStatus::from_str(&status_str)
+                    .ok_or_else(|| anyhow::anyhow!("Invalid status: {}. Use: active, paused, completed, abandoned", status_str))?;
+                manager.list_by_status(status).await?
+            } else {
+                manager.list(limit).await?
+            };
+
+            if sessions.is_empty() {
+                if !quiet {
+                    println!("No sessions found.");
+                    println!("\nStart a new session with: demiarch sessions start");
+                }
+            } else {
+                if !quiet {
+                    println!("Sessions:");
+                    println!();
+                }
+                for s in sessions {
+                    let status_icon = match s.status {
+                        SessionStatus::Active => "🟢",
+                        SessionStatus::Paused => "⏸️ ",
+                        SessionStatus::Completed => "✅",
+                        SessionStatus::Abandoned => "❌",
+                    };
+                    let desc = s.description.as_deref().unwrap_or("(no description)");
+                    let age = format_duration(chrono::Utc::now() - s.created_at);
+                    println!(
+                        "  {} {} - {} ({} ago)",
+                        status_icon,
+                        &s.id.to_string()[..8],
+                        desc,
+                        age
+                    );
+                }
+            }
+        }
+
+        SessionAction::Show { id } => {
+            let session_id = parse_session_id(&manager, &id).await?;
+            let session = manager
+                .get(session_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", id))?;
+
+            println!("Session: {}", session.id);
+            println!("  Status: {}", session.status);
+            println!("  Phase: {}", session.phase);
+            if let Some(desc) = &session.description {
+                println!("  Description: {}", desc);
+            }
+            if let Some(project_id) = session.current_project_id {
+                println!("  Current Project: {}", project_id);
+            }
+            if let Some(feature_id) = session.current_feature_id {
+                println!("  Current Feature: {}", feature_id);
+            }
+            if let Some(checkpoint_id) = session.last_checkpoint_id {
+                println!("  Last Checkpoint: {}", checkpoint_id);
+            }
+            println!("  Created: {}", session.created_at.format("%Y-%m-%d %H:%M:%S"));
+            println!("  Last Activity: {}", session.last_activity.format("%Y-%m-%d %H:%M:%S"));
+            let duration = format_duration(session.duration());
+            println!("  Duration: {}", duration);
+        }
+
+        SessionAction::Start { project, description } => {
+            let project_id = if let Some(p) = project {
+                Some(Uuid::parse_str(&p).map_err(|_| anyhow::anyhow!("Invalid project ID: {}", p))?)
+            } else {
+                None
+            };
+
+            let session = manager.create(project_id, None, description).await?;
+
+            if !quiet {
+                println!("Session started: {}", session.id);
+                if let Some(desc) = &session.description {
+                    println!("  Description: {}", desc);
+                }
+                println!("\nCommands:");
+                println!("  demiarch sessions pause     - Pause this session");
+                println!("  demiarch sessions complete  - Complete this session");
+                println!("  demiarch sessions current   - Show current session");
+            }
+        }
+
+        SessionAction::Pause { id } => {
+            let session_id = if let Some(id_str) = id {
+                parse_session_id(&manager, &id_str).await?
+            } else {
+                manager
+                    .get_active()
+                    .await?
+                    .map(|s| s.id)
+                    .ok_or_else(|| anyhow::anyhow!("No active session to pause"))?
+            };
+
+            let session = manager.pause(session_id).await?;
+
+            if !quiet {
+                println!("Session paused: {}", session.id);
+                println!("\nResume with: demiarch sessions resume {}", &session.id.to_string()[..8]);
+            }
+        }
+
+        SessionAction::Resume { id } => {
+            let session_id = parse_session_id(&manager, &id).await?;
+            let session = manager.resume(session_id).await?;
+
+            if !quiet {
+                println!("Session resumed: {}", session.id);
+            }
+        }
+
+        SessionAction::Complete { id } => {
+            let session_id = if let Some(id_str) = id {
+                parse_session_id(&manager, &id_str).await?
+            } else {
+                manager
+                    .get_active()
+                    .await?
+                    .map(|s| s.id)
+                    .ok_or_else(|| anyhow::anyhow!("No active session to complete"))?
+            };
+
+            let session = manager.complete(session_id).await?;
+
+            if !quiet {
+                println!("Session completed: {}", session.id);
+                let duration = format_duration(session.duration());
+                println!("  Duration: {}", duration);
+            }
+        }
+
+        SessionAction::Abandon { id } => {
+            let session_id = if let Some(id_str) = id {
+                parse_session_id(&manager, &id_str).await?
+            } else {
+                manager
+                    .get_active()
+                    .await?
+                    .map(|s| s.id)
+                    .ok_or_else(|| anyhow::anyhow!("No active session to abandon"))?
+            };
+
+            let session = manager.abandon(session_id).await?;
+
+            if !quiet {
+                println!("Session abandoned: {}", session.id);
+            }
+        }
+
+        SessionAction::Current => {
+            match manager.get_active().await? {
+                Some(session) => {
+                    println!("Current session: {}", session.id);
+                    println!("  Status: {}", session.status);
+                    println!("  Phase: {}", session.phase);
+                    if let Some(desc) = &session.description {
+                        println!("  Description: {}", desc);
+                    }
+                    if let Some(project_id) = session.current_project_id {
+                        println!("  Project: {}", project_id);
+                    }
+                    let duration = format_duration(session.duration());
+                    println!("  Duration: {}", duration);
+                }
+                None => {
+                    if !quiet {
+                        println!("No active session.");
+                        println!("\nStart one with: demiarch sessions start");
+                    }
+                }
+            }
+        }
+
+        SessionAction::Stats => {
+            let stats = manager.stats().await?;
+
+            println!("Session Statistics:");
+            println!("  Active:    {}", stats.active);
+            println!("  Paused:    {}", stats.paused);
+            println!("  Completed: {}", stats.completed);
+            println!("  Abandoned: {}", stats.abandoned);
+            println!("  ─────────────");
+            println!("  Total:     {}", stats.total);
+        }
+
+        SessionAction::Events { id, limit } => {
+            let session_id = parse_session_id(&manager, &id).await?;
+            let events = manager.get_events(session_id, limit).await?;
+
+            if events.is_empty() {
+                if !quiet {
+                    println!("No events found for session.");
+                }
+            } else {
+                println!("Session Events (newest first):");
+                println!();
+                for event in events {
+                    let time = event.created_at.format("%Y-%m-%d %H:%M:%S");
+                    println!("  [{}] {}", time, event.event_type);
+                    if let Some(data) = &event.data {
+                        // Pretty print the data if it's not too large
+                        let data_str = serde_json::to_string_pretty(data).unwrap_or_default();
+                        if data_str.len() < 200 {
+                            for line in data_str.lines() {
+                                println!("    {}", line);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        SessionAction::Cleanup { days } => {
+            let deleted = manager.cleanup_old_sessions(days).await?;
+
+            if !quiet {
+                if deleted > 0 {
+                    println!("Cleaned up {} old sessions (older than {} days).", deleted, days);
+                } else {
+                    println!("No old sessions to clean up.");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Parse a session ID, supporting both full UUIDs and short prefixes
+async fn parse_session_id(manager: &SessionManager, id: &str) -> anyhow::Result<Uuid> {
+    // Try to parse as full UUID first
+    if let Ok(uuid) = Uuid::parse_str(id) {
+        return Ok(uuid);
+    }
+
+    // Try to find by prefix
+    let sessions = manager.list(Some(100)).await?;
+    let matches: Vec<_> = sessions
+        .iter()
+        .filter(|s| s.id.to_string().starts_with(id))
+        .collect();
+
+    match matches.len() {
+        0 => Err(anyhow::anyhow!("No session found matching '{}'", id)),
+        1 => Ok(matches[0].id),
+        _ => Err(anyhow::anyhow!(
+            "Ambiguous session ID '{}' matches {} sessions. Use a longer prefix.",
+            id,
+            matches.len()
+        )),
+    }
+}
+
+/// Format a duration in human-readable form
+fn format_duration(duration: chrono::Duration) -> String {
+    let total_secs = duration.num_seconds();
+    if total_secs < 60 {
+        format!("{}s", total_secs)
+    } else if total_secs < 3600 {
+        format!("{}m", total_secs / 60)
+    } else if total_secs < 86400 {
+        let hours = total_secs / 3600;
+        let mins = (total_secs % 3600) / 60;
+        if mins > 0 {
+            format!("{}h {}m", hours, mins)
+        } else {
+            format!("{}h", hours)
+        }
+    } else {
+        let days = total_secs / 86400;
+        let hours = (total_secs % 86400) / 3600;
+        if hours > 0 {
+            format!("{}d {}h", days, hours)
+        } else {
+            format!("{}d", days)
+        }
     }
 }
