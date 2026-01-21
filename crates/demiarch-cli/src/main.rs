@@ -756,7 +756,10 @@ async fn main() -> anyhow::Result<()> {
             cmd_projects(&db, action, cli.quiet).await
         }
 
-        Commands::Features { action } => cmd_features(action, cli.quiet).await,
+        Commands::Features { action } => {
+            let db = get_db().await?;
+            cmd_features(&db, action, cli.quiet).await
+        }
 
         Commands::Generate {
             description,
@@ -935,50 +938,89 @@ async fn cmd_projects(db: &Database, action: ProjectAction, quiet: bool) -> anyh
     Ok(())
 }
 
-async fn cmd_features(action: FeatureAction, quiet: bool) -> anyhow::Result<()> {
-    // TODO: Get current project ID from context
-    let project_id = "current";
+async fn cmd_features(db: &Database, action: FeatureAction, quiet: bool) -> anyhow::Result<()> {
+    // Get the most recent project as the active project
+    let project_repo = project::ProjectRepository::new(db);
+    let projects = project_repo.list(None).await?;
+    let active_project = projects.first().ok_or_else(|| {
+        anyhow::anyhow!("No projects found. Create one with: demiarch new <name> --framework <framework>")
+    })?;
+    let project_id = &active_project.id;
 
     match action {
         FeatureAction::List { status } => {
-            let features = feature::list(project_id, status.as_deref()).await?;
+            let status_enum = status.as_deref().and_then(feature::FeatureStatus::parse);
+            let features = feature::list_with_db(db, project_id, status_enum).await?;
             if features.is_empty() {
                 if !quiet {
-                    println!("No features found.");
+                    println!("No features found for project '{}'.", active_project.name);
                     println!("\nCreate one with: demiarch features create <title>");
                 }
             } else {
                 if !quiet {
-                    println!("Features:");
+                    println!("Features for '{}' ({}):", active_project.name, project_id);
                 }
                 for f in features {
-                    println!("  - {}", f);
+                    let status_icon = match f.status {
+                        feature::FeatureStatus::Backlog => "○",
+                        feature::FeatureStatus::Todo => "◐",
+                        feature::FeatureStatus::InProgress => "◑",
+                        feature::FeatureStatus::Review => "◕",
+                        feature::FeatureStatus::Done => "●",
+                    };
+                    println!(
+                        "  {} [{}] {} (P{})",
+                        status_icon,
+                        &f.id[..8],
+                        f.title,
+                        f.priority
+                    );
                 }
             }
         }
         FeatureAction::Show { id } => {
-            // TODO: Implement feature::get
-            println!("Feature: {}", id);
-            println!("(Feature details not yet implemented)");
+            let repo = feature::FeatureRepository::new(db);
+            if let Some(f) = repo.get(&id).await? {
+                println!("Feature: {}", f.title);
+                println!("  ID: {}", f.id);
+                println!("  Project: {}", f.project_id);
+                println!("  Status: {}", f.status.as_str());
+                println!("  Priority: {}", f.priority);
+                if let Some(desc) = &f.description {
+                    println!("  Description: {}", desc);
+                }
+                if let Some(criteria) = &f.acceptance_criteria {
+                    println!("  Acceptance Criteria: {}", criteria);
+                }
+                if let Some(labels) = &f.labels {
+                    println!("  Labels: {}", labels.join(", "));
+                }
+                println!("  Created: {}", f.created_at);
+                println!("  Updated: {}", f.updated_at);
+            } else {
+                println!("Feature not found: {}", id);
+            }
         }
         FeatureAction::Create { title, phase } => {
-            let feature_id = feature::create(project_id, &title, phase.as_deref()).await?;
+            let f = feature::create_with_db(db, project_id, &title, None, phase.as_deref()).await?;
             if !quiet {
-                println!("Feature created: {}", feature_id);
+                println!("Feature created: {} ({})", f.title, &f.id[..8]);
+                println!("  Project: {} ({})", active_project.name, &active_project.id[..8]);
                 println!(
-                    "\nNext: Run `demiarch generate {}` to generate code.",
-                    feature_id
+                    "\nNext: Run `demiarch generate \"{}\"` to generate code.",
+                    f.title
                 );
             }
         }
         FeatureAction::Update { id, status } => {
-            feature::update(&id, status.as_deref(), None).await?;
+            let status_enum = status.as_deref().and_then(feature::FeatureStatus::parse);
+            feature::update_with_db(db, &id, status_enum, None).await?;
             if !quiet {
                 println!("Feature '{}' updated.", id);
             }
         }
         FeatureAction::Delete { id } => {
-            feature::delete(&id).await?;
+            feature::delete_with_db(db, &id).await?;
             if !quiet {
                 println!("Feature '{}' deleted.", id);
             }
