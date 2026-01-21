@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 8;
+pub const CURRENT_VERSION: i32 = 9;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -453,6 +453,131 @@ const MIGRATION_V8: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_session_events_created_at ON session_events(created_at);
 "#;
 
+/// Migration 9: Cross-project search with privacy controls
+///
+/// Enables searching across multiple projects with opt-in privacy settings.
+/// Each project can control whether it's searchable from other projects.
+const MIGRATION_V9: &str = r#"
+    -- Project search settings for cross-project search privacy
+    CREATE TABLE IF NOT EXISTS project_search_settings (
+        project_id TEXT PRIMARY KEY NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+
+        -- Privacy controls
+        allow_cross_project_search INTEGER NOT NULL DEFAULT 1,  -- Opt-in by default
+        searchable_by_all INTEGER NOT NULL DEFAULT 1,           -- Can be searched by any project
+
+        -- Granular controls (JSON array of project IDs)
+        allowed_searchers TEXT,     -- If not null, only these projects can search this one
+        excluded_searchers TEXT,    -- These projects are explicitly blocked
+
+        -- Search scope controls
+        include_features INTEGER NOT NULL DEFAULT 1,
+        include_conversations INTEGER NOT NULL DEFAULT 0,  -- Off by default for privacy
+        include_documents INTEGER NOT NULL DEFAULT 1,
+        include_checkpoints INTEGER NOT NULL DEFAULT 0,    -- Off by default
+        include_skills INTEGER NOT NULL DEFAULT 1,
+
+        -- Metadata
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Index for quick lookups
+    CREATE INDEX IF NOT EXISTS idx_project_search_settings_cross_project
+        ON project_search_settings(allow_cross_project_search);
+
+    -- Cross-project search history for audit trail
+    CREATE TABLE IF NOT EXISTS cross_project_search_log (
+        id TEXT PRIMARY KEY NOT NULL,
+        searcher_project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        query TEXT NOT NULL,
+        searched_project_ids TEXT NOT NULL,  -- JSON array of project IDs searched
+        result_count INTEGER NOT NULL DEFAULT 0,
+        search_scope TEXT NOT NULL,          -- JSON array of entity types searched
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cross_project_search_log_searcher
+        ON cross_project_search_log(searcher_project_id);
+    CREATE INDEX IF NOT EXISTS idx_cross_project_search_log_created_at
+        ON cross_project_search_log(created_at);
+
+    -- Full-text search index for features (extends existing FTS pattern)
+    CREATE VIRTUAL TABLE IF NOT EXISTS features_fts USING fts5(
+        title, description, acceptance_criteria,
+        content='features',
+        content_rowid='rowid'
+    );
+
+    -- Triggers to keep features FTS index in sync
+    CREATE TRIGGER IF NOT EXISTS features_ai AFTER INSERT ON features BEGIN
+        INSERT INTO features_fts(rowid, title, description, acceptance_criteria)
+        VALUES (NEW.rowid, NEW.title, NEW.description, NEW.acceptance_criteria);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS features_ad AFTER DELETE ON features BEGIN
+        INSERT INTO features_fts(features_fts, rowid, title, description, acceptance_criteria)
+        VALUES ('delete', OLD.rowid, OLD.title, OLD.description, OLD.acceptance_criteria);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS features_au AFTER UPDATE ON features BEGIN
+        INSERT INTO features_fts(features_fts, rowid, title, description, acceptance_criteria)
+        VALUES ('delete', OLD.rowid, OLD.title, OLD.description, OLD.acceptance_criteria);
+        INSERT INTO features_fts(rowid, title, description, acceptance_criteria)
+        VALUES (NEW.rowid, NEW.title, NEW.description, NEW.acceptance_criteria);
+    END;
+
+    -- Full-text search index for documents
+    CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+        title, description, content,
+        content='documents',
+        content_rowid='rowid'
+    );
+
+    -- Triggers to keep documents FTS index in sync
+    CREATE TRIGGER IF NOT EXISTS documents_ai AFTER INSERT ON documents BEGIN
+        INSERT INTO documents_fts(rowid, title, description, content)
+        VALUES (NEW.rowid, NEW.title, NEW.description, NEW.content);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS documents_ad AFTER DELETE ON documents BEGIN
+        INSERT INTO documents_fts(documents_fts, rowid, title, description, content)
+        VALUES ('delete', OLD.rowid, OLD.title, OLD.description, OLD.content);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS documents_au AFTER UPDATE ON documents BEGIN
+        INSERT INTO documents_fts(documents_fts, rowid, title, description, content)
+        VALUES ('delete', OLD.rowid, OLD.title, OLD.description, OLD.content);
+        INSERT INTO documents_fts(rowid, title, description, content)
+        VALUES (NEW.rowid, NEW.title, NEW.description, NEW.content);
+    END;
+
+    -- Full-text search index for messages (conversations)
+    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+        content,
+        content='messages',
+        content_rowid='rowid'
+    );
+
+    -- Triggers to keep messages FTS index in sync
+    CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+        INSERT INTO messages_fts(rowid, content)
+        VALUES (NEW.rowid, NEW.content);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+        INSERT INTO messages_fts(messages_fts, rowid, content)
+        VALUES ('delete', OLD.rowid, OLD.content);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+        INSERT INTO messages_fts(messages_fts, rowid, content)
+        VALUES ('delete', OLD.rowid, OLD.content);
+        INSERT INTO messages_fts(rowid, content)
+        VALUES (NEW.rowid, NEW.content);
+    END;
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -537,6 +662,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v8: Global session management");
         sqlx::raw_sql(MIGRATION_V8).execute(pool).await?;
         record_migration(pool, 8).await?;
+    }
+
+    if current_version < 9 {
+        tracing::info!("Applying migration v9: Cross-project search with privacy controls");
+        sqlx::raw_sql(MIGRATION_V9).execute(pool).await?;
+        record_migration(pool, 9).await?;
     }
 
     tracing::info!("Database migrations completed");
@@ -639,6 +770,8 @@ mod tests {
             "skill_embeddings",
             "sessions",
             "session_events",
+            "project_search_settings",
+            "cross_project_search_log",
         ];
 
         for table in tables {
