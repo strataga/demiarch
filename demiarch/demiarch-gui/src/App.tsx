@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { KanbanBoard } from "./components/KanbanBoard";
 import "./App.css";
 
 interface AppInfo {
@@ -89,30 +90,8 @@ function App() {
         {greeting && <p className="greeting-result">{greeting}</p>}
       </section>
 
-      <section className="features-section">
-        <h2>Features</h2>
-        <div className="features-grid">
-          <div className="feature-card">
-            <div className="feature-icon">🏠</div>
-            <h3>Local-First</h3>
-            <p>All data stored locally in SQLite</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">🤖</div>
-            <h3>AI-Powered</h3>
-            <p>Generate code through conversation</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">🔒</div>
-            <h3>Secure</h3>
-            <p>Encrypted API keys, no telemetry</p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">📦</div>
-            <h3>You Own It</h3>
-            <p>Generated code is yours to keep</p>
-          </div>
-        </div>
+      <section className="kanban-section">
+        <KanbanBoard />
       </section>
 
       <footer className="footer">

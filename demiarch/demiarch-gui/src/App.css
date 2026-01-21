@@ -228,6 +228,11 @@ body {
   line-height: 1.5;
 }
 
+/* Kanban Section */
+.kanban-section {
+  margin-bottom: 2rem;
+}
+
 /* Footer */
 .footer {
   text-align: center;
