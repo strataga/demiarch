@@ -2,9 +2,13 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { ProjectProvider, useProjects } from "./contexts/ProjectContext";
+import { AgentProvider } from "./contexts/AgentContext";
 import { ProjectSelector } from "./components/ProjectSelector";
+import { AgentStatusPanel } from "./components/AgentStatus";
 import { SAMPLE_PROJECTS } from "./data/sampleProjects";
+import { SAMPLE_AGENTS } from "./data/sampleAgents";
 import "./App.css";
+import "./components/AgentStatus/AgentStatus.css";
 
 interface AppInfo {
   name: string;
@@ -99,6 +103,10 @@ function AppContent() {
         {greeting && <p className="greeting-result">{greeting}</p>}
       </section>
 
+      <section className="agent-section">
+        <AgentStatusPanel showActivityLog={true} />
+      </section>
+
       <section className="kanban-section">
         {currentProject ? (
           <KanbanBoard
@@ -133,7 +141,9 @@ function AppContent() {
 function App() {
   return (
     <ProjectProvider initialProjects={SAMPLE_PROJECTS}>
-      <AppContent />
+      <AgentProvider initialAgents={SAMPLE_AGENTS}>
+        <AppContent />
+      </AgentProvider>
     </ProjectProvider>
   );
 }

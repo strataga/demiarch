@@ -193,6 +193,11 @@ body {
   border-left: 3px solid var(--accent);
 }
 
+/* Agent Section */
+.agent-section {
+  margin-bottom: 2rem;
+}
+
 /* Features Section */
 .features-section {
   margin-bottom: 2rem;
