@@ -3,6 +3,8 @@
 use clap::{Parser, Subcommand};
 use demiarch_core::commands::{feature, project};
 use demiarch_core::config::Config;
+use demiarch_core::cost::CostTracker;
+use demiarch_core::storage::{Database, DatabaseManager};
 use tracing::{info, warn};
 
 #[derive(Parser)]
@@ -355,16 +357,30 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
+    // Initialize database manager for commands that need it
+    // We lazily initialize it only when needed to avoid startup overhead
+    let get_db = || async {
+        DatabaseManager::new()
+            .await
+            .map(|mgr| mgr.global().clone())
+    };
+
     match cli.command {
         Commands::New {
             name,
             framework,
             repo,
-        } => cmd_new(&name, &framework, repo.as_deref(), cli.quiet).await,
+        } => {
+            let db = get_db().await?;
+            cmd_new(&db, &name, &framework, repo.as_deref(), cli.quiet).await
+        }
 
         Commands::Chat => cmd_chat(cli.quiet).await,
 
-        Commands::Projects { action } => cmd_projects(action, cli.quiet).await,
+        Commands::Projects { action } => {
+            let db = get_db().await?;
+            cmd_projects(&db, action, cli.quiet).await
+        }
 
         Commands::Features { action } => cmd_features(action, cli.quiet).await,
 
@@ -398,6 +414,7 @@ async fn main() -> anyhow::Result<()> {
 // ============================================================================
 
 async fn cmd_new(
+    db: &Database,
     name: &str,
     framework: &str,
     repo: Option<&str>,
@@ -408,13 +425,13 @@ async fn cmd_new(
     }
 
     let repo_url = repo.unwrap_or("");
-    let project_id = project::create(name, framework, repo_url).await?;
+    let created_project = project::create_with_db(db, name, framework, repo_url).await?;
 
     if !quiet {
         println!("Project created successfully!");
-        println!("  ID: {}", project_id);
-        println!("  Name: {}", name);
-        println!("  Framework: {}", framework);
+        println!("  ID: {}", created_project.id);
+        println!("  Name: {}", created_project.name);
+        println!("  Framework: {}", created_project.framework);
         if !repo_url.is_empty() {
             println!("  Repository: {}", repo_url);
         }
@@ -436,10 +453,10 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn cmd_projects(action: ProjectAction, quiet: bool) -> anyhow::Result<()> {
+async fn cmd_projects(db: &Database, action: ProjectAction, quiet: bool) -> anyhow::Result<()> {
     match action {
         ProjectAction::List => {
-            let projects = project::list().await?;
+            let projects = project::list_with_db(db, Some(project::ProjectStatus::Active)).await?;
             if projects.is_empty() {
                 if !quiet {
                     println!("No projects found.");
@@ -449,22 +466,57 @@ async fn cmd_projects(action: ProjectAction, quiet: bool) -> anyhow::Result<()> 
                 if !quiet {
                     println!("Projects:");
                 }
-                for project in projects {
-                    println!("  - {}", project);
+                for p in projects {
+                    let status_indicator = match p.status {
+                        project::ProjectStatus::Active => "",
+                        project::ProjectStatus::Archived => " [archived]",
+                        project::ProjectStatus::Deleted => " [deleted]",
+                    };
+                    println!(
+                        "  {} - {} ({}){}",
+                        p.id[..8].to_string(),
+                        p.name,
+                        p.framework,
+                        status_indicator
+                    );
                 }
             }
         }
-        ProjectAction::Show { id } => match project::get(&id).await? {
-            Some(details) => println!("{}", details),
-            None => {
-                return Err(anyhow::anyhow!(
-                    "Project '{}' not found. Run `demiarch projects list` to see all projects.",
-                    id
-                ));
+        ProjectAction::Show { id } => {
+            // Try to find by ID or name
+            let found_project = if let Some(p) = project::get_with_db(db, &id).await? {
+                Some(p)
+            } else {
+                // Try to find by name
+                let repo = project::ProjectRepository::new(db);
+                repo.get_by_name(&id).await?
+            };
+
+            match found_project {
+                Some(p) => {
+                    println!("Project: {}", p.name);
+                    println!("  ID: {}", p.id);
+                    println!("  Framework: {}", p.framework);
+                    println!("  Status: {}", p.status.as_str());
+                    if !p.repo_url.is_empty() {
+                        println!("  Repository: {}", p.repo_url);
+                    }
+                    if let Some(desc) = &p.description {
+                        println!("  Description: {}", desc);
+                    }
+                    println!("  Created: {}", p.created_at.format("%Y-%m-%d %H:%M:%S"));
+                    println!("  Updated: {}", p.updated_at.format("%Y-%m-%d %H:%M:%S"));
+                }
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "Project '{}' not found. Run `demiarch projects list` to see all projects.",
+                        id
+                    ));
+                }
             }
-        },
+        }
         ProjectAction::Archive { id } => {
-            project::archive(&id).await?;
+            project::archive_with_db(db, &id).await?;
             if !quiet {
                 println!("Project '{}' archived.", id);
             }
@@ -475,9 +527,13 @@ async fn cmd_projects(action: ProjectAction, quiet: bool) -> anyhow::Result<()> 
                 println!("Use --force to confirm deletion.");
                 return Ok(());
             }
-            project::delete(&id, force).await?;
+            project::delete_with_db(db, &id, force).await?;
             if !quiet {
-                println!("Project '{}' deleted.", id);
+                if force {
+                    println!("Project '{}' permanently deleted.", id);
+                } else {
+                    println!("Project '{}' marked as deleted.", id);
+                }
             }
         }
     }
@@ -741,6 +797,7 @@ async fn cmd_hooks(action: HookAction, quiet: bool) -> anyhow::Result<()> {
 
 async fn cmd_costs(project: Option<&str>, quiet: bool) -> anyhow::Result<()> {
     let config = Config::load()?;
+    let tracker = CostTracker::from_config(&config.cost);
 
     if !quiet {
         println!("Cost Summary:");
@@ -748,15 +805,48 @@ async fn cmd_costs(project: Option<&str>, quiet: bool) -> anyhow::Result<()> {
             println!("  Project: {}", p);
         }
         println!();
-        println!("  Today: $0.00");
-        println!("  This week: $0.00");
-        println!("  This month: $0.00");
+
+        // Get today's summary from the tracker
+        let today_total = tracker.today_total();
+        let remaining = tracker.remaining_budget();
+
+        println!("  Today: ${:.4}", today_total);
+
+        // Show summary if we have one
+        if let Some(summary) = tracker.today_summary() {
+            println!("    Calls: {}", summary.call_count);
+            println!(
+                "    Tokens: {} input, {} output",
+                summary.total_input_tokens, summary.total_output_tokens
+            );
+            if !summary.by_model.is_empty() {
+                println!("    By model:");
+                for (model, model_summary) in &summary.by_model {
+                    println!(
+                        "      {}: ${:.4} ({} calls)",
+                        model, model_summary.total_cost_usd, model_summary.call_count
+                    );
+                }
+            }
+        }
+
         println!();
-        println!("  Daily limit: ${:.2}", config.cost.daily_limit_usd);
+        println!("  Daily limit: ${:.2}", tracker.daily_limit());
+        println!("  Remaining: ${:.2}", remaining);
         println!(
             "  Alert threshold: {:.0}%",
             config.cost.alert_threshold * 100.0
         );
+
+        // Show warnings if approaching or over limit
+        if tracker.is_over_limit() {
+            println!();
+            println!("  [WARNING] Daily limit exceeded!");
+        } else if tracker.is_approaching_limit() {
+            println!();
+            println!("  [WARNING] Approaching daily limit ({}% used)",
+                ((today_total / tracker.daily_limit()) * 100.0) as u32);
+        }
     }
     Ok(())
 }
@@ -917,10 +1007,46 @@ async fn cmd_doctor(quiet: bool) -> anyhow::Result<()> {
         }
     }
 
-    // Check database (placeholder)
+    // Check database
     if !quiet {
-        println!("[--] Database: Not initialized");
-        println!("     Database will be created when you create your first project");
+        match DatabaseManager::new().await {
+            Ok(manager) => {
+                let db = manager.global();
+                match db.health_check().await {
+                    Ok(()) => {
+                        println!("[OK] Database: Connected");
+                        println!("     Path: {}", db.path().display());
+
+                        // Check migration status
+                        match db.migration_status().await {
+                            Ok(status) => {
+                                if status.needs_migration {
+                                    println!("[!!] Database: Migrations pending (v{} -> v{})",
+                                        status.current_version, status.target_version);
+                                } else {
+                                    println!("[OK] Database: Schema v{}", status.current_version);
+                                }
+                            }
+                            Err(e) => {
+                                println!("[!!] Database: Migration check failed - {}", e);
+                            }
+                        }
+
+                        // Show project count
+                        let projects = project::list_with_db(db, None).await.unwrap_or_default();
+                        println!("     Projects: {}", projects.len());
+                    }
+                    Err(e) => {
+                        all_ok = false;
+                        println!("[!!] Database: Health check failed - {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                all_ok = false;
+                println!("[!!] Database: Failed to initialize - {}", e);
+            }
+        }
     }
 
     // Summary
