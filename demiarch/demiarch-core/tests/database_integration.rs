@@ -267,14 +267,15 @@ async fn test_indexes_created() {
     let pool = manager.pool().unwrap();
 
     // Query for all indexes
-    let indexes: Vec<String> =
-        sqlx::query("SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'")
-            .fetch_all(pool)
-            .await
-            .unwrap()
-            .iter()
-            .map(|row| row.get::<String, _>("name"))
-            .collect();
+    let indexes: Vec<String> = sqlx::query(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .iter()
+    .map(|row| row.get::<String, _>("name"))
+    .collect();
 
     // Verify key indexes exist
     let expected_indexes = vec![

@@ -202,9 +202,11 @@ impl EncryptedKey {
         let cipher = Aes256Gcm::new_from_slice(master_key.as_bytes())
             .map_err(|e| KeyError::DecryptionFailed(e.to_string()))?;
 
-        let plaintext = cipher
-            .decrypt(nonce, ciphertext.as_ref())
-            .map_err(|_| KeyError::DecryptionFailed("Decryption failed (invalid key or corrupted data)".to_string()))?;
+        let plaintext = cipher.decrypt(nonce, ciphertext.as_ref()).map_err(|_| {
+            KeyError::DecryptionFailed(
+                "Decryption failed (invalid key or corrupted data)".to_string(),
+            )
+        })?;
 
         let decrypted = String::from_utf8(plaintext)
             .map_err(|e| KeyError::DecryptionFailed(format!("Invalid UTF-8: {}", e)))?;
@@ -213,11 +215,7 @@ impl EncryptedKey {
     }
 
     /// Update the encrypted value
-    pub fn update(
-        &mut self,
-        plaintext: &str,
-        master_key: &MasterKey,
-    ) -> Result<(), KeyError> {
+    pub fn update(&mut self, plaintext: &str, master_key: &MasterKey) -> Result<(), KeyError> {
         use base64::{engine::general_purpose::STANDARD, Engine};
 
         // Generate new nonce for each encryption
@@ -380,13 +378,8 @@ mod tests {
         let master_key2 = MasterKey::generate();
         let plaintext = "sk-test-api-key-12345";
 
-        let encrypted = EncryptedKey::encrypt(
-            "test-key".to_string(),
-            plaintext,
-            &master_key1,
-            None,
-        )
-        .unwrap();
+        let encrypted =
+            EncryptedKey::encrypt("test-key".to_string(), plaintext, &master_key1, None).unwrap();
 
         let result = encrypted.decrypt(&master_key2);
         assert!(matches!(result, Err(KeyError::DecryptionFailed(_))));
@@ -398,13 +391,8 @@ mod tests {
         let original = "sk-original-key";
         let updated = "sk-updated-key";
 
-        let mut encrypted = EncryptedKey::encrypt(
-            "test-key".to_string(),
-            original,
-            &master_key,
-            None,
-        )
-        .unwrap();
+        let mut encrypted =
+            EncryptedKey::encrypt("test-key".to_string(), original, &master_key, None).unwrap();
 
         let original_nonce = encrypted.nonce.clone();
 
@@ -423,13 +411,8 @@ mod tests {
         let master_key = MasterKey::generate();
         let plaintext = "sk-test-12345";
 
-        let encrypted = EncryptedKey::encrypt(
-            "test-key".to_string(),
-            plaintext,
-            &master_key,
-            None,
-        )
-        .unwrap();
+        let encrypted =
+            EncryptedKey::encrypt("test-key".to_string(), plaintext, &master_key, None).unwrap();
 
         let preview = encrypted.redacted_preview(&master_key);
         assert_eq!(preview, "***2345");

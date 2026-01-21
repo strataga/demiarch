@@ -287,9 +287,7 @@ mod tests {
 
         // Update
         let mut updated = retrieved.clone();
-        updated
-            .update("new-secret-value", &master_key)
-            .unwrap();
+        updated.update("new-secret-value", &master_key).unwrap();
         repo.update(&updated).await.unwrap();
 
         let retrieved = repo.get_by_id(encrypted.id).await.unwrap().unwrap();

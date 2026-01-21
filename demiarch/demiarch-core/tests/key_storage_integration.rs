@@ -153,18 +153,9 @@ async fn test_master_key_rotation() {
     service.initialize().await.unwrap();
 
     // Store some keys
-    service
-        .store_key("key1", "secret1", None)
-        .await
-        .unwrap();
-    service
-        .store_key("key2", "secret2", None)
-        .await
-        .unwrap();
-    service
-        .store_key("key3", "secret3", None)
-        .await
-        .unwrap();
+    service.store_key("key1", "secret1", None).await.unwrap();
+    service.store_key("key2", "secret2", None).await.unwrap();
+    service.store_key("key3", "secret3", None).await.unwrap();
 
     // Rotate master key
     service.rotate_master_key().await.unwrap();
@@ -197,13 +188,8 @@ async fn test_wrong_master_key_fails_decryption() {
     let master_key1 = MasterKey::generate();
     let master_key2 = MasterKey::generate();
 
-    let encrypted = EncryptedKey::encrypt(
-        "test".to_string(),
-        "secret",
-        &master_key1,
-        None,
-    )
-    .unwrap();
+    let encrypted =
+        EncryptedKey::encrypt("test".to_string(), "secret", &master_key1, None).unwrap();
 
     let result = encrypted.decrypt(&master_key2);
     assert!(matches!(result, Err(KeyError::DecryptionFailed(_))));
@@ -217,10 +203,7 @@ async fn test_mark_key_used() {
 
     service.initialize().await.unwrap();
 
-    service
-        .store_key("test-key", "secret", None)
-        .await
-        .unwrap();
+    service.store_key("test-key", "secret", None).await.unwrap();
 
     // Initially last_used_at should be None
     let keys = service.list_keys().await.unwrap();

@@ -60,14 +60,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![
-            get_app_info,
-            health_check,
-            greet,
-        ])
+        .invoke_handler(tauri::generate_handler![get_app_info, health_check, greet,])
         .setup(|app| {
             let state = app.state::<AppState>();
-            state.initialized.store(true, std::sync::atomic::Ordering::SeqCst);
+            state
+                .initialized
+                .store(true, std::sync::atomic::Ordering::SeqCst);
 
             #[cfg(debug_assertions)]
             {
