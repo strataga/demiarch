@@ -85,13 +85,13 @@ impl MasterKey {
 
     /// Export key as hex string (for storage in keyring)
     pub fn to_hex(&self) -> String {
-        hex::encode(&self.bytes)
+        hex::encode(self.bytes)
     }
 
     /// Export key as base64 string
     pub fn to_base64(&self) -> String {
         use base64::{engine::general_purpose::STANDARD, Engine};
-        STANDARD.encode(&self.bytes)
+        STANDARD.encode(self.bytes)
     }
 
     /// Get the raw key bytes (use carefully)
@@ -164,8 +164,8 @@ impl EncryptedKey {
         Ok(Self {
             id: Uuid::new_v4(),
             name,
-            ciphertext: STANDARD.encode(&ciphertext),
-            nonce: STANDARD.encode(&nonce_bytes),
+            ciphertext: STANDARD.encode(ciphertext),
+            nonce: STANDARD.encode(nonce_bytes),
             description,
             created_at: now,
             updated_at: now,
@@ -230,8 +230,8 @@ impl EncryptedKey {
             .encrypt(nonce, plaintext.as_bytes())
             .map_err(|e| KeyError::EncryptionFailed(e.to_string()))?;
 
-        self.ciphertext = STANDARD.encode(&ciphertext);
-        self.nonce = STANDARD.encode(&nonce_bytes);
+        self.ciphertext = STANDARD.encode(ciphertext);
+        self.nonce = STANDARD.encode(nonce_bytes);
         self.updated_at = Utc::now();
 
         Ok(())

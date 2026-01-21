@@ -229,8 +229,8 @@ impl KeyRepository for InMemoryKeyRepository {
 
     async fn update(&self, key: &EncryptedKey) -> Result<(), KeyError> {
         let mut keys = self.keys.lock().unwrap();
-        if keys.contains_key(&key.id) {
-            keys.insert(key.id, key.clone());
+        if let std::collections::hash_map::Entry::Occupied(mut e) = keys.entry(key.id) {
+            e.insert(key.clone());
             Ok(())
         } else {
             Err(KeyError::NotFound(key.id.to_string()))
