@@ -347,6 +347,14 @@ enum CheckpointAction {
         #[arg(short, long)]
         feature: Option<String>,
     },
+    /// Restore project state to a checkpoint
+    Restore {
+        /// Checkpoint ID to restore
+        id: String,
+        /// Skip confirmation prompt
+        #[arg(long)]
+        force: bool,
+    },
     /// Verify a checkpoint's integrity
     Verify {
         /// Checkpoint ID
@@ -1302,6 +1310,49 @@ async fn cmd_checkpoints(action: CheckpointAction, quiet: bool) -> anyhow::Resul
                 println!("  ID: {}", cp.id);
                 println!("  Description: {}", cp.description);
                 println!("  Size: {}", cp.display_size());
+            }
+        }
+
+        CheckpointAction::Restore { id, force } => {
+            let checkpoint_id = uuid::Uuid::parse_str(&id)
+                .map_err(|_| anyhow::anyhow!("Invalid checkpoint ID: {}", id))?;
+
+            if !force && !quiet {
+                println!(
+                    "Warning: This will restore project state to checkpoint '{}'.",
+                    &id[..8]
+                );
+                println!("Current project state will be backed up automatically.");
+                println!("Use --force to skip this confirmation.");
+                return Ok(());
+            }
+
+            if !quiet {
+                println!("Restoring checkpoint '{}'...", &id[..8]);
+            }
+
+            let result = checkpoint::restore_checkpoint(checkpoint_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!();
+                println!("Checkpoint restored successfully!");
+                println!();
+                println!("  Restored to: {}", result.checkpoint_timestamp.format("%Y-%m-%d %H:%M:%S"));
+                println!("  Description: {}", result.checkpoint_description);
+                println!();
+                println!("  Phases restored: {}", result.phases_restored);
+                println!("  Features restored: {}", result.features_restored);
+                println!("  Messages restored: {}", result.messages_restored);
+                if result.files_restored > 0 {
+                    println!("  Files restored: {}", result.files_restored);
+                }
+                println!();
+                println!("  Safety backup created: {}", &result.safety_backup_id.to_string()[..8]);
+                println!();
+                println!("To undo this restore, run:");
+                println!("  demiarch checkpoints restore {} --force", &result.safety_backup_id.to_string()[..8]);
             }
         }
 

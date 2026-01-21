@@ -43,6 +43,7 @@
 pub mod checkpoint;
 pub mod manager;
 pub mod repository;
+pub mod restore;
 pub mod signing;
 
 // Re-export main types
@@ -55,6 +56,7 @@ pub use manager::{
     DEFAULT_RETENTION_DAYS, compute_content_hash,
 };
 pub use repository::CheckpointRepository;
+pub use restore::{RestoreError, RestoreResult, restore_checkpoint};
 pub use signing::{
     CheckpointSigner, CheckpointVerifier, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE, SIGNATURE_SIZE,
     SigningError,

@@ -4,6 +4,7 @@
 
 use crate::domain::recovery::{
     CheckpointConfig, CheckpointInfo, CheckpointManager, CheckpointSigner, CheckpointStats,
+    RestoreResult,
 };
 use crate::error::Result;
 use crate::storage::Database;
@@ -77,6 +78,23 @@ pub async fn create_checkpoint(
         .await?;
 
     Ok(CheckpointInfo::from(&checkpoint))
+}
+
+/// Restore a checkpoint to project state
+///
+/// This will:
+/// 1. Verify the checkpoint signature
+/// 2. Create a safety backup before restore
+/// 3. Restore database state (phases, features, messages)
+/// 4. Restore any tracked generated code files
+///
+/// Returns a RestoreResult containing details about what was restored.
+pub async fn restore_checkpoint(checkpoint_id: Uuid) -> Result<RestoreResult> {
+    let db = Database::default().await.map_err(|e| crate::error::Error::Other(e.to_string()))?;
+    let signer = get_or_create_signer()?;
+    let manager = CheckpointManager::new(db.pool().clone(), signer);
+
+    manager.restore_checkpoint(checkpoint_id).await
 }
 
 /// Get or create the signing key

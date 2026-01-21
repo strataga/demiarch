@@ -8,6 +8,7 @@ use super::checkpoint::{
     PhaseSnapshot, SnapshotData,
 };
 use super::repository::CheckpointRepository;
+use super::restore::{self, RestoreResult};
 use super::signing::{CheckpointSigner, CheckpointVerifier, SigningError};
 use crate::error::Result;
 use sha2::{Digest, Sha256};
@@ -66,6 +67,11 @@ impl CheckpointManager {
             signer,
             config,
         }
+    }
+
+    /// Get a reference to the underlying repository
+    pub fn repository(&self) -> &CheckpointRepository {
+        &self.repository
     }
 
     /// Create a checkpoint before code generation
@@ -274,6 +280,19 @@ impl CheckpointManager {
             chat_messages: message_snapshots,
             generated_code,
         })
+    }
+
+    /// Restore a checkpoint to project state
+    ///
+    /// This will:
+    /// 1. Verify the checkpoint signature
+    /// 2. Create a safety backup before restore
+    /// 3. Restore database state within a transaction
+    /// 4. Restore any tracked files
+    ///
+    /// Returns a RestoreResult on success containing details about what was restored.
+    pub async fn restore_checkpoint(&self, checkpoint_id: Uuid) -> Result<RestoreResult> {
+        restore::restore_checkpoint(self.repository.pool(), self, checkpoint_id).await
     }
 
     /// Get statistics about checkpoints for a project

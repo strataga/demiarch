@@ -20,6 +20,11 @@ impl CheckpointRepository {
         Self { pool }
     }
 
+    /// Get a reference to the underlying connection pool
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     /// Save a checkpoint to the database
     pub async fn save(&self, checkpoint: &Checkpoint) -> Result<()> {
         let id = checkpoint.id.to_string();
