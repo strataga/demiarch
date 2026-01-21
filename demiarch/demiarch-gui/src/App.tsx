@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { KanbanBoard } from "./components/KanbanBoard";
+import { ProjectProvider, useProjects } from "./contexts/ProjectContext";
+import { ProjectSelector } from "./components/ProjectSelector";
+import { SAMPLE_PROJECTS } from "./data/sampleProjects";
 import "./App.css";
 
 interface AppInfo {
@@ -14,12 +17,13 @@ interface HealthStatus {
   message: string;
 }
 
-function App() {
+function AppContent() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [greeting, setGreeting] = useState<string>("");
   const [name, setName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const { currentProject, updateProjectBoard } = useProjects();
 
   useEffect(() => {
     async function initialize() {
@@ -61,9 +65,14 @@ function App() {
   return (
     <main className="container">
       <header className="header">
-        <h1>{appInfo?.name || "Demiarch"}</h1>
+        <div className="header__top">
+          <div className="header__branding">
+            <h1>{appInfo?.name || "Demiarch"}</h1>
+            <span className="version">v{appInfo?.version}</span>
+          </div>
+          <ProjectSelector />
+        </div>
         <p className="tagline">{appInfo?.description}</p>
-        <span className="version">v{appInfo?.version}</span>
       </header>
 
       <section className="status-section">
@@ -91,7 +100,18 @@ function App() {
       </section>
 
       <section className="kanban-section">
-        <KanbanBoard />
+        {currentProject ? (
+          <KanbanBoard
+            key={currentProject.id}
+            initialBoard={currentProject.board}
+            onBoardChange={updateProjectBoard}
+          />
+        ) : (
+          <div className="kanban-section__empty">
+            <p>No project selected</p>
+            <p className="kanban-section__empty-hint">Select a project from the dropdown above to view its board</p>
+          </div>
+        )}
       </section>
 
       <footer className="footer">
@@ -107,6 +127,14 @@ function App() {
         </p>
       </footer>
     </main>
+  );
+}
+
+function App() {
+  return (
+    <ProjectProvider initialProjects={SAMPLE_PROJECTS}>
+      <AppContent />
+    </ProjectProvider>
   );
 }
 

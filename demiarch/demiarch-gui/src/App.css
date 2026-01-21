@@ -58,16 +58,27 @@ body {
 
 /* Header */
 .header {
-  text-align: center;
   margin-bottom: 2rem;
   padding-bottom: 2rem;
   border-bottom: 1px solid var(--border-color);
 }
 
+.header__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.header__branding {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .header h1 {
-  font-size: 2.5rem;
+  font-size: 2rem;
   font-weight: 700;
-  margin-bottom: 0.5rem;
   background: linear-gradient(135deg, var(--accent), #a855f7);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -75,9 +86,8 @@ body {
 }
 
 .tagline {
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: var(--text-secondary);
-  margin-bottom: 0.5rem;
 }
 
 .version {
@@ -85,7 +95,7 @@ body {
   padding: 0.25rem 0.75rem;
   background: var(--bg-secondary);
   border-radius: 9999px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
@@ -231,6 +241,30 @@ body {
 /* Kanban Section */
 .kanban-section {
   margin-bottom: 2rem;
+}
+
+.kanban-section__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  background: var(--bg-secondary);
+  border: 2px dashed var(--border-color);
+  border-radius: 0.75rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+.kanban-section__empty p {
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.kanban-section__empty-hint {
+  font-size: 0.9rem !important;
+  color: var(--text-secondary) !important;
 }
 
 /* Footer */
