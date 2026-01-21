@@ -33,11 +33,13 @@
 //! // Lock is automatically released when guard is dropped
 //! ```
 
+pub mod event;
 pub mod guard;
 pub mod manager;
 pub mod types;
 
 // Re-export main types
+pub use event::{LockEvent, LockEventType};
 pub use guard::{LockGuard, ProjectLockGuard, ResourceLockGuard, SessionLockGuard};
 pub use manager::LockManager;
 pub use types::{LockConfig, LockError, LockInfo, LockResult, LockStatus, ResourceType};

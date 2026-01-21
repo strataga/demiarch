@@ -36,13 +36,19 @@
 //! ```
 
 pub mod entity;
+pub mod event;
 pub mod repository;
 pub mod service;
+pub mod specification;
 
 // Re-export main types
 pub use entity::{
     CrossProjectSearchLog, ProjectSearchSettings, SearchEntityType, SearchQuery, SearchResult,
     SearchScope,
 };
+pub use event::{SearchEvent, SearchEventType};
 pub use repository::SearchRepository;
 pub use service::SearchService;
+pub use specification::{
+    EntityTypeSpec, MinRelevanceSpec, PrivacyAllowedSpec, ScopeSpec, SearchSpecBuilder,
+};

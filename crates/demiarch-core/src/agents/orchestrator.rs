@@ -5,13 +5,14 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU8, Ordering};
 
 use tracing::{debug, info};
 
 use super::AgentType;
 use super::context::AgentContext;
+use super::message_builder::build_messages_from_input;
 use super::planner::PlannerAgent;
+use super::status::StatusTracker;
 use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
 use crate::error::Result;
 use crate::llm::Message;
@@ -26,7 +27,7 @@ use crate::llm::Message;
 /// - Returns complete feature implementations
 pub struct OrchestratorAgent {
     /// Current execution status
-    status: AtomicU8,
+    status: StatusTracker,
     /// Available capabilities
     capabilities: Vec<AgentCapability>,
 }
@@ -35,7 +36,7 @@ impl OrchestratorAgent {
     /// Create a new Orchestrator agent
     pub fn new() -> Self {
         Self {
-            status: AtomicU8::new(AgentStatus::Ready as u8),
+            status: StatusTracker::new(),
             capabilities: vec![AgentCapability::Orchestration, AgentCapability::Planning],
         }
     }
@@ -49,11 +50,11 @@ impl OrchestratorAgent {
             truncate_task(&input.task, 100)
         );
 
-        // Register with the shared state
-        context.register().await;
+        // Register with the shared state (include task for monitoring)
+        context.register_with_task(Some(&input.task)).await;
 
         // Update status to running
-        self.set_status(AgentStatus::Running);
+        self.status.set(AgentStatus::Running);
         context.update_status(AgentStatus::Running).await;
 
         // Build the system prompt and messages for the LLM
@@ -64,7 +65,7 @@ impl OrchestratorAgent {
         let response = match llm_client.complete(messages, None).await {
             Ok(resp) => resp,
             Err(e) => {
-                self.set_status(AgentStatus::Failed);
+                self.status.set(AgentStatus::Failed);
                 let result = AgentResult::failure(format!("LLM call failed: {}", e));
                 context.complete(result.clone()).await;
                 return Ok(result);
@@ -81,7 +82,7 @@ impl OrchestratorAgent {
 
         let result = if plan.needs_planner {
             // Spawn a Planner agent to decompose the feature
-            self.set_status(AgentStatus::WaitingForChildren);
+            self.status.set(AgentStatus::WaitingForChildren);
             context.update_status(AgentStatus::WaitingForChildren).await;
 
             let planner = PlannerAgent::new();
@@ -111,7 +112,7 @@ impl OrchestratorAgent {
         };
 
         // Mark as completed
-        self.set_status(AgentStatus::Completed);
+        self.status.set(AgentStatus::Completed);
         context.complete(result.clone()).await;
 
         info!(
@@ -126,29 +127,28 @@ impl OrchestratorAgent {
     }
 
     /// Build messages for the LLM call
+    ///
+    /// Extends the base message builder with project/feature context.
     fn build_messages(&self, input: &AgentInput, context: &AgentContext) -> Vec<Message> {
-        let mut messages = vec![Message::system(self.system_prompt())];
+        // Start with the base messages
+        let mut messages = build_messages_from_input(&self.system_prompt(), input, context);
 
-        // Add inherited context
-        messages.extend(context.inherited_messages.clone());
+        // Insert project context before the user message if available
+        let insert_pos = messages.len().saturating_sub(1);
 
-        // Add project context if available
         if let Some(project_id) = context.project_id() {
-            messages.push(Message::system(format!(
-                "Working on project: {}",
-                project_id
-            )));
+            messages.insert(
+                insert_pos,
+                Message::system(format!("Working on project: {}", project_id)),
+            );
         }
 
         if let Some(feature_id) = context.feature_id() {
-            messages.push(Message::system(format!(
-                "Implementing feature: {}",
-                feature_id
-            )));
+            messages.insert(
+                insert_pos,
+                Message::system(format!("Implementing feature: {}", feature_id)),
+            );
         }
-
-        // Add the user's request
-        messages.push(Message::user(&input.task));
 
         messages
     }
@@ -173,22 +173,6 @@ impl OrchestratorAgent {
         }
     }
 
-    /// Set the agent status
-    fn set_status(&self, status: AgentStatus) {
-        self.status.store(status as u8, Ordering::SeqCst);
-    }
-
-    /// Get the current status
-    fn get_status(&self) -> AgentStatus {
-        match self.status.load(Ordering::SeqCst) {
-            0 => AgentStatus::Ready,
-            1 => AgentStatus::Running,
-            2 => AgentStatus::WaitingForChildren,
-            3 => AgentStatus::Completed,
-            4 => AgentStatus::Failed,
-            _ => AgentStatus::Cancelled,
-        }
-    }
 }
 
 impl Default for OrchestratorAgent {
@@ -207,7 +191,7 @@ impl Agent for OrchestratorAgent {
     }
 
     fn status(&self) -> AgentStatus {
-        self.get_status()
+        self.status.get()
     }
 
     fn execute(

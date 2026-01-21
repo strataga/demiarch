@@ -4,16 +4,17 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU8, Ordering};
 
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 use super::AgentType;
+use super::code_extraction::{extract_code_blocks, language_to_test_extension};
 use super::context::AgentContext;
+use super::message_builder::build_messages_from_input;
+use super::status::StatusTracker;
 use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
 use crate::error::Result;
-use crate::llm::Message;
 
 /// Type of test generated
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,7 +104,7 @@ impl TestSuite {
 /// - Is a leaf agent (cannot spawn children)
 pub struct TesterAgent {
     /// Current execution status
-    status: AtomicU8,
+    status: StatusTracker,
     /// Available capabilities
     capabilities: Vec<AgentCapability>,
 }
@@ -112,7 +113,7 @@ impl TesterAgent {
     /// Create a new Tester agent
     pub fn new() -> Self {
         Self {
-            status: AtomicU8::new(AgentStatus::Ready as u8),
+            status: StatusTracker::new(),
             capabilities: vec![AgentCapability::TestGeneration, AgentCapability::FileRead],
         }
     }
@@ -129,22 +130,22 @@ impl TesterAgent {
             "Tester starting test generation"
         );
 
-        // Register with the shared state
-        context.register().await;
+        // Register with the shared state (include task for monitoring)
+        context.register_with_task(Some(&input.task)).await;
 
         // Update status to running
-        self.set_status(AgentStatus::Running);
+        self.status.set(AgentStatus::Running);
         context.update_status(AgentStatus::Running).await;
 
         // Build messages for the LLM
-        let messages = self.build_messages(&input, &context);
+        let messages = build_messages_from_input(&self.system_prompt(), &input, &context);
 
         // Call the LLM to generate tests
         let llm_client = context.llm_client();
         let response = match llm_client.complete(messages, None).await {
             Ok(resp) => resp,
             Err(e) => {
-                self.set_status(AgentStatus::Failed);
+                self.status.set(AgentStatus::Failed);
                 let result = AgentResult::failure(format!("LLM call failed: {}", e));
                 context.complete(result.clone()).await;
                 return Ok(result);
@@ -157,18 +158,18 @@ impl TesterAgent {
         );
 
         // Extract test code blocks from the response
-        let test_blocks = extract_test_blocks(&response.content);
+        let test_blocks = extract_code_blocks(&response.content);
 
         // Build result with test artifacts
         let mut result = AgentResult::success(&response.content).with_tokens(response.tokens_used);
 
-        for (i, (language, code)) in test_blocks.iter().enumerate() {
-            let filename = format!("test-{}.{}", i + 1, language_test_extension(language));
-            result = result.with_artifact(AgentArtifact::test(&filename, code));
+        for (i, block) in test_blocks.iter().enumerate() {
+            let filename = format!("test-{}.{}", i + 1, language_to_test_extension(&block.language));
+            result = result.with_artifact(AgentArtifact::test(&filename, &block.code));
         }
 
         // Mark as completed
-        self.set_status(AgentStatus::Completed);
+        self.status.set(AgentStatus::Completed);
         context.complete(result.clone()).await;
 
         info!(
@@ -179,39 +180,6 @@ impl TesterAgent {
         );
 
         Ok(result)
-    }
-
-    /// Build messages for the LLM call
-    fn build_messages(&self, input: &AgentInput, context: &AgentContext) -> Vec<Message> {
-        let mut messages = vec![Message::system(self.system_prompt())];
-
-        // Add inherited context
-        messages.extend(context.inherited_messages.clone());
-
-        // Add context from input
-        messages.extend(input.context_messages.clone());
-
-        // Add the task
-        messages.push(Message::user(&input.task));
-
-        messages
-    }
-
-    /// Set the agent status
-    fn set_status(&self, status: AgentStatus) {
-        self.status.store(status as u8, Ordering::SeqCst);
-    }
-
-    /// Get the current status
-    fn get_status(&self) -> AgentStatus {
-        match self.status.load(Ordering::SeqCst) {
-            0 => AgentStatus::Ready,
-            1 => AgentStatus::Running,
-            2 => AgentStatus::WaitingForChildren,
-            3 => AgentStatus::Completed,
-            4 => AgentStatus::Failed,
-            _ => AgentStatus::Cancelled,
-        }
     }
 }
 
@@ -231,7 +199,7 @@ impl Agent for TesterAgent {
     }
 
     fn status(&self) -> AgentStatus {
-        self.get_status()
+        self.status.get()
     }
 
     fn execute(
@@ -302,59 +270,10 @@ Focus on meaningful tests that catch real bugs."#
     }
 }
 
-/// Extract test code blocks from markdown-formatted text
-fn extract_test_blocks(content: &str) -> Vec<(String, String)> {
-    let mut blocks = Vec::new();
-    let mut in_block = false;
-    let mut current_language = String::new();
-    let mut current_code = String::new();
-
-    for line in content.lines() {
-        if line.starts_with("```") {
-            if in_block {
-                // End of block
-                if !current_code.trim().is_empty() {
-                    blocks.push((current_language.clone(), current_code.trim().to_string()));
-                }
-                current_language.clear();
-                current_code.clear();
-                in_block = false;
-            } else {
-                // Start of block
-                current_language = line.trim_start_matches('`').trim().to_string();
-                if current_language.is_empty() {
-                    current_language = "txt".to_string();
-                }
-                in_block = true;
-            }
-        } else if in_block {
-            current_code.push_str(line);
-            current_code.push('\n');
-        }
-    }
-
-    blocks
-}
-
-/// Get file extension for test files
-fn language_test_extension(language: &str) -> &str {
-    match language.to_lowercase().as_str() {
-        "rust" | "rs" => "rs",
-        "python" | "py" => "py",
-        "javascript" | "js" => "test.js",
-        "typescript" | "ts" => "test.ts",
-        "go" | "golang" => "test.go",
-        "java" => "java",
-        "csharp" | "c#" => "cs",
-        "ruby" | "rb" => "rb",
-        "php" => "php",
-        _ => "txt",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::code_extraction::{extract_code_blocks, language_to_test_extension};
 
     #[test]
     fn test_tester_creation() {
@@ -423,12 +342,12 @@ def test_example():
 ```
 "#;
 
-        let blocks = extract_test_blocks(content);
+        let blocks = extract_code_blocks(content);
         assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].0, "rust");
-        assert!(blocks[0].1.contains("#[test]"));
-        assert_eq!(blocks[1].0, "python");
-        assert!(blocks[1].1.contains("def test_example"));
+        assert_eq!(blocks[0].language, "rust");
+        assert!(blocks[0].code.contains("#[test]"));
+        assert_eq!(blocks[1].language, "python");
+        assert!(blocks[1].code.contains("def test_example"));
     }
 
     #[test]
@@ -442,10 +361,10 @@ def test_example():
 
     #[test]
     fn test_language_test_extension() {
-        assert_eq!(language_test_extension("rust"), "rs");
-        assert_eq!(language_test_extension("javascript"), "test.js");
-        assert_eq!(language_test_extension("typescript"), "test.ts");
-        assert_eq!(language_test_extension("go"), "test.go");
+        assert_eq!(language_to_test_extension("rust"), "rs");
+        assert_eq!(language_to_test_extension("javascript"), "test.js");
+        assert_eq!(language_to_test_extension("typescript"), "test.ts");
+        assert_eq!(language_to_test_extension("go"), "_test.go");
     }
 
     #[test]

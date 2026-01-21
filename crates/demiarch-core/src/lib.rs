@@ -13,6 +13,7 @@
 //! - Encrypted API key storage (AES-256-GCM)
 
 pub mod agents;
+pub mod application;
 pub mod commands;
 pub mod config;
 pub mod context;

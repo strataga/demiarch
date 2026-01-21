@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use super::AgentType;
+use super::events::AgentEventWriter;
 use super::traits::{AgentResult, AgentStatus};
 use crate::context::{
     ContextBudget, ContextWindow, DisclosureLevel, TokenAllocation, estimate_messages_tokens,
@@ -41,6 +42,23 @@ impl AgentId {
     /// Create from an existing UUID
     pub fn from_uuid(uuid: Uuid) -> Self {
         Self(uuid)
+    }
+
+    /// Parse from a string (full UUID or short 8-char form)
+    /// Returns None if the string is not a valid UUID
+    pub fn parse(s: &str) -> Option<Self> {
+        // Try full UUID first
+        if let Ok(uuid) = Uuid::parse_str(s) {
+            return Some(Self(uuid));
+        }
+        // For short form (8 chars), we can't recover the full UUID
+        // So return None - the caller should use the original string
+        None
+    }
+
+    /// Get the full UUID string representation
+    pub fn full_string(&self) -> String {
+        self.0.to_string()
     }
 }
 
@@ -135,10 +153,18 @@ pub struct ChildAgentInfo {
     pub id: AgentId,
     /// Type of the child agent
     pub agent_type: AgentType,
+    /// Human-readable name (e.g., "planner-0", "coder-1")
+    pub name: String,
+    /// Parent agent ID (None for root orchestrator)
+    pub parent_id: Option<AgentId>,
     /// Path in the hierarchy
     pub path: AgentPath,
     /// Current status
     pub status: AgentStatus,
+    /// Task description this agent is working on
+    pub task: Option<String>,
+    /// Token usage accumulated by this agent
+    pub tokens_used: u64,
     /// Result (if completed)
     pub result: Option<AgentResult>,
 }
@@ -160,6 +186,8 @@ pub struct SharedAgentState {
     agent_registry: Arc<RwLock<HashMap<AgentId, ChildAgentInfo>>>,
     /// Context budget for token allocation
     context_budget: Arc<ContextBudget>,
+    /// Event writer for real-time monitoring
+    event_writer: Arc<AgentEventWriter>,
 }
 
 impl SharedAgentState {
@@ -173,6 +201,7 @@ impl SharedAgentState {
             counter: Arc::new(AtomicU64::new(0)),
             agent_registry: Arc::new(RwLock::new(HashMap::new())),
             context_budget: Arc::new(ContextBudget::default()),
+            event_writer: Arc::new(AgentEventWriter::new()),
         }
     }
 
@@ -186,7 +215,13 @@ impl SharedAgentState {
             counter: Arc::new(AtomicU64::new(0)),
             agent_registry: Arc::new(RwLock::new(HashMap::new())),
             context_budget: Arc::new(budget),
+            event_writer: Arc::new(AgentEventWriter::new()),
         }
+    }
+
+    /// Get the event writer for emitting agent events
+    pub fn event_writer(&self) -> &AgentEventWriter {
+        &self.event_writer
     }
 
     /// Get the context budget
@@ -219,12 +254,31 @@ impl SharedAgentState {
 
     /// Register an agent in the global registry
     pub async fn register_agent(&self, info: ChildAgentInfo) {
+        // Emit spawned event
+        self.event_writer.emit_spawned(
+            &info.id,
+            info.agent_type,
+            &info.name,
+            info.parent_id.as_ref(),
+            &info.path.to_string(),
+            info.task.as_deref(),
+        );
+
+        let id = info.id;
         let mut registry = self.agent_registry.write().await;
-        registry.insert(info.id, info);
+        registry.insert(id, info);
     }
 
     /// Update an agent's status in the registry
     pub async fn update_agent_status(&self, id: AgentId, status: AgentStatus) {
+        let tokens = {
+            let registry = self.agent_registry.read().await;
+            registry.get(&id).map(|i| i.tokens_used).unwrap_or(0)
+        };
+
+        // Emit status update event
+        self.event_writer.emit_status_update(&id, status, tokens);
+
         let mut registry = self.agent_registry.write().await;
         if let Some(info) = registry.get_mut(&id) {
             info.status = status;
@@ -233,6 +287,16 @@ impl SharedAgentState {
 
     /// Mark an agent as completed with its result
     pub async fn complete_agent(&self, id: AgentId, result: AgentResult) {
+        let tokens = result.tokens_used as u64;
+
+        // Emit completion event
+        if result.success {
+            self.event_writer.emit_completed(&id, tokens);
+        } else {
+            // For failures, the error message is in the output field
+            self.event_writer.emit_failed(&id, &result.output);
+        }
+
         let mut registry = self.agent_registry.write().await;
         if let Some(info) = registry.get_mut(&id) {
             info.status = if result.success {
@@ -240,6 +304,7 @@ impl SharedAgentState {
             } else {
                 AgentStatus::Failed
             };
+            info.tokens_used = tokens;
             info.result = Some(result);
         }
     }
@@ -387,11 +452,20 @@ impl AgentContext {
 
     /// Register this agent with the shared registry
     pub async fn register(&self) {
+        self.register_with_task(None).await;
+    }
+
+    /// Register this agent with a task description
+    pub async fn register_with_task(&self, task: Option<&str>) {
         let info = ChildAgentInfo {
             id: self.id,
             agent_type: self.agent_type,
+            name: self.path.leaf().unwrap_or("root").to_string(),
+            parent_id: self.parent_id,
             path: self.path.clone(),
             status: AgentStatus::Running,
+            task: task.map(|t| t.to_string()),
+            tokens_used: 0,
             result: None,
         };
         self.shared_state.register_agent(info).await;
@@ -676,8 +750,12 @@ mod tests {
         let info = ChildAgentInfo {
             id: AgentId::new(),
             agent_type: AgentType::Planner,
+            name: "planner-0".to_string(),
+            parent_id: None,
             path: AgentPath::new("planner-0"),
             status: AgentStatus::Running,
+            task: Some("Test task".to_string()),
+            tokens_used: 0,
             result: None,
         };
 

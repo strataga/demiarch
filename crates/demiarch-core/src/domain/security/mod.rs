@@ -44,11 +44,15 @@
 //! ```
 
 pub mod entity;
+pub mod event;
 pub mod repository;
 pub mod service;
 
 // Re-export entity types
 pub use entity::{EncryptedKey, KeyError, MasterKey, SecureString, SecurityEntity};
+
+// Re-export event types
+pub use event::{SecurityEvent, SecurityEventType};
 
 // Re-export repository traits
 pub use repository::{KeyRepository, MasterKeyRepository, SecurityRepository};

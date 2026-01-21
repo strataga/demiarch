@@ -4,16 +4,16 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU8, Ordering};
 
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 use super::AgentType;
 use super::context::AgentContext;
+use super::message_builder::build_messages_from_input;
+use super::status::StatusTracker;
 use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
 use crate::error::Result;
-use crate::llm::Message;
 
 /// Severity of a review issue
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,7 +119,7 @@ impl CodeReview {
 /// - Is a leaf agent (cannot spawn children)
 pub struct ReviewerAgent {
     /// Current execution status
-    status: AtomicU8,
+    status: StatusTracker,
     /// Available capabilities
     capabilities: Vec<AgentCapability>,
 }
@@ -128,7 +128,7 @@ impl ReviewerAgent {
     /// Create a new Reviewer agent
     pub fn new() -> Self {
         Self {
-            status: AtomicU8::new(AgentStatus::Ready as u8),
+            status: StatusTracker::new(),
             capabilities: vec![AgentCapability::CodeReview, AgentCapability::FileRead],
         }
     }
@@ -141,22 +141,22 @@ impl ReviewerAgent {
             "Reviewer starting code review"
         );
 
-        // Register with the shared state
-        context.register().await;
+        // Register with the shared state (include task for monitoring)
+        context.register_with_task(Some(&input.task)).await;
 
         // Update status to running
-        self.set_status(AgentStatus::Running);
+        self.status.set(AgentStatus::Running);
         context.update_status(AgentStatus::Running).await;
 
         // Build messages for the LLM
-        let messages = self.build_messages(&input, &context);
+        let messages = build_messages_from_input(&self.system_prompt(), &input, &context);
 
         // Call the LLM to review the code
         let llm_client = context.llm_client();
         let response = match llm_client.complete(messages, None).await {
             Ok(resp) => resp,
             Err(e) => {
-                self.set_status(AgentStatus::Failed);
+                self.status.set(AgentStatus::Failed);
                 let result = AgentResult::failure(format!("LLM call failed: {}", e));
                 context.complete(result.clone()).await;
                 return Ok(result);
@@ -178,7 +178,7 @@ impl ReviewerAgent {
             .with_artifact(AgentArtifact::review("code-review", &review_json));
 
         // Mark as completed
-        self.set_status(AgentStatus::Completed);
+        self.status.set(AgentStatus::Completed);
         context.complete(result.clone()).await;
 
         info!(
@@ -190,22 +190,6 @@ impl ReviewerAgent {
         );
 
         Ok(result)
-    }
-
-    /// Build messages for the LLM call
-    fn build_messages(&self, input: &AgentInput, context: &AgentContext) -> Vec<Message> {
-        let mut messages = vec![Message::system(self.system_prompt())];
-
-        // Add inherited context
-        messages.extend(context.inherited_messages.clone());
-
-        // Add context from input
-        messages.extend(input.context_messages.clone());
-
-        // Add the task
-        messages.push(Message::user(&input.task));
-
-        messages
     }
 
     /// Parse the LLM response into a CodeReview
@@ -275,23 +259,6 @@ impl ReviewerAgent {
         }
         review
     }
-
-    /// Set the agent status
-    fn set_status(&self, status: AgentStatus) {
-        self.status.store(status as u8, Ordering::SeqCst);
-    }
-
-    /// Get the current status
-    fn get_status(&self) -> AgentStatus {
-        match self.status.load(Ordering::SeqCst) {
-            0 => AgentStatus::Ready,
-            1 => AgentStatus::Running,
-            2 => AgentStatus::WaitingForChildren,
-            3 => AgentStatus::Completed,
-            4 => AgentStatus::Failed,
-            _ => AgentStatus::Cancelled,
-        }
-    }
 }
 
 impl Default for ReviewerAgent {
@@ -310,7 +277,7 @@ impl Agent for ReviewerAgent {
     }
 
     fn status(&self) -> AgentStatus {
-        self.get_status()
+        self.status.get()
     }
 
     fn execute(

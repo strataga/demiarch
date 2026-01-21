@@ -20,17 +20,25 @@
 //! 5. Results bubble back up through the hierarchy
 //! 6. **Orchestrator** returns complete feature implementation
 
+pub mod code_extraction;
 pub mod coder;
 pub mod context;
+pub mod events;
+pub mod message_builder;
 pub mod orchestrator;
 pub mod planner;
 pub mod reviewer;
+pub mod status;
 pub mod tester;
 pub mod tool;
 pub mod traits;
 
 pub use coder::CoderAgent;
 pub use context::{AgentContext, AgentId, AgentPath};
+pub use events::{
+    AgentEvent, AgentEventData, AgentEventReader, AgentEventType, AgentEventWriter, clear_events,
+    read_current_session_events, read_recent_events,
+};
 pub use orchestrator::OrchestratorAgent;
 pub use planner::PlannerAgent;
 pub use reviewer::ReviewerAgent;

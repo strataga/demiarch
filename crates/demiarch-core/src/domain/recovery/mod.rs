@@ -48,6 +48,7 @@
 
 pub mod checkpoint;
 pub mod edit_detection;
+pub mod event;
 pub mod manager;
 pub mod repository;
 pub mod restore;
@@ -72,3 +73,4 @@ pub use signing::{
     CheckpointSigner, CheckpointVerifier, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE, SIGNATURE_SIZE,
     SigningError,
 };
+pub use event::{RecoveryEvent, RecoveryEventType};

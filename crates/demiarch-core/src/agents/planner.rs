@@ -5,89 +5,19 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU8, Ordering};
 
-use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 use super::AgentType;
 use super::coder::CoderAgent;
 use super::context::AgentContext;
+use super::message_builder::build_messages_from_input;
 use super::reviewer::ReviewerAgent;
+use super::status::StatusTracker;
 use super::tester::TesterAgent;
 use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
+use crate::domain::feature_decomposition::{ExecutionPlan, PlanTask, TaskStatus};
 use crate::error::Result;
-use crate::llm::Message;
-
-/// A task identified by the planner
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlanTask {
-    /// Unique identifier for this task
-    pub id: String,
-    /// Type of agent that should execute this task
-    pub agent_type: String,
-    /// Description of what needs to be done
-    pub description: String,
-    /// Dependencies on other tasks (by id)
-    pub depends_on: Vec<String>,
-    /// Priority (1 = highest)
-    pub priority: u8,
-}
-
-/// The execution plan created by the planner
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutionPlan {
-    /// Feature being implemented
-    pub feature_description: String,
-    /// Ordered list of tasks
-    pub tasks: Vec<PlanTask>,
-    /// Whether code review is required
-    pub requires_review: bool,
-    /// Whether tests should be generated
-    pub requires_tests: bool,
-}
-
-impl ExecutionPlan {
-    /// Create a new execution plan
-    pub fn new(description: impl Into<String>) -> Self {
-        Self {
-            feature_description: description.into(),
-            tasks: Vec::new(),
-            requires_review: true,
-            requires_tests: true,
-        }
-    }
-
-    /// Add a task to the plan
-    pub fn with_task(mut self, task: PlanTask) -> Self {
-        self.tasks.push(task);
-        self
-    }
-
-    /// Get coding tasks
-    pub fn coding_tasks(&self) -> Vec<&PlanTask> {
-        self.tasks
-            .iter()
-            .filter(|t| t.agent_type == "coder")
-            .collect()
-    }
-
-    /// Get review tasks
-    pub fn review_tasks(&self) -> Vec<&PlanTask> {
-        self.tasks
-            .iter()
-            .filter(|t| t.agent_type == "reviewer")
-            .collect()
-    }
-
-    /// Get test tasks
-    pub fn test_tasks(&self) -> Vec<&PlanTask> {
-        self.tasks
-            .iter()
-            .filter(|t| t.agent_type == "tester")
-            .collect()
-    }
-}
 
 /// Planner agent - coordinates task decomposition
 ///
@@ -98,7 +28,7 @@ impl ExecutionPlan {
 /// - Spawns Coder, Reviewer, and Tester agents
 pub struct PlannerAgent {
     /// Current execution status
-    status: AtomicU8,
+    status: StatusTracker,
     /// Available capabilities
     capabilities: Vec<AgentCapability>,
 }
@@ -107,7 +37,7 @@ impl PlannerAgent {
     /// Create a new Planner agent
     pub fn new() -> Self {
         Self {
-            status: AtomicU8::new(AgentStatus::Ready as u8),
+            status: StatusTracker::new(),
             capabilities: vec![AgentCapability::Planning, AgentCapability::CodebaseSearch],
         }
     }
@@ -120,22 +50,22 @@ impl PlannerAgent {
             "Planner starting task decomposition"
         );
 
-        // Register with the shared state
-        context.register().await;
+        // Register with the shared state (include task for monitoring)
+        context.register_with_task(Some(&input.task)).await;
 
         // Update status to running
-        self.set_status(AgentStatus::Running);
+        self.status.set(AgentStatus::Running);
         context.update_status(AgentStatus::Running).await;
 
         // Build messages for the LLM
-        let messages = self.build_messages(&input, &context);
+        let messages = build_messages_from_input(&self.system_prompt(), &input, &context);
 
         // Call the LLM to create an execution plan
         let llm_client = context.llm_client();
         let response = match llm_client.complete(messages, None).await {
             Ok(resp) => resp,
             Err(e) => {
-                self.set_status(AgentStatus::Failed);
+                self.status.set(AgentStatus::Failed);
                 let result = AgentResult::failure(format!("LLM call failed: {}", e));
                 context.complete(result.clone()).await;
                 return Ok(result);
@@ -158,7 +88,7 @@ impl PlannerAgent {
 
         // Execute the plan by spawning child agents
         if !plan.tasks.is_empty() {
-            self.set_status(AgentStatus::WaitingForChildren);
+            self.status.set(AgentStatus::WaitingForChildren);
             context.update_status(AgentStatus::WaitingForChildren).await;
 
             // Execute coding tasks first
@@ -188,7 +118,7 @@ impl PlannerAgent {
         }
 
         // Mark as completed
-        self.set_status(AgentStatus::Completed);
+        self.status.set(AgentStatus::Completed);
         context.complete(result.clone()).await;
 
         info!(
@@ -241,22 +171,6 @@ impl PlannerAgent {
         tester.execute(tester_input, tester_context).await
     }
 
-    /// Build messages for the LLM call
-    fn build_messages(&self, input: &AgentInput, context: &AgentContext) -> Vec<Message> {
-        let mut messages = vec![Message::system(self.system_prompt())];
-
-        // Add inherited context
-        messages.extend(context.inherited_messages.clone());
-
-        // Add context from input
-        messages.extend(input.context_messages.clone());
-
-        // Add the task
-        messages.push(Message::user(&input.task));
-
-        messages
-    }
-
     /// Parse the LLM response into an execution plan
     fn parse_execution_plan(&self, original_task: &str, response: &str) -> ExecutionPlan {
         let mut plan = ExecutionPlan::new(original_task);
@@ -284,6 +198,7 @@ impl PlannerAgent {
                 description: "Implement the feature as described".to_string(),
                 depends_on: vec![],
                 priority: 1,
+                status: TaskStatus::Pending,
             });
         }
 
@@ -298,6 +213,7 @@ impl PlannerAgent {
                 description: "Review the generated code".to_string(),
                 depends_on,
                 priority: 2,
+                status: TaskStatus::Pending,
             });
         }
 
@@ -312,27 +228,11 @@ impl PlannerAgent {
                 description: "Generate tests for the implementation".to_string(),
                 depends_on,
                 priority: 3,
+                status: TaskStatus::Pending,
             });
         }
 
         plan
-    }
-
-    /// Set the agent status
-    fn set_status(&self, status: AgentStatus) {
-        self.status.store(status as u8, Ordering::SeqCst);
-    }
-
-    /// Get the current status
-    fn get_status(&self) -> AgentStatus {
-        match self.status.load(Ordering::SeqCst) {
-            0 => AgentStatus::Ready,
-            1 => AgentStatus::Running,
-            2 => AgentStatus::WaitingForChildren,
-            3 => AgentStatus::Completed,
-            4 => AgentStatus::Failed,
-            _ => AgentStatus::Cancelled,
-        }
     }
 }
 
@@ -352,7 +252,7 @@ impl Agent for PlannerAgent {
     }
 
     fn status(&self) -> AgentStatus {
-        self.get_status()
+        self.status.get()
     }
 
     fn execute(
@@ -433,6 +333,7 @@ mod tests {
                 description: "Write code".to_string(),
                 depends_on: vec![],
                 priority: 1,
+                status: TaskStatus::Pending,
             })
             .with_task(PlanTask {
                 id: "task-2".to_string(),
@@ -440,6 +341,7 @@ mod tests {
                 description: "Review code".to_string(),
                 depends_on: vec!["task-1".to_string()],
                 priority: 2,
+                status: TaskStatus::Pending,
             });
 
         assert_eq!(plan.tasks.len(), 2);
@@ -451,9 +353,12 @@ mod tests {
     #[test]
     fn test_parse_execution_plan_json() {
         let planner = PlannerAgent::new();
+        // Note: The domain ExecutionPlan requires an `id` field (UUID), so if missing
+        // the JSON parse will fail and fallback to heuristic parsing
         let json_response = r#"
         Here's the plan:
         {
+            "id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
             "feature_description": "User authentication",
             "tasks": [
                 {
