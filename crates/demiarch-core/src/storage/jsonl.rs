@@ -60,6 +60,7 @@ pub const EXPORTABLE_TABLES: &[&str] = &[
     "llm_costs",
     "daily_cost_summaries",
     "feature_extraction_history",
+    "learned_skills",
 ];
 
 // =============================================================================
@@ -258,6 +259,35 @@ pub struct FeatureExtractionHistoryRecord {
     pub created_at: String,
 }
 
+/// Learned skill record for JSONL export
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct LearnedSkillRecord {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub pattern_type: String,
+    pub pattern_template: String,
+    pub pattern_variables: Option<String>,
+    pub pattern_applicability: Option<String>,
+    pub pattern_limitations: Option<String>,
+    pub source_project_id: Option<String>,
+    pub source_feature_id: Option<String>,
+    pub source_agent_type: Option<String>,
+    pub source_original_task: Option<String>,
+    pub source_model_used: Option<String>,
+    pub source_tokens_used: Option<i32>,
+    pub confidence: String,
+    pub tags: Option<String>,
+    pub times_used: i32,
+    pub success_count: i32,
+    pub failure_count: i32,
+    pub last_used_at: Option<String>,
+    pub metadata: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 // =============================================================================
 // Export Status and Metadata
 // =============================================================================
@@ -367,6 +397,7 @@ async fn export_table(pool: &SqlitePool, table: &str, file_path: &Path) -> Resul
         "llm_costs" => export_llm_costs(pool, &mut writer).await?,
         "daily_cost_summaries" => export_daily_cost_summaries(pool, &mut writer).await?,
         "feature_extraction_history" => export_feature_extraction_history(pool, &mut writer).await?,
+        "learned_skills" => export_learned_skills(pool, &mut writer).await?,
         _ => return Err(Error::Other(format!("Unknown table: {}", table))),
     };
 
@@ -649,6 +680,33 @@ async fn export_feature_extraction_history<W: Write>(
     Ok(count)
 }
 
+async fn export_learned_skills<W: Write>(pool: &SqlitePool, writer: &mut W) -> Result<usize> {
+    let rows: Vec<LearnedSkillRecord> = sqlx::query_as(
+        r#"
+        SELECT id, name, description, category,
+               pattern_type, pattern_template, pattern_variables,
+               pattern_applicability, pattern_limitations,
+               source_project_id, source_feature_id, source_agent_type,
+               source_original_task, source_model_used, source_tokens_used,
+               confidence, tags,
+               times_used, success_count, failure_count, last_used_at,
+               metadata, created_at, updated_at
+        FROM learned_skills
+        ORDER BY created_at, id
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let count = rows.len();
+    for record in rows {
+        serde_json::to_writer(&mut *writer, &record)
+            .map_err(|e| Error::Other(format!("JSON serialization error: {}", e)))?;
+        writeln!(writer).map_err(Error::Io)?;
+    }
+    Ok(count)
+}
+
 // =============================================================================
 // Import Functions
 // =============================================================================
@@ -718,6 +776,7 @@ async fn import_table(pool: &SqlitePool, table: &str, file_path: &Path) -> Resul
         "llm_costs" => import_llm_costs(pool, reader).await,
         "daily_cost_summaries" => import_daily_cost_summaries(pool, reader).await,
         "feature_extraction_history" => import_feature_extraction_history(pool, reader).await,
+        "learned_skills" => import_learned_skills(pool, reader).await,
         _ => Err(Error::Other(format!("Unknown table: {}", table))),
     }
 }
@@ -1134,6 +1193,71 @@ async fn import_feature_extraction_history<R: BufRead>(
         .bind(record.features_created)
         .bind(&record.raw_response)
         .bind(&record.created_at)
+        .execute(pool)
+        .await?;
+
+        count += 1;
+    }
+    Ok(count)
+}
+
+async fn import_learned_skills<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<usize> {
+    let mut count = 0;
+    for line in reader.lines() {
+        let line = line.map_err(Error::Io)?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let record: LearnedSkillRecord =
+            serde_json::from_str(&line).map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+
+        sqlx::query(
+            r#"
+            INSERT OR REPLACE INTO learned_skills (
+                id, name, description, category,
+                pattern_type, pattern_template, pattern_variables,
+                pattern_applicability, pattern_limitations,
+                source_project_id, source_feature_id, source_agent_type,
+                source_original_task, source_model_used, source_tokens_used,
+                confidence, tags,
+                times_used, success_count, failure_count, last_used_at,
+                metadata, created_at, updated_at
+            ) VALUES (
+                ?, ?, ?, ?,
+                ?, ?, ?,
+                ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?
+            )
+            "#,
+        )
+        .bind(&record.id)
+        .bind(&record.name)
+        .bind(&record.description)
+        .bind(&record.category)
+        .bind(&record.pattern_type)
+        .bind(&record.pattern_template)
+        .bind(&record.pattern_variables)
+        .bind(&record.pattern_applicability)
+        .bind(&record.pattern_limitations)
+        .bind(&record.source_project_id)
+        .bind(&record.source_feature_id)
+        .bind(&record.source_agent_type)
+        .bind(&record.source_original_task)
+        .bind(&record.source_model_used)
+        .bind(record.source_tokens_used)
+        .bind(&record.confidence)
+        .bind(&record.tags)
+        .bind(record.times_used)
+        .bind(record.success_count)
+        .bind(record.failure_count)
+        .bind(&record.last_used_at)
+        .bind(&record.metadata)
+        .bind(&record.created_at)
+        .bind(&record.updated_at)
         .execute(pool)
         .await?;
 

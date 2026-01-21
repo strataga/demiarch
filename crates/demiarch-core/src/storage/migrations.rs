@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 5;
+pub const CURRENT_VERSION: i32 = 6;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -284,6 +284,89 @@ const MIGRATION_V5: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_generated_files_edit_detected ON generated_files(edit_detected);
 "#;
 
+/// Migration 6: Learned skills system for autonomous knowledge extraction
+///
+/// Stores skills extracted from successful agent interactions. Skills are
+/// patterns, techniques, and reusable knowledge that can be applied to
+/// future tasks. Includes usage tracking for confidence adjustment.
+const MIGRATION_V6: &str = r#"
+    -- Learned skills table for storing extracted knowledge
+    CREATE TABLE IF NOT EXISTS learned_skills (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        category TEXT NOT NULL CHECK (category IN (
+            'code_generation', 'refactoring', 'testing', 'debugging',
+            'architecture', 'performance', 'security', 'documentation',
+            'api_design', 'database', 'error_handling', 'other'
+        )),
+
+        -- Pattern data (JSON)
+        pattern_type TEXT NOT NULL,
+        pattern_template TEXT NOT NULL,
+        pattern_variables TEXT,              -- JSON array of variables
+        pattern_applicability TEXT,          -- JSON array of conditions
+        pattern_limitations TEXT,            -- JSON array of limitations
+
+        -- Source context
+        source_project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+        source_feature_id TEXT REFERENCES features(id) ON DELETE SET NULL,
+        source_agent_type TEXT,
+        source_original_task TEXT,
+        source_model_used TEXT,
+        source_tokens_used INTEGER,
+
+        -- Classification
+        confidence TEXT NOT NULL DEFAULT 'medium' CHECK (confidence IN ('low', 'medium', 'high')),
+        tags TEXT,                           -- JSON array of tags
+
+        -- Usage statistics
+        times_used INTEGER NOT NULL DEFAULT 0,
+        success_count INTEGER NOT NULL DEFAULT 0,
+        failure_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at TIMESTAMP,
+
+        -- Metadata (JSON)
+        metadata TEXT,
+
+        -- Timestamps
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Indexes for efficient querying
+    CREATE INDEX IF NOT EXISTS idx_learned_skills_category ON learned_skills(category);
+    CREATE INDEX IF NOT EXISTS idx_learned_skills_confidence ON learned_skills(confidence);
+    CREATE INDEX IF NOT EXISTS idx_learned_skills_source_project_id ON learned_skills(source_project_id);
+    CREATE INDEX IF NOT EXISTS idx_learned_skills_times_used ON learned_skills(times_used);
+    CREATE INDEX IF NOT EXISTS idx_learned_skills_created_at ON learned_skills(created_at);
+
+    -- Full-text search on name and description for skill discovery
+    CREATE VIRTUAL TABLE IF NOT EXISTS learned_skills_fts USING fts5(
+        name, description, tags,
+        content='learned_skills',
+        content_rowid='rowid'
+    );
+
+    -- Triggers to keep FTS index in sync
+    CREATE TRIGGER IF NOT EXISTS learned_skills_ai AFTER INSERT ON learned_skills BEGIN
+        INSERT INTO learned_skills_fts(rowid, name, description, tags)
+        VALUES (NEW.rowid, NEW.name, NEW.description, NEW.tags);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS learned_skills_ad AFTER DELETE ON learned_skills BEGIN
+        INSERT INTO learned_skills_fts(learned_skills_fts, rowid, name, description, tags)
+        VALUES ('delete', OLD.rowid, OLD.name, OLD.description, OLD.tags);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS learned_skills_au AFTER UPDATE ON learned_skills BEGIN
+        INSERT INTO learned_skills_fts(learned_skills_fts, rowid, name, description, tags)
+        VALUES ('delete', OLD.rowid, OLD.name, OLD.description, OLD.tags);
+        INSERT INTO learned_skills_fts(rowid, name, description, tags)
+        VALUES (NEW.rowid, NEW.name, NEW.description, NEW.tags);
+    END;
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -350,6 +433,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v5: Generated file tracking for edit detection");
         sqlx::raw_sql(MIGRATION_V5).execute(pool).await?;
         record_migration(pool, 5).await?;
+    }
+
+    if current_version < 6 {
+        tracing::info!("Applying migration v6: Learned skills system");
+        sqlx::raw_sql(MIGRATION_V6).execute(pool).await?;
+        record_migration(pool, 6).await?;
     }
 
     tracing::info!("Database migrations completed");
@@ -448,6 +537,7 @@ mod tests {
             "phase_templates",
             "feature_extraction_history",
             "generated_files",
+            "learned_skills",
         ];
 
         for table in tables {
