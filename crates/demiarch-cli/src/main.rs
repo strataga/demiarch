@@ -1,8 +1,8 @@
 //! Demiarch CLI - local-first AI app builder
 
 use clap::{Parser, Subcommand};
-use demiarch_core::config::Config;
 use demiarch_core::commands::{feature, project};
+use demiarch_core::config::Config;
 use tracing::{info, warn};
 
 #[derive(Parser)]
@@ -121,13 +121,9 @@ enum ProjectAction {
     /// List all projects
     List,
     /// Show project details
-    Show {
-        id: String,
-    },
+    Show { id: String },
     /// Archive a project
-    Archive {
-        id: String,
-    },
+    Archive { id: String },
     /// Delete a project
     Delete {
         id: String,
@@ -144,9 +140,7 @@ enum FeatureAction {
         status: Option<String>,
     },
     /// Show feature details
-    Show {
-        id: String,
-    },
+    Show { id: String },
     /// Create a new feature
     Create {
         title: String,
@@ -160,9 +154,7 @@ enum FeatureAction {
         status: Option<String>,
     },
     /// Delete a feature
-    Delete {
-        id: String,
-    },
+    Delete { id: String },
 }
 
 #[derive(Subcommand)]
@@ -173,22 +165,16 @@ enum SkillAction {
         category: Option<String>,
     },
     /// Show skill details
-    Show {
-        id: String,
-    },
+    Show { id: String },
     /// Search skills
-    Search {
-        query: String,
-    },
+    Search { query: String },
     /// Extract skills from current context
     Extract {
         #[arg(short, long)]
         description: Option<String>,
     },
     /// Delete a skill
-    Delete {
-        id: String,
-    },
+    Delete { id: String },
     /// Show skill statistics
     Stats,
 }
@@ -198,9 +184,7 @@ enum RoutingAction {
     /// Show routing status
     Status,
     /// Set routing preference
-    SetPreference {
-        preference: String,
-    },
+    SetPreference { preference: String },
     /// Show model performance
     Performance {
         #[arg(short, long)]
@@ -255,17 +239,11 @@ enum HookAction {
         handler: String,
     },
     /// Enable a hook
-    Enable {
-        id: String,
-    },
+    Enable { id: String },
     /// Disable a hook
-    Disable {
-        id: String,
-    },
+    Disable { id: String },
     /// Remove a hook
-    Remove {
-        id: String,
-    },
+    Remove { id: String },
     /// Show hook execution history
     History {
         #[arg(short, long)]
@@ -390,9 +368,10 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Features { action } => cmd_features(action, cli.quiet).await,
 
-        Commands::Generate { feature_id, dry_run } => {
-            cmd_generate(&feature_id, dry_run, cli.quiet).await
-        }
+        Commands::Generate {
+            feature_id,
+            dry_run,
+        } => cmd_generate(&feature_id, dry_run, cli.quiet).await,
 
         Commands::Skills { action } => cmd_skills(action, cli.quiet).await,
 
@@ -418,7 +397,12 @@ async fn main() -> anyhow::Result<()> {
 // Command Implementations
 // ============================================================================
 
-async fn cmd_new(name: &str, framework: &str, repo: Option<&str>, quiet: bool) -> anyhow::Result<()> {
+async fn cmd_new(
+    name: &str,
+    framework: &str,
+    repo: Option<&str>,
+    quiet: bool,
+) -> anyhow::Result<()> {
     if !quiet {
         println!("Creating project '{}'...", name);
     }
@@ -470,17 +454,15 @@ async fn cmd_projects(action: ProjectAction, quiet: bool) -> anyhow::Result<()> 
                 }
             }
         }
-        ProjectAction::Show { id } => {
-            match project::get(&id).await? {
-                Some(details) => println!("{}", details),
-                None => {
-                    return Err(anyhow::anyhow!(
-                        "Project '{}' not found. Run `demiarch projects list` to see all projects.",
-                        id
-                    ));
-                }
+        ProjectAction::Show { id } => match project::get(&id).await? {
+            Some(details) => println!("{}", details),
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Project '{}' not found. Run `demiarch projects list` to see all projects.",
+                    id
+                ));
             }
-        }
+        },
         ProjectAction::Archive { id } => {
             project::archive(&id).await?;
             if !quiet {
@@ -532,7 +514,10 @@ async fn cmd_features(action: FeatureAction, quiet: bool) -> anyhow::Result<()> 
             let feature_id = feature::create(project_id, &title, phase.as_deref()).await?;
             if !quiet {
                 println!("Feature created: {}", feature_id);
-                println!("\nNext: Run `demiarch generate {}` to generate code.", feature_id);
+                println!(
+                    "\nNext: Run `demiarch generate {}` to generate code.",
+                    feature_id
+                );
             }
         }
         FeatureAction::Update { id, status } => {
@@ -619,7 +604,10 @@ async fn cmd_routing(action: RoutingAction, quiet: bool) -> anyhow::Result<()> {
                 println!("Routing Status:");
                 println!("  Preference: {}", config.routing.preference);
                 println!("  Default model: {}", config.llm.default_model);
-                println!("  Fallback models: {}", config.llm.fallback_models.join(", "));
+                println!(
+                    "  Fallback models: {}",
+                    config.llm.fallback_models.join(", ")
+                );
             }
         }
         RoutingAction::SetPreference { preference } => {
@@ -671,7 +659,10 @@ async fn cmd_context(action: ContextAction, quiet: bool) -> anyhow::Result<()> {
                 println!("  (No matching context found)");
             }
         }
-        ContextAction::Prune { older_than, dry_run } => {
+        ContextAction::Prune {
+            older_than,
+            dry_run,
+        } => {
             if !quiet {
                 let days = older_than.unwrap_or(30);
                 if dry_run {
@@ -706,7 +697,11 @@ async fn cmd_hooks(action: HookAction, quiet: bool) -> anyhow::Result<()> {
                 println!("  (No hooks registered)");
             }
         }
-        HookAction::Register { hook_type, name, handler } => {
+        HookAction::Register {
+            hook_type,
+            name,
+            handler,
+        } => {
             if !quiet {
                 println!("Registering hook:");
                 println!("  Type: {}", hook_type);
@@ -758,7 +753,10 @@ async fn cmd_costs(project: Option<&str>, quiet: bool) -> anyhow::Result<()> {
         println!("  This month: $0.00");
         println!();
         println!("  Daily limit: ${:.2}", config.cost.daily_limit_usd);
-        println!("  Alert threshold: {:.0}%", config.cost.alert_threshold * 100.0);
+        println!(
+            "  Alert threshold: {:.0}%",
+            config.cost.alert_threshold * 100.0
+        );
     }
     Ok(())
 }
@@ -856,7 +854,9 @@ async fn cmd_doctor(quiet: bool) -> anyhow::Result<()> {
                     if !quiet {
                         warn!("API Key: Not configured");
                         println!("[!!] API Key: Not configured");
-                        println!("     Set DEMIARCH_API_KEY or OPENROUTER_API_KEY environment variable");
+                        println!(
+                            "     Set DEMIARCH_API_KEY or OPENROUTER_API_KEY environment variable"
+                        );
                     }
                 }
                 Err(e) => {
@@ -942,8 +942,7 @@ fn cmd_watch(quiet: bool) -> anyhow::Result<()> {
     }
 
     // Try to run the TUI binary
-    let result = std::process::Command::new("demiarch-tui")
-        .status();
+    let result = std::process::Command::new("demiarch-tui").status();
 
     match result {
         Ok(status) if status.success() => Ok(()),

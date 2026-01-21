@@ -137,8 +137,7 @@ impl Config {
             .with_context(|| format!("Failed to create config directory: {}", dir.display()))?;
 
         let path = Self::config_path()?;
-        let contents = toml::to_string_pretty(self)
-            .context("Failed to serialize config")?;
+        let contents = toml::to_string_pretty(self).context("Failed to serialize config")?;
 
         fs::write(&path, contents)
             .with_context(|| format!("Failed to write config file: {}", path.display()))?;
@@ -169,14 +168,17 @@ impl Config {
             "routing.preference" => Ok(self.routing.preference.clone()),
 
             // API key (special handling - show redacted)
-            "llm.api_key" | "api_key" => {
-                match self.llm.redacted_api_key()? {
-                    Some(redacted) => Ok(redacted),
-                    None => Ok("(not set - use DEMIARCH_API_KEY or OPENROUTER_API_KEY env var)".to_string()),
-                }
-            }
+            "llm.api_key" | "api_key" => match self.llm.redacted_api_key()? {
+                Some(redacted) => Ok(redacted),
+                None => Ok(
+                    "(not set - use DEMIARCH_API_KEY or OPENROUTER_API_KEY env var)".to_string(),
+                ),
+            },
 
-            _ => Err(anyhow!("Unknown configuration key: {}. Use `demiarch config list` to see available keys.", key)),
+            _ => Err(anyhow!(
+                "Unknown configuration key: {}. Use `demiarch config list` to see available keys.",
+                key
+            )),
         }
     }
 
@@ -195,7 +197,8 @@ impl Config {
                     .collect();
             }
             "llm.temperature" => {
-                let temp: f32 = value.parse()
+                let temp: f32 = value
+                    .parse()
                     .with_context(|| format!("Invalid temperature value: {}", value))?;
                 if !(0.0..=2.0).contains(&temp) {
                     return Err(anyhow!("Temperature must be between 0.0 and 2.0"));
@@ -203,17 +206,20 @@ impl Config {
                 self.llm.temperature = temp;
             }
             "llm.max_tokens" => {
-                self.llm.max_tokens = value.parse()
+                self.llm.max_tokens = value
+                    .parse()
                     .with_context(|| format!("Invalid max_tokens value: {}", value))?;
             }
             "llm.timeout_secs" => {
-                self.llm.timeout_secs = value.parse()
+                self.llm.timeout_secs = value
+                    .parse()
                     .with_context(|| format!("Invalid timeout_secs value: {}", value))?;
             }
 
             // Cost settings
             "cost.daily_limit_usd" => {
-                let limit: f64 = value.parse()
+                let limit: f64 = value
+                    .parse()
                     .with_context(|| format!("Invalid daily_limit_usd value: {}", value))?;
                 if limit < 0.0 {
                     return Err(anyhow!("Daily limit must be non-negative"));
@@ -221,7 +227,8 @@ impl Config {
                 self.cost.daily_limit_usd = limit;
             }
             "cost.alert_threshold" => {
-                let threshold: f64 = value.parse()
+                let threshold: f64 = value
+                    .parse()
                     .with_context(|| format!("Invalid alert_threshold value: {}", value))?;
                 if !(0.0..=1.0).contains(&threshold) {
                     return Err(anyhow!("Alert threshold must be between 0.0 and 1.0"));

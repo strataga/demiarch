@@ -299,7 +299,8 @@ async fn test_other_error_suggestion() {
 #[tokio::test]
 async fn test_result_type_alias() {
     let success: Result<i32> = Ok(42);
-    assert_eq!(success.unwrap(), 42);
+    assert!(success.is_ok());
+    assert_eq!(success.ok(), Some(42));
 
     let failure: Result<i32> = Err(Error::ProjectNotFound("test".to_string()));
     assert!(failure.is_err());

@@ -322,7 +322,11 @@ impl CostTracker {
 
     /// Get all cost records (most recent first)
     pub fn records(&self) -> Vec<LlmCost> {
-        self.records.read().ok().map(|r| r.clone()).unwrap_or_default()
+        self.records
+            .read()
+            .ok()
+            .map(|r| r.clone())
+            .unwrap_or_default()
     }
 
     /// Get records for a specific date
@@ -480,7 +484,9 @@ mod tests {
             None,
         );
 
-        let summary = tracker.today_summary().expect("Should have today's summary");
+        let summary = tracker
+            .today_summary()
+            .expect("Should have today's summary");
 
         assert_eq!(summary.call_count, 2);
         assert_eq!(summary.total_input_tokens, 3000);
