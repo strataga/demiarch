@@ -37,12 +37,12 @@ pub mod prelude {
 /// Re-export security types for convenient access
 pub mod security {
     pub use crate::domain::security::{
-        EncryptedKey, KeyError, KeyInfo, KeyRepository, KeyService, MasterKey,
-        MasterKeyRepository, SecureString,
+        EncryptedKey, KeyError, KeyInfo, KeyRepository, KeyService, MasterKey, MasterKeyRepository,
+        SecureString,
     };
     pub use crate::infrastructure::security::{
-        InMemoryKeyRepository, InMemoryMasterKeyRepository, KeyringMasterKeyRepository,
-        SqliteKeyRepository, CREATE_ENCRYPTED_KEYS_TABLE_SQL,
+        CREATE_ENCRYPTED_KEYS_TABLE_SQL, InMemoryKeyRepository, InMemoryMasterKeyRepository,
+        KeyringMasterKeyRepository, SqliteKeyRepository,
     };
 }
 

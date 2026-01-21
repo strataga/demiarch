@@ -27,4 +27,4 @@ pub mod migrations;
 
 // Re-export commonly used types
 pub use database::{Database, DatabaseConfig, DatabaseManager};
-pub use migrations::{run_migrations, migration_status, MigrationStatus, CURRENT_VERSION};
+pub use migrations::{CURRENT_VERSION, MigrationStatus, migration_status, run_migrations};

@@ -125,7 +125,10 @@ async fn test_project_create_returns_result() {
     assert!(result.is_ok());
     // The create function now returns a valid UUID instead of a placeholder
     let id = result.unwrap();
-    assert!(uuid::Uuid::parse_str(&id).is_ok(), "Should return a valid UUID");
+    assert!(
+        uuid::Uuid::parse_str(&id).is_ok(),
+        "Should return a valid UUID"
+    );
 }
 
 #[tokio::test]

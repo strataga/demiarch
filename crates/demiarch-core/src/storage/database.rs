@@ -4,8 +4,8 @@
 
 use crate::storage::migrations;
 use anyhow::{Context, Result};
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::SqlitePool;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -97,11 +97,12 @@ impl Database {
     /// Create a new database connection with the given configuration
     pub async fn new(config: DatabaseConfig) -> Result<Self> {
         // Ensure the directory exists
-        if let Some(parent) = config.path.parent() {
-            if !parent.exists() && config.path.to_string_lossy() != ":memory:" {
-                std::fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create database directory: {:?}", parent))?;
-            }
+        if let Some(parent) = config.path.parent()
+            && !parent.exists()
+            && config.path.to_string_lossy() != ":memory:"
+        {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create database directory: {:?}", parent))?;
         }
 
         let connection_str = if config.path.to_string_lossy() == ":memory:" {
@@ -239,13 +240,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_in_memory_database() {
-        let db = Database::in_memory().await.expect("Failed to create in-memory database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create in-memory database");
 
         // Health check should pass
         db.health_check().await.expect("Health check failed");
 
         // Migrations should have run
-        let status = db.migration_status().await.expect("Failed to get migration status");
+        let status = db
+            .migration_status()
+            .await
+            .expect("Failed to get migration status");
         assert!(!status.needs_migration);
     }
 
@@ -276,7 +282,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_foreign_keys_enabled() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Check that foreign keys are enabled
         let result: (i32,) = sqlx::query_as("PRAGMA foreign_keys")
@@ -289,7 +297,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_database_crud_operations() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Insert a project
         let project_id = uuid::Uuid::new_v4().to_string();
@@ -346,7 +356,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_cascade_delete() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         // Insert a project
         let project_id = uuid::Uuid::new_v4().to_string();

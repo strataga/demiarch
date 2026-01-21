@@ -152,16 +152,14 @@ const MIGRATION_V1: &str = r#"
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
-    sqlx::raw_sql(CREATE_MIGRATIONS_TABLE)
-        .execute(pool)
-        .await?;
+    sqlx::raw_sql(CREATE_MIGRATIONS_TABLE).execute(pool).await?;
 
     // Get the latest version
     let row: Option<(i32,)> = sqlx::query_as("SELECT MAX(version) FROM _migrations")
         .fetch_optional(pool)
         .await?;
 
-    Ok(row.and_then(|(v,)| Some(v)).unwrap_or(0))
+    Ok(row.map(|(v,)| v).unwrap_or(0))
 }
 
 /// Record that a migration has been applied
@@ -296,11 +294,10 @@ mod tests {
         ];
 
         for table in tables {
-            let result: (i32,) =
-                sqlx::query_as(&format!("SELECT COUNT(*) FROM {}", table))
-                    .fetch_one(&pool)
-                    .await
-                    .expect(&format!("Table {} should exist", table));
+            let result: (i32,) = sqlx::query_as(&format!("SELECT COUNT(*) FROM {}", table))
+                .fetch_one(&pool)
+                .await
+                .unwrap_or_else(|_| panic!("Table {} should exist", table));
             // Just checking the query succeeds, count should be 0
             assert_eq!(result.0, 0);
         }

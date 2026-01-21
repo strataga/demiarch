@@ -73,10 +73,11 @@ impl KeyService {
             None => {
                 // Auto-initialize if master key doesn't exist
                 self.initialize().await?;
-                self.master_key_repository
-                    .get()
-                    .await?
-                    .ok_or_else(|| KeyError::KeyringError("Failed to retrieve master key after initialization".to_string()))
+                self.master_key_repository.get().await?.ok_or_else(|| {
+                    KeyError::KeyringError(
+                        "Failed to retrieve master key after initialization".to_string(),
+                    )
+                })
             }
         }
     }
@@ -261,7 +262,9 @@ impl KeyService {
     /// This should only be used when completely resetting the key store.
     pub async fn destroy_master_key(&self) -> Result<(), KeyError> {
         self.master_key_repository.delete().await?;
-        tracing::warn!("Destroyed master encryption key - all encrypted keys are now unrecoverable");
+        tracing::warn!(
+            "Destroyed master encryption key - all encrypted keys are now unrecoverable"
+        );
         Ok(())
     }
 }

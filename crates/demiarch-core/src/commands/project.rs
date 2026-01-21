@@ -2,17 +2,18 @@
 //!
 //! Provides CRUD operations for demiarch projects.
 
-use crate::storage::Database;
 use crate::Result;
+use crate::storage::Database;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use uuid::Uuid;
 
 /// Project status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProjectStatus {
+    #[default]
     Active,
     Archived,
     Deleted,
@@ -29,19 +30,13 @@ impl ProjectStatus {
     }
 
     /// Parse from database string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "active" => Some(ProjectStatus::Active),
             "archived" => Some(ProjectStatus::Archived),
             "deleted" => Some(ProjectStatus::Deleted),
             _ => None,
         }
-    }
-}
-
-impl Default for ProjectStatus {
-    fn default() -> Self {
-        ProjectStatus::Active
     }
 }
 
@@ -68,7 +63,11 @@ pub struct Project {
 
 impl Project {
     /// Create a new project with the given details
-    pub fn new(name: impl Into<String>, framework: impl Into<String>, repo_url: impl Into<String>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        framework: impl Into<String>,
+        repo_url: impl Into<String>,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4().to_string(),
@@ -258,7 +257,7 @@ impl<'a> ProjectRepository<'a> {
             name: row.get("name"),
             framework: row.get("framework"),
             repo_url: row.get("repo_url"),
-            status: ProjectStatus::from_str(row.get("status")).unwrap_or_default(),
+            status: ProjectStatus::parse(row.get("status")).unwrap_or_default(),
             description: row.get("description"),
             created_at: row.get("created_at"),
             updated_at: row.get("updated_at"),
@@ -281,7 +280,12 @@ pub async fn create(name: &str, framework: &str, repo_url: &str) -> Result<Strin
 }
 
 /// Create a new project and save to database
-pub async fn create_with_db(db: &Database, name: &str, framework: &str, repo_url: &str) -> Result<Project> {
+pub async fn create_with_db(
+    db: &Database,
+    name: &str,
+    framework: &str,
+    repo_url: &str,
+) -> Result<Project> {
     let repo = ProjectRepository::new(db);
 
     // Check if name already exists
@@ -327,7 +331,8 @@ pub async fn get_with_db(db: &Database, id: &str) -> Result<Option<Project>> {
 /// Archive a project (legacy API)
 pub async fn archive(id: &str) -> Result<()> {
     // Validate UUID format
-    let _ = Uuid::parse_str(id).map_err(|_| crate::Error::Validation("Invalid project ID".to_string()))?;
+    let _ = Uuid::parse_str(id)
+        .map_err(|_| crate::Error::Validation("Invalid project ID".to_string()))?;
     Ok(())
 }
 
@@ -346,7 +351,8 @@ pub async fn archive_with_db(db: &Database, id: &str) -> Result<()> {
 /// Delete a project (legacy API)
 pub async fn delete(id: &str, _force: bool) -> Result<()> {
     // Validate UUID format
-    let _ = Uuid::parse_str(id).map_err(|_| crate::Error::Validation("Invalid project ID".to_string()))?;
+    let _ = Uuid::parse_str(id)
+        .map_err(|_| crate::Error::Validation("Invalid project ID".to_string()))?;
     Ok(())
 }
 
@@ -372,7 +378,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_project() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         let project = create_with_db(&db, "test-project", "rust", "https://github.com/test/test")
             .await
@@ -385,7 +393,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_project() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         let created = create_with_db(&db, "test-project", "rust", "")
             .await
@@ -402,13 +412,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_projects() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         create_with_db(&db, "project-a", "rust", "").await.unwrap();
         create_with_db(&db, "project-b", "react", "").await.unwrap();
-        create_with_db(&db, "project-c", "python", "").await.unwrap();
+        create_with_db(&db, "project-c", "python", "")
+            .await
+            .unwrap();
 
-        let projects = list_with_db(&db, None).await.expect("Failed to list projects");
+        let projects = list_with_db(&db, None)
+            .await
+            .expect("Failed to list projects");
         assert_eq!(projects.len(), 3);
 
         // Should be sorted by name
@@ -419,10 +435,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_projects_by_status() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
-        create_with_db(&db, "active-project", "rust", "").await.unwrap();
-        let archived = create_with_db(&db, "archived-project", "rust", "").await.unwrap();
+        create_with_db(&db, "active-project", "rust", "")
+            .await
+            .unwrap();
+        let archived = create_with_db(&db, "archived-project", "rust", "")
+            .await
+            .unwrap();
         archive_with_db(&db, &archived.id).await.unwrap();
 
         let active_projects = list_with_db(&db, Some(ProjectStatus::Active))
@@ -440,7 +462,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_archive_project() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         let project = create_with_db(&db, "test-project", "rust", "")
             .await
@@ -460,7 +484,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_soft_delete_project() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         let project = create_with_db(&db, "test-project", "rust", "")
             .await
@@ -480,7 +506,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_hard_delete_project() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         let project = create_with_db(&db, "test-project", "rust", "")
             .await
@@ -499,7 +527,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_duplicate_name_error() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         create_with_db(&db, "test-project", "rust", "")
             .await
@@ -511,7 +541,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_project_not_found() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
 
         let result = archive_with_db(&db, "nonexistent-id").await;
         assert!(result.is_err(), "Should fail with not found");
@@ -519,25 +551,35 @@ mod tests {
 
     #[tokio::test]
     async fn test_project_with_description() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
         let repo = ProjectRepository::new(&db);
 
         let project = Project::new("test-project", "rust", "")
             .with_description("A test project for unit testing");
 
-        repo.create(&project).await.expect("Failed to create project");
+        repo.create(&project)
+            .await
+            .expect("Failed to create project");
 
-        let retrieved = repo.get(&project.id)
+        let retrieved = repo
+            .get(&project.id)
             .await
             .expect("Failed to get project")
             .expect("Project should exist");
 
-        assert_eq!(retrieved.description, Some("A test project for unit testing".to_string()));
+        assert_eq!(
+            retrieved.description,
+            Some("A test project for unit testing".to_string())
+        );
     }
 
     #[tokio::test]
     async fn test_restore_archived_project() {
-        let db = Database::in_memory().await.expect("Failed to create database");
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
         let repo = ProjectRepository::new(&db);
 
         let project = Project::new("test-project", "rust", "");

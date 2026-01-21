@@ -359,11 +359,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize database manager for commands that need it
     // We lazily initialize it only when needed to avoid startup overhead
-    let get_db = || async {
-        DatabaseManager::new()
-            .await
-            .map(|mgr| mgr.global().clone())
-    };
+    let get_db = || async { DatabaseManager::new().await.map(|mgr| mgr.global().clone()) };
 
     match cli.command {
         Commands::New {
@@ -474,7 +470,7 @@ async fn cmd_projects(db: &Database, action: ProjectAction, quiet: bool) -> anyh
                     };
                     println!(
                         "  {} - {} ({}){}",
-                        p.id[..8].to_string(),
+                        &p.id[..8],
                         p.name,
                         p.framework,
                         status_indicator
@@ -844,8 +840,10 @@ async fn cmd_costs(project: Option<&str>, quiet: bool) -> anyhow::Result<()> {
             println!("  [WARNING] Daily limit exceeded!");
         } else if tracker.is_approaching_limit() {
             println!();
-            println!("  [WARNING] Approaching daily limit ({}% used)",
-                ((today_total / tracker.daily_limit()) * 100.0) as u32);
+            println!(
+                "  [WARNING] Approaching daily limit ({}% used)",
+                ((today_total / tracker.daily_limit()) * 100.0) as u32
+            );
         }
     }
     Ok(())
@@ -1021,8 +1019,10 @@ async fn cmd_doctor(quiet: bool) -> anyhow::Result<()> {
                         match db.migration_status().await {
                             Ok(status) => {
                                 if status.needs_migration {
-                                    println!("[!!] Database: Migrations pending (v{} -> v{})",
-                                        status.current_version, status.target_version);
+                                    println!(
+                                        "[!!] Database: Migrations pending (v{} -> v{})",
+                                        status.current_version, status.target_version
+                                    );
                                 } else {
                                     println!("[OK] Database: Schema v{}", status.current_version);
                                 }

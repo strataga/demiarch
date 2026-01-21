@@ -3,8 +3,8 @@
 //! Provides encrypted key storage with AES-256-GCM encryption at rest.
 
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit, OsRng},
 };
 use chrono::{DateTime, Utc};
 use rand_chacha::rand_core::RngCore;
@@ -76,7 +76,7 @@ impl MasterKey {
 
     /// Create a master key from base64-encoded string
     pub fn from_base64(b64: &str) -> Result<Self, KeyError> {
-        use base64::{engine::general_purpose::STANDARD, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD};
         let bytes = STANDARD
             .decode(b64)
             .map_err(|e| KeyError::InvalidFormat(e.to_string()))?;
@@ -85,13 +85,13 @@ impl MasterKey {
 
     /// Export key as hex string (for storage in keyring)
     pub fn to_hex(&self) -> String {
-        hex::encode(&self.bytes)
+        hex::encode(self.bytes)
     }
 
     /// Export key as base64 string
     pub fn to_base64(&self) -> String {
-        use base64::{engine::general_purpose::STANDARD, Engine};
-        STANDARD.encode(&self.bytes)
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        STANDARD.encode(self.bytes)
     }
 
     /// Get the raw key bytes (use carefully)
@@ -144,7 +144,7 @@ impl EncryptedKey {
         master_key: &MasterKey,
         description: Option<String>,
     ) -> Result<Self, KeyError> {
-        use base64::{engine::general_purpose::STANDARD, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD};
 
         // Generate random nonce
         let mut nonce_bytes = [0u8; NONCE_SIZE];
@@ -164,8 +164,8 @@ impl EncryptedKey {
         Ok(Self {
             id: Uuid::new_v4(),
             name,
-            ciphertext: STANDARD.encode(&ciphertext),
-            nonce: STANDARD.encode(&nonce_bytes),
+            ciphertext: STANDARD.encode(ciphertext),
+            nonce: STANDARD.encode(nonce_bytes),
             description,
             created_at: now,
             updated_at: now,
@@ -177,7 +177,7 @@ impl EncryptedKey {
     ///
     /// Returns a SecureString that is zeroized on drop
     pub fn decrypt(&self, master_key: &MasterKey) -> Result<SecureString, KeyError> {
-        use base64::{engine::general_purpose::STANDARD, Engine};
+        use base64::{Engine, engine::general_purpose::STANDARD};
 
         // Decode ciphertext and nonce
         let ciphertext = STANDARD
@@ -202,9 +202,11 @@ impl EncryptedKey {
         let cipher = Aes256Gcm::new_from_slice(master_key.as_bytes())
             .map_err(|e| KeyError::DecryptionFailed(e.to_string()))?;
 
-        let plaintext = cipher
-            .decrypt(nonce, ciphertext.as_ref())
-            .map_err(|_| KeyError::DecryptionFailed("Decryption failed (invalid key or corrupted data)".to_string()))?;
+        let plaintext = cipher.decrypt(nonce, ciphertext.as_ref()).map_err(|_| {
+            KeyError::DecryptionFailed(
+                "Decryption failed (invalid key or corrupted data)".to_string(),
+            )
+        })?;
 
         let decrypted = String::from_utf8(plaintext)
             .map_err(|e| KeyError::DecryptionFailed(format!("Invalid UTF-8: {}", e)))?;
@@ -213,12 +215,8 @@ impl EncryptedKey {
     }
 
     /// Update the encrypted value
-    pub fn update(
-        &mut self,
-        plaintext: &str,
-        master_key: &MasterKey,
-    ) -> Result<(), KeyError> {
-        use base64::{engine::general_purpose::STANDARD, Engine};
+    pub fn update(&mut self, plaintext: &str, master_key: &MasterKey) -> Result<(), KeyError> {
+        use base64::{Engine, engine::general_purpose::STANDARD};
 
         // Generate new nonce for each encryption
         let mut nonce_bytes = [0u8; NONCE_SIZE];
@@ -232,8 +230,8 @@ impl EncryptedKey {
             .encrypt(nonce, plaintext.as_bytes())
             .map_err(|e| KeyError::EncryptionFailed(e.to_string()))?;
 
-        self.ciphertext = STANDARD.encode(&ciphertext);
-        self.nonce = STANDARD.encode(&nonce_bytes);
+        self.ciphertext = STANDARD.encode(ciphertext);
+        self.nonce = STANDARD.encode(nonce_bytes);
         self.updated_at = Utc::now();
 
         Ok(())
@@ -380,13 +378,8 @@ mod tests {
         let master_key2 = MasterKey::generate();
         let plaintext = "sk-test-api-key-12345";
 
-        let encrypted = EncryptedKey::encrypt(
-            "test-key".to_string(),
-            plaintext,
-            &master_key1,
-            None,
-        )
-        .unwrap();
+        let encrypted =
+            EncryptedKey::encrypt("test-key".to_string(), plaintext, &master_key1, None).unwrap();
 
         let result = encrypted.decrypt(&master_key2);
         assert!(matches!(result, Err(KeyError::DecryptionFailed(_))));
@@ -398,13 +391,8 @@ mod tests {
         let original = "sk-original-key";
         let updated = "sk-updated-key";
 
-        let mut encrypted = EncryptedKey::encrypt(
-            "test-key".to_string(),
-            original,
-            &master_key,
-            None,
-        )
-        .unwrap();
+        let mut encrypted =
+            EncryptedKey::encrypt("test-key".to_string(), original, &master_key, None).unwrap();
 
         let original_nonce = encrypted.nonce.clone();
 
@@ -423,13 +411,8 @@ mod tests {
         let master_key = MasterKey::generate();
         let plaintext = "sk-test-12345";
 
-        let encrypted = EncryptedKey::encrypt(
-            "test-key".to_string(),
-            plaintext,
-            &master_key,
-            None,
-        )
-        .unwrap();
+        let encrypted =
+            EncryptedKey::encrypt("test-key".to_string(), plaintext, &master_key, None).unwrap();
 
         let preview = encrypted.redacted_preview(&master_key);
         assert_eq!(preview, "***2345");
