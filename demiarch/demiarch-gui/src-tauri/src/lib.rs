@@ -3,16 +3,49 @@
 //! Tauri command implementations and application entry point
 //! for the Demiarch GUI interface.
 
-use serde::{Deserialize, Serialize};
-use tauri::Manager;
+use std::path::PathBuf;
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::fs::File;
+use std::time::Duration;
 
-// Re-export core functionality
-pub use demiarch_core;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use sqlx::{sqlite::SqlitePoolOptions, FromRow, Row, SqlitePool};
+use tauri::{Emitter, Manager};
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+use std::sync::Arc;
 
 /// Application state shared across all windows
-#[derive(Debug, Default)]
 pub struct AppState {
     pub initialized: std::sync::atomic::AtomicBool,
+    pub pool: Arc<RwLock<Option<SqlitePool>>>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            initialized: std::sync::atomic::AtomicBool::new(false),
+            pool: Arc::new(RwLock::new(None)),
+        }
+    }
+}
+
+impl std::fmt::Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppState")
+            .field("initialized", &self.initialized)
+            .finish()
+    }
+}
+
+/// Get the default demiarch database path
+fn get_db_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("demiarch")
+        .join("demiarch.db")
 }
 
 /// Application info returned to the frontend
@@ -31,27 +64,101 @@ pub struct HealthStatus {
 }
 
 // ============================================================================
+// Project & Feature Types
+// ============================================================================
+
+/// Project info returned to the frontend
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ProjectInfo {
+    pub id: String,
+    pub name: String,
+    pub framework: String,
+    pub repo_url: String,
+    pub status: String,
+    pub description: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Feature info returned to the frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureInfo {
+    pub id: String,
+    pub project_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub status: String,
+    pub priority: i32,
+    pub labels: Option<Vec<String>>,
+    pub acceptance_criteria: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+// ============================================================================
+// Agent Event Types (mirrors demiarch-core::agents::events)
+// ============================================================================
+
+/// Agent event file path
+fn get_agent_events_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".demiarch")
+        .join("agent-events.jsonl")
+}
+
+/// Type of agent event
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentEventType {
+    Spawned,
+    Started,
+    StatusUpdate,
+    Completed,
+    Failed,
+    Cancelled,
+    TokenUpdate,
+    Disposed,
+}
+
+/// Agent data included in events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentEventData {
+    pub id: String,
+    pub agent_type: String,
+    pub name: String,
+    pub parent_id: Option<String>,
+    pub path: String,
+    pub status: String,
+    pub tokens: u64,
+    pub task: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Agent lifecycle event
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentEvent {
+    pub timestamp: DateTime<Utc>,
+    pub event_id: Uuid,
+    pub session_id: Uuid,
+    pub event_type: AgentEventType,
+    pub agent: AgentEventData,
+}
+
+// ============================================================================
 // Conflict Resolution Types
 // ============================================================================
 
 /// A file with detected conflicts between generated and user versions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConflictFile {
-    /// Relative file path from project root
     pub file_path: String,
-    /// Current status: "modified", "deleted", or "unchanged"
     pub status: String,
-    /// Original content hash when generated
     pub original_hash: String,
-    /// Current content hash (None if deleted)
     pub current_hash: Option<String>,
-    /// Original content from checkpoint (for diff)
     pub original_content: Option<String>,
-    /// Current content on disk (for diff)
     pub current_content: Option<String>,
-    /// When the file was originally generated (ISO 8601)
     pub generated_at: Option<String>,
-    /// Feature that generated this file (if any)
     pub feature_id: Option<String>,
 }
 
@@ -64,17 +171,6 @@ pub struct ConflictSummary {
     pub unchanged_files: Vec<String>,
 }
 
-/// Resolution strategy for a conflict
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ResolutionStrategy {
-    #[serde(rename = "keep-user")]
-    KeepUser,
-    #[serde(rename = "keep-generated")]
-    KeepGenerated,
-    #[serde(rename = "merge")]
-    Merge,
-}
-
 /// Result of resolving a conflict
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolutionResult {
@@ -83,6 +179,10 @@ pub struct ResolutionResult {
     pub success: bool,
     pub error: Option<String>,
 }
+
+// ============================================================================
+// Basic Commands
+// ============================================================================
 
 /// Get application information
 #[tauri::command]
@@ -110,74 +210,192 @@ fn greet(name: &str) -> String {
 }
 
 // ============================================================================
+// Project & Feature Commands
+// ============================================================================
+
+/// List all projects
+#[tauri::command]
+async fn list_projects(state: tauri::State<'_, AppState>) -> Result<Vec<ProjectInfo>, String> {
+    let pool_guard: tokio::sync::RwLockReadGuard<'_, Option<SqlitePool>> = state.pool.read().await;
+    let pool: &SqlitePool = pool_guard.as_ref().ok_or("Database not initialized")?;
+
+    let projects: Vec<ProjectInfo> = sqlx::query_as::<_, ProjectInfo>(
+        r#"
+        SELECT
+            id,
+            name,
+            framework,
+            repo_url,
+            status,
+            description,
+            datetime(created_at) as created_at,
+            datetime(updated_at) as updated_at
+        FROM projects
+        WHERE status = 'active'
+        ORDER BY updated_at DESC
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list projects: {}", e))?;
+
+    Ok(projects)
+}
+
+/// Get a specific project by ID
+#[tauri::command]
+async fn get_project(
+    state: tauri::State<'_, AppState>,
+    project_id: String,
+) -> Result<ProjectInfo, String> {
+    let pool_guard: tokio::sync::RwLockReadGuard<'_, Option<SqlitePool>> = state.pool.read().await;
+    let pool: &SqlitePool = pool_guard.as_ref().ok_or("Database not initialized")?;
+
+    let project: ProjectInfo = sqlx::query_as::<_, ProjectInfo>(
+        r#"
+        SELECT
+            id,
+            name,
+            framework,
+            repo_url,
+            status,
+            description,
+            datetime(created_at) as created_at,
+            datetime(updated_at) as updated_at
+        FROM projects
+        WHERE id = ?
+        "#,
+    )
+    .bind(&project_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to get project: {}", e))?
+    .ok_or("Project not found")?;
+
+    Ok(project)
+}
+
+/// List features for a project
+#[tauri::command]
+async fn list_features(
+    state: tauri::State<'_, AppState>,
+    project_id: String,
+) -> Result<Vec<FeatureInfo>, String> {
+    let pool_guard: tokio::sync::RwLockReadGuard<'_, Option<SqlitePool>> = state.pool.read().await;
+    let pool: &SqlitePool = pool_guard.as_ref().ok_or("Database not initialized")?;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            id,
+            project_id,
+            title,
+            description,
+            status,
+            priority,
+            labels,
+            acceptance_criteria,
+            datetime(created_at) as created_at,
+            datetime(updated_at) as updated_at
+        FROM features
+        WHERE project_id = ?
+        ORDER BY priority ASC, created_at DESC
+        "#,
+    )
+    .bind(&project_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list features: {}", e))?;
+
+    let features: Vec<FeatureInfo> = rows
+        .into_iter()
+        .map(|row: sqlx::sqlite::SqliteRow| {
+            let labels_str: Option<String> = row.get("labels");
+            let labels = labels_str.map(|s: String| {
+                serde_json::from_str::<Vec<String>>(&s).unwrap_or_else(|_| {
+                    s.split(',').map(|l| l.trim().to_string()).collect()
+                })
+            });
+
+            FeatureInfo {
+                id: row.get("id"),
+                project_id: row.get("project_id"),
+                title: row.get("title"),
+                description: row.get("description"),
+                status: row.get("status"),
+                priority: row.get("priority"),
+                labels,
+                acceptance_criteria: row.get("acceptance_criteria"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            }
+        })
+        .collect();
+
+    Ok(features)
+}
+
+/// Update a feature's status
+#[tauri::command]
+async fn update_feature_status(
+    state: tauri::State<'_, AppState>,
+    feature_id: String,
+    status: String,
+) -> Result<(), String> {
+    let pool_guard: tokio::sync::RwLockReadGuard<'_, Option<SqlitePool>> = state.pool.read().await;
+    let pool: &SqlitePool = pool_guard.as_ref().ok_or("Database not initialized")?;
+
+    // Validate status
+    let valid_statuses = ["backlog", "todo", "in_progress", "review", "done"];
+    if !valid_statuses.contains(&status.as_str()) {
+        return Err(format!(
+            "Invalid status: {}. Valid values: {:?}",
+            status, valid_statuses
+        ));
+    }
+
+    sqlx::query(
+        r#"
+        UPDATE features
+        SET status = ?, updated_at = datetime('now')
+        WHERE id = ?
+        "#,
+    )
+    .bind(&status)
+    .bind(&feature_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("Failed to update feature status: {}", e))?;
+
+    Ok(())
+}
+
+// ============================================================================
 // Conflict Resolution Commands
 // ============================================================================
 
 /// Check all tracked files for conflicts (user edits to generated code)
 #[tauri::command]
 async fn check_for_conflicts(_project_id: String) -> Result<ConflictSummary, String> {
-    // TODO: Integrate with demiarch_core::domain::recovery::EditDetectionService
-    // For now, return mock data for UI development
+    // TODO: Integrate with actual edit detection
     Ok(ConflictSummary {
-        total_files: 5,
-        modified_files: vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
-        deleted_files: vec!["src/unused.rs".to_string()],
-        unchanged_files: vec!["src/config.rs".to_string(), "Cargo.toml".to_string()],
+        total_files: 0,
+        modified_files: vec![],
+        deleted_files: vec![],
+        unchanged_files: vec![],
     })
 }
 
 /// Get detailed conflict information for files with edits
 #[tauri::command]
 async fn get_conflict_details(_project_id: String) -> Result<Vec<ConflictFile>, String> {
-    // TODO: Integrate with demiarch_core::domain::recovery::EditDetectionService
-    // For now, return mock data for UI development
-    Ok(vec![
-        ConflictFile {
-            file_path: "src/main.rs".to_string(),
-            status: "modified".to_string(),
-            original_hash: "abc123".to_string(),
-            current_hash: Some("def456".to_string()),
-            original_content: Some("fn main() {\n    println!(\"Hello, world!\");\n}".to_string()),
-            current_content: Some(
-                "fn main() {\n    println!(\"Hello, Demiarch!\");\n    // User added this comment\n    init_app();\n}"
-                    .to_string(),
-            ),
-            generated_at: Some("2024-01-15T10:30:00Z".to_string()),
-            feature_id: None,
-        },
-        ConflictFile {
-            file_path: "src/lib.rs".to_string(),
-            status: "modified".to_string(),
-            original_hash: "ghi789".to_string(),
-            current_hash: Some("jkl012".to_string()),
-            original_content: Some("pub mod app;\npub mod config;".to_string()),
-            current_content: Some(
-                "pub mod app;\npub mod config;\npub mod utils; // User added module".to_string(),
-            ),
-            generated_at: Some("2024-01-15T10:30:00Z".to_string()),
-            feature_id: None,
-        },
-        ConflictFile {
-            file_path: "src/unused.rs".to_string(),
-            status: "deleted".to_string(),
-            original_hash: "mno345".to_string(),
-            current_hash: None,
-            original_content: Some("// This file was deleted by user".to_string()),
-            current_content: None,
-            generated_at: Some("2024-01-14T09:00:00Z".to_string()),
-            feature_id: None,
-        },
-    ])
+    // TODO: Integrate with actual edit detection
+    Ok(vec![])
 }
 
 /// Resolve a single conflict with the specified strategy
 #[tauri::command]
 async fn resolve_conflict(file_path: String, strategy: String) -> Result<ResolutionResult, String> {
-    // TODO: Integrate with demiarch_core::domain::recovery
-    // - "keep-user": Acknowledge user edits as new baseline
-    // - "keep-generated": Restore from checkpoint
-    // - "merge": Future feature for intelligent merging
-
     Ok(ResolutionResult {
         file_path,
         strategy,
@@ -189,18 +407,110 @@ async fn resolve_conflict(file_path: String, strategy: String) -> Result<Resolut
 /// Acknowledge user edits (accept as new baseline without restoring)
 #[tauri::command]
 async fn acknowledge_edits(_project_id: String, file_paths: Vec<String>) -> Result<usize, String> {
-    // TODO: Integrate with demiarch_core::domain::recovery::EditDetectionService::acknowledge_edits
     Ok(file_paths.len())
 }
 
 /// Get diff between original and current content for a specific file
 #[tauri::command]
 async fn get_file_diff(_project_id: String, _file_path: String) -> Result<ConflictFile, String> {
-    // TODO: Integrate with demiarch_core to read actual file content
-    // and compare with tracked original hash
-
     Err("File not found or not tracked".to_string())
 }
+
+// ============================================================================
+// Agent Event Streaming Commands
+// ============================================================================
+
+/// Start watching agent events and emit to frontend
+#[tauri::command]
+async fn start_agent_watcher(app: tauri::AppHandle) -> Result<(), String> {
+    let events_path = get_agent_events_path();
+
+    // Spawn a background task to watch the file
+    tokio::spawn(async move {
+        let mut last_position: u64 = 0;
+        let mut last_session_id: Option<Uuid> = None;
+
+        loop {
+            // Try to open the file
+            if let Ok(mut file) = File::open(&events_path) {
+                // Get file size
+                if let Ok(metadata) = file.metadata() {
+                    let file_size = metadata.len();
+
+                    // If file was truncated, reset position
+                    if file_size < last_position {
+                        last_position = 0;
+                        last_session_id = None;
+                    }
+
+                    // Seek to last read position
+                    if file.seek(SeekFrom::Start(last_position)).is_ok() {
+                        let reader = BufReader::new(&file);
+
+                        for line in reader.lines() {
+                            if let Ok(line) = line {
+                                if let Ok(event) = serde_json::from_str::<AgentEvent>(&line) {
+                                    // Track session ID - only emit events from current session
+                                    if last_session_id.is_none() || last_session_id == Some(event.session_id) {
+                                        last_session_id = Some(event.session_id);
+
+                                        // Emit to frontend
+                                        let _ = app.emit("agent-event", &event);
+                                    } else if Some(event.session_id) != last_session_id {
+                                        // New session started, update filter and emit
+                                        last_session_id = Some(event.session_id);
+                                        // Emit session change event
+                                        let _ = app.emit("agent-session-change", event.session_id.to_string());
+                                        let _ = app.emit("agent-event", &event);
+                                    }
+                                }
+                                last_position += line.len() as u64 + 1; // +1 for newline
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Poll every 200ms
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    });
+
+    Ok(())
+}
+
+/// Get recent agent events (for initial load)
+#[tauri::command]
+async fn get_recent_agent_events(count: Option<usize>) -> Result<Vec<AgentEvent>, String> {
+    let events_path = get_agent_events_path();
+    let count = count.unwrap_or(100);
+
+    let file = File::open(&events_path).map_err(|e| format!("Failed to open events file: {}", e))?;
+    let reader = BufReader::new(file);
+
+    let mut all_events: Vec<AgentEvent> = reader
+        .lines()
+        .filter_map(|line| line.ok())
+        .filter_map(|line| serde_json::from_str(&line).ok())
+        .collect();
+
+    // Get the most recent session's events
+    if let Some(last) = all_events.last() {
+        let session_id = last.session_id;
+        all_events.retain(|e| e.session_id == session_id);
+    }
+
+    // Return last N events
+    if all_events.len() > count {
+        all_events.drain(0..all_events.len() - count);
+    }
+
+    Ok(all_events)
+}
+
+// ============================================================================
+// Application Entry Point
+// ============================================================================
 
 /// Run the Tauri application
 pub fn run() {
@@ -211,17 +521,54 @@ pub fn run() {
             get_app_info,
             health_check,
             greet,
+            list_projects,
+            get_project,
+            list_features,
+            update_feature_status,
             check_for_conflicts,
             get_conflict_details,
             resolve_conflict,
             acknowledge_edits,
             get_file_diff,
+            start_agent_watcher,
+            get_recent_agent_events,
         ])
         .setup(|app| {
             let state = app.state::<AppState>();
             state
                 .initialized
                 .store(true, std::sync::atomic::Ordering::SeqCst);
+
+            // Initialize database connection - clone the Arc
+            let pool_arc = Arc::clone(&state.pool);
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+                rt.block_on(async {
+                    let db_path = get_db_path();
+
+                    if !db_path.exists() {
+                        eprintln!("Database not found at {:?}", db_path);
+                        return;
+                    }
+
+                    let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
+
+                    match SqlitePoolOptions::new()
+                        .max_connections(5)
+                        .connect(&db_url)
+                        .await
+                    {
+                        Ok(pool) => {
+                            let mut pool_guard = pool_arc.write().await;
+                            *pool_guard = Some(pool);
+                            eprintln!("Database connected: {:?}", db_path);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to connect to database: {}", e);
+                        }
+                    }
+                });
+            });
 
             #[cfg(debug_assertions)]
             {

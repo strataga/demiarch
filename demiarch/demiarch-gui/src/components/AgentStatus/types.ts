@@ -2,7 +2,7 @@
 
 export type AgentStatus = 'idle' | 'thinking' | 'working' | 'waiting' | 'error' | 'completed';
 
-export type AgentType = 'orchestrator' | 'coder' | 'reviewer' | 'researcher' | 'planner';
+export type AgentType = 'orchestrator' | 'coder' | 'reviewer' | 'researcher' | 'planner' | 'tester';
 
 export interface AgentTask {
   id: string;
@@ -50,6 +50,7 @@ export const AGENT_TYPE_CONFIG: Record<AgentType, { label: string; color: string
   reviewer: { label: 'Reviewer', color: '#8b5cf6' },
   researcher: { label: 'Researcher', color: '#22c55e' },
   planner: { label: 'Planner', color: '#ec4899' },
+  tester: { label: 'Tester', color: '#06b6d4' },
 };
 
 // Helper to create a new agent
