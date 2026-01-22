@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layout 07: Dashboard + Drill-Down - Demiarch</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-card: #242424;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent: #646cff;
+      --border: #333;
+      --success: #4ade80;
+      --warning: #f59e0b;
+      --error: #ef4444;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 13px;
+    }
+    .layout {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .back-link {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 0.5rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.75rem;
+      z-index: 100;
+    }
+    .back-link:hover { border-color: var(--accent); color: var(--text-primary); }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 44px;
+      padding: 0 1rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .app-title {
+      font-size: 1rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+    .breadcrumb span { color: var(--text-primary); }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+    }
+
+    /* Dashboard */
+    .dashboard {
+      flex: 1;
+      overflow: auto;
+      padding: 1.5rem;
+    }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .widget {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      transition: all 0.2s;
+    }
+    .widget:hover {
+      border-color: var(--accent);
+    }
+    .widget-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+    }
+    .widget-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .widget-badge {
+      padding: 0.125rem 0.5rem;
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+      font-size: 0.65rem;
+      font-weight: 600;
+      border-radius: 9999px;
+    }
+    .widget-main {
+      margin-bottom: 0.75rem;
+    }
+    .project-name {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .project-stats {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+    .progress-bar {
+      height: 6px;
+      background: var(--bg-primary);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 0.25rem;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      border-radius: 3px;
+    }
+    .progress-label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+    }
+    .widget-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.375rem 0.75rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .widget-action:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Agents Widget */
+    .agent-stats {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .agent-stat {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+    .agent-stat-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .agent-stat-dot.working { background: var(--accent); }
+    .agent-stat-dot.idle { background: var(--text-secondary); }
+    .agent-stat-dot.error { background: var(--error); }
+    .agent-stat-label { font-size: 0.8rem; }
+
+    /* Conflicts Widget */
+    .conflict-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+    .conflict-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0.5rem;
+      background: rgba(245, 158, 11, 0.1);
+      border-radius: 4px;
+      font-size: 0.75rem;
+    }
+
+    /* Activity Widget */
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .activity-item {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      padding: 0.25rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .activity-time {
+      color: var(--accent);
+      margin-right: 0.5rem;
+    }
+
+    .layout-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-width: 400px;
+    }
+    .layout-info h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--accent); }
+    .layout-info p { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="back-link">Back to Index</a>
+
+  <div class="layout">
+    <header class="header">
+      <div class="header-left">
+        <h1 class="app-title">Demiarch</h1>
+        <div class="breadcrumb">
+          Home &gt; <span>Dashboard</span>
+        </div>
+      </div>
+      <div class="status-dot"></div>
+    </header>
+
+    <main class="dashboard">
+      <div class="dashboard-grid">
+        <!-- Project Widget -->
+        <div class="widget">
+          <div class="widget-header">
+            <span class="widget-title">Current Project</span>
+          </div>
+          <div class="widget-main">
+            <div class="project-name">viral-shorts</div>
+            <div class="project-stats">Tasks: 24 total</div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 67%"></div>
+            </div>
+            <div class="progress-label">67% complete (16/24 tasks done)</div>
+          </div>
+          <button class="widget-action">Open Kanban &rarr;</button>
+        </div>
+
+        <!-- Agents Widget -->
+        <div class="widget">
+          <div class="widget-header">
+            <span class="widget-title">Agents</span>
+          </div>
+          <div class="widget-main">
+            <div class="agent-stats">
+              <div class="agent-stat">
+                <div class="agent-stat-dot working"></div>
+                <span class="agent-stat-label">1 working</span>
+              </div>
+              <div class="agent-stat">
+                <div class="agent-stat-dot idle"></div>
+                <span class="agent-stat-label">2 idle</span>
+              </div>
+              <div class="agent-stat">
+                <div class="agent-stat-dot error"></div>
+                <span class="agent-stat-label">0 errors</span>
+              </div>
+            </div>
+          </div>
+          <button class="widget-action">Manage Agents &rarr;</button>
+        </div>
+
+        <!-- Conflicts Widget -->
+        <div class="widget">
+          <div class="widget-header">
+            <span class="widget-title">Conflicts</span>
+            <span class="widget-badge">2</span>
+          </div>
+          <div class="widget-main">
+            <div class="conflict-list">
+              <div class="conflict-item">&#9888; src/auth.rs</div>
+              <div class="conflict-item">&#9888; components/App.tsx</div>
+            </div>
+          </div>
+          <button class="widget-action">Resolve Conflicts &rarr;</button>
+        </div>
+
+        <!-- Activity Widget -->
+        <div class="widget">
+          <div class="widget-header">
+            <span class="widget-title">Recent Activity</span>
+          </div>
+          <div class="widget-main">
+            <div class="activity-list">
+              <div class="activity-item"><span class="activity-time">10:42</span>Agent-1 started working on auth flow</div>
+              <div class="activity-item"><span class="activity-time">10:41</span>Task "Error handling" moved to Review</div>
+              <div class="activity-item"><span class="activity-time">10:40</span>Conflict detected in src/auth.rs</div>
+              <div class="activity-item"><span class="activity-time">10:38</span>Agent-2 completed video processing</div>
+            </div>
+          </div>
+          <button class="widget-action">View All Activity &rarr;</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="layout-info">
+    <h3>07: Dashboard + Drill-Down Layout</h3>
+    <p><strong>Pros:</strong> Great "at a glance" overview, each view optimized, supports analytics<br>
+    <strong>Cons:</strong> Extra click to reach kanban, dashboard may feel unnecessary<br>
+    <strong>Best for:</strong> Team leads or users managing multiple projects who need overview</p>
+  </div>
+</body>
+</html>

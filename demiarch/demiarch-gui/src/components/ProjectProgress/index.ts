@@ -1,0 +1,1 @@
+export { ProjectProgress } from './ProjectProgress';

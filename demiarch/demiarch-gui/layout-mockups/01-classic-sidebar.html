@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layout 01: Classic Sidebar - Demiarch</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-card: #242424;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent: #646cff;
+      --border: #333;
+      --success: #4ade80;
+      --warning: #f59e0b;
+      --error: #ef4444;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 13px;
+    }
+    .layout {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .back-link {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 0.5rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.75rem;
+      z-index: 100;
+    }
+    .back-link:hover { border-color: var(--accent); color: var(--text-primary); }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 40px;
+      padding: 0 0.75rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .sidebar-toggle {
+      width: 24px;
+      height: 24px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .app-title {
+      font-size: 1rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .version {
+      font-size: 0.6rem;
+      color: var(--text-secondary);
+      padding: 0.125rem 0.375rem;
+      background: var(--bg-primary);
+      border-radius: 9999px;
+    }
+    .project-select {
+      padding: 0.25rem 0.5rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 0.8rem;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+    }
+    .header-btn {
+      padding: 0.25rem 0.5rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 14px;
+      height: 14px;
+      padding: 0 0.25rem;
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+      font-size: 0.6rem;
+      font-weight: 600;
+      border-radius: 9999px;
+      margin-left: 0.25rem;
+    }
+
+    /* Content */
+    .content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-section {
+      padding: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-section:last-child {
+      border-bottom: none;
+      flex: 1;
+      overflow: auto;
+    }
+    .section-title {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+    .agent-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem;
+      background: var(--bg-primary);
+      border-radius: 4px;
+      margin-bottom: 0.25rem;
+    }
+    .agent-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .agent-dot.working { background: var(--accent); }
+    .agent-dot.idle { background: var(--text-secondary); }
+    .agent-dot.error { background: var(--error); }
+    .agent-name { font-size: 0.75rem; }
+    .agent-status { font-size: 0.65rem; color: var(--text-secondary); margin-left: auto; }
+    .conflict-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem;
+      background: rgba(245, 158, 11, 0.1);
+      border-radius: 4px;
+      margin-bottom: 0.25rem;
+      font-size: 0.75rem;
+    }
+
+    /* Main */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 0.5rem;
+    }
+    .board-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .board-title { font-size: 1rem; font-weight: 600; }
+    .board-stats { font-size: 0.7rem; color: var(--text-secondary); }
+    .columns {
+      display: flex;
+      gap: 0.5rem;
+      flex: 1;
+      overflow-x: auto;
+    }
+    .column {
+      flex: 0 0 200px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .column-header {
+      padding: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+    }
+    .column-header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      border-radius: 0.5rem 0.5rem 0 0;
+    }
+    .column:nth-child(1) .column-header::before { background: #6b7280; }
+    .column:nth-child(2) .column-header::before { background: #3b82f6; }
+    .column:nth-child(3) .column-header::before { background: #f59e0b; }
+    .column:nth-child(4) .column-header::before { background: #8b5cf6; }
+    .column:nth-child(5) .column-header::before { background: #22c55e; }
+    .column-title { font-size: 0.75rem; font-weight: 600; }
+    .column-count {
+      font-size: 0.65rem;
+      color: var(--text-secondary);
+      background: var(--bg-primary);
+      padding: 0.0625rem 0.375rem;
+      border-radius: 9999px;
+    }
+    .column-cards {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.375rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+      border-left: 2px solid var(--warning);
+    }
+    .card-title { font-size: 0.75rem; font-weight: 500; margin-bottom: 0.25rem; }
+    .card-desc { font-size: 0.65rem; color: var(--text-secondary); }
+    .card-labels { display: flex; gap: 0.125rem; margin-top: 0.25rem; }
+    .label {
+      font-size: 0.5rem;
+      padding: 0.0625rem 0.25rem;
+      background: var(--accent);
+      color: white;
+      border-radius: 9999px;
+    }
+
+    .layout-info {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-width: 400px;
+    }
+    .layout-info h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--accent); }
+    .layout-info p { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="back-link">Back to Index</a>
+
+  <div class="layout">
+    <header class="header">
+      <div class="header-left">
+        <button class="sidebar-toggle">&lt;</button>
+        <h1 class="app-title">Demiarch</h1>
+        <span class="version">v0.1.0</span>
+      </div>
+      <select class="project-select">
+        <option>viral-shorts</option>
+        <option>demiarch-gui</option>
+      </select>
+      <div class="header-right">
+        <div class="status-dot"></div>
+        <button class="header-btn">Conflicts<span class="badge">2</span></button>
+      </div>
+    </header>
+
+    <div class="content">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h3 class="section-title">Agents</h3>
+          <div class="agent-item">
+            <div class="agent-dot working"></div>
+            <span class="agent-name">Agent-1</span>
+            <span class="agent-status">working</span>
+          </div>
+          <div class="agent-item">
+            <div class="agent-dot idle"></div>
+            <span class="agent-name">Agent-2</span>
+            <span class="agent-status">idle</span>
+          </div>
+          <div class="agent-item">
+            <div class="agent-dot error"></div>
+            <span class="agent-name">Agent-3</span>
+            <span class="agent-status">error</span>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <h3 class="section-title">Conflicts</h3>
+          <div class="conflict-item">src/auth.rs</div>
+          <div class="conflict-item">components/App.tsx</div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div class="board-header">
+          <h2 class="board-title">viral-shorts</h2>
+          <span class="board-stats">12 cards</span>
+        </div>
+        <div class="columns">
+          <div class="column">
+            <div class="column-header">
+              <span class="column-title">Backlog</span>
+              <span class="column-count">3</span>
+            </div>
+            <div class="column-cards">
+              <div class="card">
+                <div class="card-title">Add user authentication</div>
+                <div class="card-desc">Implement OAuth2 login flow</div>
+                <div class="card-labels"><span class="label">auth</span></div>
+              </div>
+              <div class="card">
+                <div class="card-title">Database migrations</div>
+                <div class="card-desc">Set up schema versioning</div>
+              </div>
+              <div class="card">
+                <div class="card-title">API documentation</div>
+              </div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header">
+              <span class="column-title">Todo</span>
+              <span class="column-count">2</span>
+            </div>
+            <div class="column-cards">
+              <div class="card">
+                <div class="card-title">Video upload endpoint</div>
+                <div class="card-desc">Handle multipart uploads</div>
+              </div>
+              <div class="card">
+                <div class="card-title">Thumbnail generation</div>
+              </div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header">
+              <span class="column-title">In Progress</span>
+              <span class="column-count">3</span>
+            </div>
+            <div class="column-cards">
+              <div class="card">
+                <div class="card-title">Video processing pipeline</div>
+                <div class="card-desc">FFmpeg integration</div>
+                <div class="card-labels"><span class="label">core</span></div>
+              </div>
+              <div class="card">
+                <div class="card-title">Storage service</div>
+              </div>
+              <div class="card">
+                <div class="card-title">Rate limiting</div>
+              </div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header">
+              <span class="column-title">Review</span>
+              <span class="column-count">2</span>
+            </div>
+            <div class="column-cards">
+              <div class="card">
+                <div class="card-title">Error handling</div>
+              </div>
+              <div class="card">
+                <div class="card-title">Logging setup</div>
+              </div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header">
+              <span class="column-title">Done</span>
+              <span class="column-count">2</span>
+            </div>
+            <div class="column-cards">
+              <div class="card">
+                <div class="card-title">Project setup</div>
+              </div>
+              <div class="card">
+                <div class="card-title">CI/CD pipeline</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="layout-info">
+    <h3>01: Classic Sidebar Layout</h3>
+    <p><strong>Pros:</strong> Familiar pattern, easy to collapse sidebar, clear separation<br>
+    <strong>Cons:</strong> Sidebar can feel cramped, limited vertical space for logs<br>
+    <strong>Best for:</strong> Users who prefer conventional layouts</p>
+  </div>
+</body>
+</html>

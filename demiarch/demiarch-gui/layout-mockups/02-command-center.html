@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layout 02: Command Center - Demiarch</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-card: #242424;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent: #646cff;
+      --border: #333;
+      --success: #4ade80;
+      --warning: #f59e0b;
+      --error: #ef4444;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 13px;
+    }
+    .layout {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .back-link {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 0.5rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.75rem;
+      z-index: 100;
+    }
+    .back-link:hover { border-color: var(--accent); color: var(--text-primary); }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+      padding: 0 1rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .app-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .project-select {
+      padding: 0.375rem 0.75rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0.75rem;
+      background: rgba(74, 222, 128, 0.1);
+      border: 1px solid var(--success);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--success);
+    }
+    .conflict-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0.75rem;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid var(--warning);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--warning);
+      cursor: pointer;
+    }
+
+    /* Main Kanban Area */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 1rem;
+    }
+    .columns {
+      display: flex;
+      gap: 0.75rem;
+      flex: 1;
+      overflow-x: auto;
+    }
+    .column {
+      flex: 0 0 220px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .column-header {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+    }
+    .column-header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      border-radius: 0.5rem 0.5rem 0 0;
+    }
+    .column:nth-child(1) .column-header::before { background: #6b7280; }
+    .column:nth-child(2) .column-header::before { background: #3b82f6; }
+    .column:nth-child(3) .column-header::before { background: #f59e0b; }
+    .column:nth-child(4) .column-header::before { background: #8b5cf6; }
+    .column:nth-child(5) .column-header::before { background: #22c55e; }
+    .column-title { font-size: 0.8rem; font-weight: 600; }
+    .column-count {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      background: var(--bg-primary);
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+    }
+    .column-cards {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      padding: 0.625rem;
+      border-left: 2px solid var(--warning);
+    }
+    .card-title { font-size: 0.8rem; font-weight: 500; margin-bottom: 0.25rem; }
+    .card-desc { font-size: 0.7rem; color: var(--text-secondary); }
+
+    /* Bottom Dock - Agent Stations */
+    .dock {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+    }
+    .dock-agents {
+      display: flex;
+      gap: 1rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .agent-station {
+      flex: 0 0 200px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .agent-station:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .agent-station.working {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px rgba(100, 108, 255, 0.2);
+    }
+    .agent-station.error {
+      border-color: var(--error);
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+    }
+    .station-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .station-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .station-dot.working { background: var(--accent); animation: pulse 2s infinite; }
+    .station-dot.idle { background: var(--text-secondary); }
+    .station-dot.error { background: var(--error); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .station-name { font-size: 0.85rem; font-weight: 600; }
+    .station-expand { margin-left: auto; color: var(--text-secondary); font-size: 0.7rem; }
+    .station-task {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .station-time {
+      font-size: 0.65rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+    .add-agent {
+      flex: 0 0 200px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .add-agent:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .layout-info {
+      position: fixed;
+      bottom: 100px;
+      left: 10px;
+      padding: 0.75rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-width: 400px;
+    }
+    .layout-info h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--accent); }
+    .layout-info p { font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="back-link">Back to Index</a>
+
+  <div class="layout">
+    <header class="header">
+      <div class="header-left">
+        <h1 class="app-title">Demiarch</h1>
+        <select class="project-select">
+          <option>viral-shorts</option>
+          <option>demiarch-gui</option>
+        </select>
+      </div>
+      <div class="header-right">
+        <div class="status-indicator">HEALTHY</div>
+        <div class="conflict-indicator">2 CONFLICTS</div>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="columns">
+        <div class="column">
+          <div class="column-header">
+            <span class="column-title">Backlog</span>
+            <span class="column-count">3</span>
+          </div>
+          <div class="column-cards">
+            <div class="card"><div class="card-title">Add user authentication</div><div class="card-desc">Implement OAuth2 login flow</div></div>
+            <div class="card"><div class="card-title">Database migrations</div></div>
+            <div class="card"><div class="card-title">API documentation</div></div>
+          </div>
+        </div>
+        <div class="column">
+          <div class="column-header">
+            <span class="column-title">Todo</span>
+            <span class="column-count">2</span>
+          </div>
+          <div class="column-cards">
+            <div class="card"><div class="card-title">Video upload endpoint</div></div>
+            <div class="card"><div class="card-title">Thumbnail generation</div></div>
+          </div>
+        </div>
+        <div class="column">
+          <div class="column-header">
+            <span class="column-title">In Progress</span>
+            <span class="column-count">3</span>
+          </div>
+          <div class="column-cards">
+            <div class="card"><div class="card-title">Video processing pipeline</div><div class="card-desc">FFmpeg integration</div></div>
+            <div class="card"><div class="card-title">Storage service</div></div>
+            <div class="card"><div class="card-title">Rate limiting</div></div>
+          </div>
+        </div>
+        <div class="column">
+          <div class="column-header">
+            <span class="column-title">Review</span>
+            <span class="column-count">2</span>
+          </div>
+          <div class="column-cards">
+            <div class="card"><div class="card-title">Error handling</div></div>
+            <div class="card"><div class="card-title">Logging setup</div></div>
+          </div>
+        </div>
+        <div class="column">
+          <div class="column-header">
+            <span class="column-title">Done</span>
+            <span class="column-count">2</span>
+          </div>
+          <div class="column-cards">
+            <div class="card"><div class="card-title">Project setup</div></div>
+            <div class="card"><div class="card-title">CI/CD pipeline</div></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="dock">
+      <div class="dock-agents">
+        <div class="agent-station working">
+          <div class="station-header">
+            <div class="station-dot working"></div>
+            <span class="station-name">Agent-1</span>
+            <span class="station-expand">View Logs</span>
+          </div>
+          <div class="station-task">"Implementing auth flow..."</div>
+          <div class="station-time">Running for 2m 34s</div>
+        </div>
+        <div class="agent-station">
+          <div class="station-header">
+            <div class="station-dot idle"></div>
+            <span class="station-name">Agent-2</span>
+            <span class="station-expand">View Logs</span>
+          </div>
+          <div class="station-task">Idle</div>
+          <div class="station-time">Last active: 5m ago</div>
+        </div>
+        <div class="agent-station error">
+          <div class="station-header">
+            <div class="station-dot error"></div>
+            <span class="station-name">Agent-3</span>
+            <span class="station-expand">View Logs</span>
+          </div>
+          <div class="station-task">Error: Connection timeout</div>
+          <div class="station-time">Failed 1m ago</div>
+        </div>
+        <div class="add-agent">+ Add Agent</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout-info">
+    <h3>02: Command Center Layout</h3>
+    <p><strong>Pros:</strong> Agents feel like active "workers", maximum horizontal space, scales well<br>
+    <strong>Cons:</strong> Bottom panel reduces vertical space, conflicts need modal/toast<br>
+    <strong>Best for:</strong> Power users running multiple agents who want to feel "in command"</p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demiarch Layout Concepts</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #fff;
+      padding: 2rem;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #646cff, #a855f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      color: #a0a0a0;
+      margin-bottom: 2rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 1.5rem;
+      transition: all 0.2s;
+    }
+    .card:hover {
+      border-color: #646cff;
+      transform: translateY(-2px);
+    }
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+    }
+    .card .num {
+      color: #646cff;
+      font-weight: 600;
+    }
+    .card p {
+      font-size: 0.85rem;
+      color: #a0a0a0;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+    .card .tags {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .tag {
+      font-size: 0.7rem;
+      padding: 0.25rem 0.5rem;
+      background: #242424;
+      border-radius: 4px;
+      color: #a0a0a0;
+    }
+    .tag.green { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+    .tag.yellow { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .tag.red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .card a {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: #646cff;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+    .card a:hover {
+      background: #535bf2;
+    }
+  </style>
+</head>
+<body>
+  <h1>Demiarch Layout Concepts</h1>
+  <p class="subtitle">10 different UI layout options for the Demiarch AI agent orchestration app</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2><span class="num">01</span> Classic Sidebar</h2>
+      <p>Traditional three-column layout with collapsible left sidebar containing agents and conflicts. Current implementation.</p>
+      <div class="tags">
+        <span class="tag green">Low Complexity</span>
+        <span class="tag">Medium Kanban Space</span>
+      </div>
+      <a href="01-classic-sidebar.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">02</span> Command Center</h2>
+      <p>Mission control style with bottom dock for agents as "stations". Kanban fills center. Great for monitoring multiple agents.</p>
+      <div class="tags">
+        <span class="tag yellow">Medium Complexity</span>
+        <span class="tag green">High Kanban Space</span>
+      </div>
+      <a href="02-command-center.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">03</span> Floating Panels</h2>
+      <p>Minimalist base with draggable, repositionable panels. Maximum flexibility for power users.</p>
+      <div class="tags">
+        <span class="tag red">High Complexity</span>
+        <span class="tag green">Maximum Kanban Space</span>
+      </div>
+      <a href="03-floating-panels.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">04</span> Dual Sidebar</h2>
+      <p>Left sidebar for navigation/projects, right sidebar for agents/activity. Balanced information architecture.</p>
+      <div class="tags">
+        <span class="tag yellow">Medium Complexity</span>
+        <span class="tag red">Low Kanban Space</span>
+      </div>
+      <a href="04-dual-sidebar.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">05</span> Tabbed Workspace</h2>
+      <p>Full-screen tabs to switch between Kanban, Agents, Conflicts, Timeline. Each view gets maximum space.</p>
+      <div class="tags">
+        <span class="tag green">Low Complexity</span>
+        <span class="tag green">Maximum Kanban Space</span>
+      </div>
+      <a href="05-tabbed-workspace.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">06</span> Split Screen</h2>
+      <p>IDE-style resizable panes. Primary pane shows kanban, secondary can show agents/conflicts/timeline.</p>
+      <div class="tags">
+        <span class="tag yellow">Medium Complexity</span>
+        <span class="tag">Adjustable Space</span>
+      </div>
+      <a href="06-split-screen.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">07</span> Dashboard + Drill-Down</h2>
+      <p>Overview dashboard landing page with cards for projects, agents, activity. Click to drill into kanban view.</p>
+      <div class="tags">
+        <span class="tag yellow">Medium Complexity</span>
+        <span class="tag green">Maximum (in view)</span>
+      </div>
+      <a href="07-dashboard.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">08</span> Overlay/Modal Panel</h2>
+      <p>Full-screen kanban with slide-out overlay for agents. Agents appear on-demand, not always visible.</p>
+      <div class="tags">
+        <span class="tag green">Low Complexity</span>
+        <span class="tag green">Maximum Kanban Space</span>
+      </div>
+      <a href="08-overlay-modal.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">09</span> Horizontal Bands</h2>
+      <p>Stacked horizontal strips: header, agents row, kanban, footer with conflicts/activity. Good for ultrawide.</p>
+      <div class="tags">
+        <span class="tag yellow">Medium Complexity</span>
+        <span class="tag">Medium Kanban Space</span>
+      </div>
+      <a href="09-horizontal-bands.html">View Layout</a>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">10</span> Focus Mode + HUD</h2>
+      <p>Minimal HUD elements with full-screen kanban. Status as small icons, details via hover zones or shortcuts.</p>
+      <div class="tags">
+        <span class="tag red">High Complexity</span>
+        <span class="tag green">Maximum Kanban Space</span>
+      </div>
+      <a href="10-focus-hud.html">View Layout</a>
+    </div>
+  </div>
+</body>
+</html>

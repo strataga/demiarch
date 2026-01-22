@@ -2,13 +2,13 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { ProjectProvider, useProjects } from "./contexts/ProjectContext";
-import { AgentProvider } from "./contexts/AgentContext";
+import { AgentProvider, useAgents } from "./contexts/AgentContext";
 import { ConflictProvider, useConflicts } from "./contexts/ConflictContext";
 import { ProjectSelector } from "./components/ProjectSelector";
+import { ProjectProgress } from "./components/ProjectProgress";
+import { AgentRadar } from "./components/AgentRadar";
 import { AgentStatusPanel } from "./components/AgentStatus";
 import { ConflictPanel } from "./components/ConflictPanel";
-import { SAMPLE_PROJECTS } from "./data/sampleProjects";
-import { SAMPLE_AGENTS } from "./data/sampleAgents";
 import "./App.css";
 import "./components/AgentStatus/AgentStatus.css";
 import "./components/ConflictPanel/ConflictPanel.css";
@@ -27,11 +27,15 @@ interface HealthStatus {
 function AppContent() {
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
-  const [greeting, setGreeting] = useState<string>("");
-  const [name, setName] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
-  const { currentProject, updateProjectBoard } = useProjects();
+  const [isAppLoading, setIsAppLoading] = useState(true);
+  const [showAgentRadar, setShowAgentRadar] = useState(false);
+  const [showAgentPanel, setShowAgentPanel] = useState(false);
+  const { currentProject, updateProjectBoard, isLoading: isProjectsLoading, error: projectsError, refreshProjects } = useProjects();
   const { checkForConflicts, isPanelVisible, setPanelVisible, summary } = useConflicts();
+  const { agents } = useAgents();
+
+  // Calculate agent stats for HUD
+  const activeAgents = agents.filter((a) => a.status === 'working' || a.status === 'thinking');
 
   useEffect(() => {
     async function initialize() {
@@ -45,25 +49,18 @@ function AppContent() {
       } catch (error) {
         console.error("Failed to initialize:", error);
       } finally {
-        setIsLoading(false);
+        setIsAppLoading(false);
       }
     }
     initialize();
   }, []);
 
-  async function handleGreet() {
-    if (!name.trim()) return;
-    try {
-      const result = await invoke<string>("greet", { name: name.trim() });
-      setGreeting(result);
-    } catch (error) {
-      console.error("Greet failed:", error);
-    }
-  }
+  // Calculate conflict count
+  const conflictCount = summary ? summary.modifiedFiles.length + summary.deletedFiles.length : 0;
 
-  if (isLoading) {
+  if (isAppLoading) {
     return (
-      <div className="container loading">
+      <div className="app-loading">
         <div className="spinner" />
         <p>Loading Demiarch...</p>
       </div>
@@ -71,106 +68,143 @@ function AppContent() {
   }
 
   return (
-    <main className="container">
-      <header className="header">
-        <div className="header__top">
-          <div className="header__branding">
-            <h1>{appInfo?.name || "Demiarch"}</h1>
-            <span className="version">v{appInfo?.version}</span>
-          </div>
+    <div className="app-layout">
+      {/* Compact Header */}
+      <header className="app-header">
+        <div className="app-header__left">
+          <h1 className="app-title">{appInfo?.name || "Demiarch"}</h1>
+          <span className="app-version">v{appInfo?.version}</span>
           <ProjectSelector />
         </div>
-        <p className="tagline">{appInfo?.description}</p>
-      </header>
-
-      <section className="status-section">
-        <div className="status-section__row">
-          <div className={`status-indicator ${healthStatus?.status}`}>
-            <span className="status-dot" />
-            <span>{healthStatus?.message}</span>
-          </div>
+        <div className="app-header__right">
+          {/* Agent HUD Button */}
           <button
-            className="conflict-check-btn"
-            onClick={() => {
-              if (isPanelVisible) {
-                setPanelVisible(false);
-              } else {
-                checkForConflicts('current-project');
-              }
-            }}
+            className={`header-btn header-btn--agents ${showAgentRadar ? 'header-btn--active' : ''}`}
+            onClick={() => setShowAgentRadar(!showAgentRadar)}
+            title="Agent Monitor"
           >
-            {isPanelVisible ? 'Hide Conflicts' : 'Check for Conflicts'}
-            {summary && (summary.modifiedFiles.length > 0 || summary.deletedFiles.length > 0) && (
-              <span className="conflict-check-btn__badge">
-                {summary.modifiedFiles.length + summary.deletedFiles.length}
-              </span>
+            <span className="agent-dots">
+              {agents.slice(0, 3).map((agent) => (
+                <span
+                  key={agent.id}
+                  className={`agent-dot agent-dot--${agent.status}`}
+                />
+              ))}
+              {agents.length === 0 && (
+                <span className="agent-dot agent-dot--idle" />
+              )}
+            </span>
+            {activeAgents.length > 0 && (
+              <span className="header-btn__count">{activeAgents.length}</span>
             )}
           </button>
+
+          {/* Conflict Badge */}
+          {conflictCount > 0 && (
+            <button
+              className="header-btn header-btn--warning"
+              onClick={() => {
+                if (isPanelVisible) {
+                  setPanelVisible(false);
+                } else {
+                  checkForConflicts('current-project');
+                }
+              }}
+              title="Conflicts detected"
+            >
+              <span className="warning-icon">⚠</span>
+              <span className="conflict-count">{conflictCount}</span>
+            </button>
+          )}
+
+          {/* Health Status */}
+          <div className={`status-dot ${healthStatus?.status}`} title={healthStatus?.message} />
         </div>
-      </section>
+      </header>
 
-      {isPanelVisible && (
-        <section className="conflict-section">
-          <ConflictPanel />
-        </section>
-      )}
-
-      <section className="interaction-section">
-        <h2>Test IPC Communication</h2>
-        <div className="input-group">
-          <input
-            type="text"
-            placeholder="Enter your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleGreet()}
-          />
-          <button onClick={handleGreet} disabled={!name.trim()}>
-            Greet
-          </button>
-        </div>
-        {greeting && <p className="greeting-result">{greeting}</p>}
-      </section>
-
-      <section className="agent-section">
-        <AgentStatusPanel showActivityLog={true} />
-      </section>
-
-      <section className="kanban-section">
-        {currentProject ? (
-          <KanbanBoard
-            key={currentProject.id}
-            initialBoard={currentProject.board}
-            onBoardChange={updateProjectBoard}
-          />
+      {/* Main Content - Full Screen Kanban */}
+      <main className="app-main">
+        {isProjectsLoading ? (
+          <div className="app-main__empty">
+            <div className="spinner" />
+            <p>Loading projects...</p>
+          </div>
+        ) : projectsError ? (
+          <div className="app-main__empty">
+            <p className="error-text">Failed to load projects</p>
+            <p className="hint-text">{projectsError}</p>
+            <button className="retry-btn" onClick={() => refreshProjects()}>Retry</button>
+          </div>
+        ) : currentProject ? (
+          <>
+            {/* Project Progress Bar */}
+            <div className="project-progress-strip">
+              <ProjectProgress />
+            </div>
+            <KanbanBoard
+              key={currentProject.id}
+              initialBoard={currentProject.board}
+              onBoardChange={updateProjectBoard}
+            />
+          </>
         ) : (
-          <div className="kanban-section__empty">
+          <div className="app-main__empty">
             <p>No project selected</p>
-            <p className="kanban-section__empty-hint">Select a project from the dropdown above to view its board</p>
+            <p className="hint-text">Select a project from the dropdown above</p>
           </div>
         )}
-      </section>
+      </main>
 
-      <footer className="footer">
-        <p>
-          Built with{" "}
-          <a href="https://tauri.app" target="_blank" rel="noreferrer">
-            Tauri
-          </a>{" "}
-          +{" "}
-          <a href="https://react.dev" target="_blank" rel="noreferrer">
-            React
-          </a>
-        </p>
-      </footer>
-    </main>
+      {/* Agent Radar Overlay */}
+      {showAgentRadar && (
+        <div className="overlay-backdrop" onClick={() => setShowAgentRadar(false)}>
+          <div className="overlay-panel overlay-panel--radar" onClick={(e) => e.stopPropagation()}>
+            <AgentRadar onClose={() => setShowAgentRadar(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Slide-out Agent Detail Panel */}
+      {showAgentPanel && (
+        <div className="slide-panel slide-panel--right">
+          <div className="slide-panel__header">
+            <h3 className="slide-panel__title">Agents</h3>
+            <button className="slide-panel__close" onClick={() => setShowAgentPanel(false)}>×</button>
+          </div>
+          <div className="slide-panel__content">
+            <AgentStatusPanel showActivityLog={true} />
+          </div>
+        </div>
+      )}
+
+      {/* Slide-out Conflict Panel */}
+      {isPanelVisible && (
+        <div className="slide-panel slide-panel--right">
+          <div className="slide-panel__header">
+            <h3 className="slide-panel__title">Conflicts</h3>
+            <button className="slide-panel__close" onClick={() => setPanelVisible(false)}>×</button>
+          </div>
+          <div className="slide-panel__content">
+            <ConflictPanel />
+          </div>
+        </div>
+      )}
+
+      {/* Keyboard Hints */}
+      <div className="keyboard-hints">
+        <div className="key-hint"><span className="key">A</span> Agents</div>
+        <div className="key-hint"><span className="key">C</span> Conflicts</div>
+        <div className="key-hint"><span className="key">N</span> New Card</div>
+        <div className="key-hint"><span className="key">?</span> Help</div>
+      </div>
+    </div>
   );
 }
 
 function App() {
   return (
-    <ProjectProvider initialProjects={SAMPLE_PROJECTS}>
-      <AgentProvider initialAgents={SAMPLE_AGENTS}>
+    <ProjectProvider>
+      <AgentProvider>
         <ConflictProvider>
           <AppContent />
         </ConflictProvider>
