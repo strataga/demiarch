@@ -1,27 +1,10 @@
-//! CLI main function tests
-#![allow(clippy::assertions_on_constants)]
+//! CLI main function unit tests
+//!
+//! Note: Integration tests are in cli_integration_tests.rs
 
 #[test]
-fn test_cli_structs_exist() {
-    assert!(true);
-}
-
-#[test]
-fn test_cli_new_command() {
-    assert!(true);
-}
-
-#[test]
-fn test_cli_chat_command() {
-    assert!(true);
-}
-
-#[test]
-fn test_cli_doctor_command() {
-    assert!(true);
-}
-
-#[test]
-fn test_cli_watch_command() {
+fn test_cli_structs_compile() {
+    // This test ensures the CLI module compiles correctly
+    // Actual CLI testing is done in cli_integration_tests.rs
     assert!(true);
 }

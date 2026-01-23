@@ -670,4 +670,140 @@ mod tests {
         let restored = repo.get(&project.id).await.unwrap().unwrap();
         assert_eq!(restored.status, ProjectStatus::Active);
     }
+
+    #[tokio::test]
+    async fn test_create_project_with_path() {
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
+
+        let path = std::path::Path::new("/tmp/test-project");
+        let project = create_with_path(&db, "test", "rust", "", path)
+            .await
+            .expect("Failed to create project with path");
+
+        assert_eq!(project.path, Some("/tmp/test-project".to_string()));
+        assert_eq!(project.name, "test");
+        assert_eq!(project.framework, "rust");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_directory_exact_match() {
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
+
+        let path = std::path::Path::new("/projects/myapp");
+        create_with_path(&db, "myapp", "rust", "", path)
+            .await
+            .expect("Failed to create project");
+
+        let found = find_by_directory(&db, path)
+            .await
+            .expect("Failed to find project")
+            .expect("Project should be found");
+
+        assert_eq!(found.name, "myapp");
+        assert_eq!(found.path, Some("/projects/myapp".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_find_by_directory_subdirectory() {
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
+
+        let project_path = std::path::Path::new("/projects/myapp");
+        create_with_path(&db, "myapp", "rust", "", project_path)
+            .await
+            .expect("Failed to create project");
+
+        // Find from a subdirectory
+        let subdir = std::path::Path::new("/projects/myapp/src/components");
+        let found = find_by_directory(&db, subdir)
+            .await
+            .expect("Failed to find project")
+            .expect("Project should be found from subdirectory");
+
+        assert_eq!(found.name, "myapp");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_directory_no_match() {
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
+
+        let project_path = std::path::Path::new("/projects/myapp");
+        create_with_path(&db, "myapp", "rust", "", project_path)
+            .await
+            .expect("Failed to create project");
+
+        // Try to find from unrelated directory
+        let unrelated = std::path::Path::new("/other/directory");
+        let found = find_by_directory(&db, unrelated)
+            .await
+            .expect("Failed to search");
+
+        assert!(found.is_none(), "Should not find project in unrelated directory");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_directory_multiple_projects() {
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
+
+        // Create multiple projects
+        let path1 = std::path::Path::new("/projects/app1");
+        let path2 = std::path::Path::new("/projects/app2");
+        create_with_path(&db, "app1", "rust", "", path1)
+            .await
+            .expect("Failed to create project 1");
+        create_with_path(&db, "app2", "node", "", path2)
+            .await
+            .expect("Failed to create project 2");
+
+        // Find each project from its directory
+        let found1 = find_by_directory(&db, path1).await.unwrap().unwrap();
+        let found2 = find_by_directory(&db, path2).await.unwrap().unwrap();
+
+        assert_eq!(found1.name, "app1");
+        assert_eq!(found2.name, "app2");
+    }
+
+    #[tokio::test]
+    async fn test_get_by_path() {
+        let db = Database::in_memory()
+            .await
+            .expect("Failed to create database");
+        let repo = ProjectRepository::new(&db);
+
+        let project = Project::new("test-project", "rust", "")
+            .with_path("/home/user/projects/test");
+        repo.create(&project).await.unwrap();
+
+        let retrieved = repo
+            .get_by_path("/home/user/projects/test")
+            .await
+            .expect("Failed to get project by path")
+            .expect("Project should exist");
+
+        assert_eq!(retrieved.id, project.id);
+        assert_eq!(retrieved.name, "test-project");
+    }
+
+    #[tokio::test]
+    async fn test_project_with_path_builder() {
+        let project = Project::new("my-app", "rust", "https://github.com/user/my-app")
+            .with_path("/home/user/projects/my-app")
+            .with_description("A test application");
+
+        assert_eq!(project.name, "my-app");
+        assert_eq!(project.path, Some("/home/user/projects/my-app".to_string()));
+        assert_eq!(
+            project.description,
+            Some("A test application".to_string())
+        );
+    }
 }

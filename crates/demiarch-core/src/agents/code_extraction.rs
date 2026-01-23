@@ -487,4 +487,170 @@ pub mod config {}
         assert_eq!(files[0].path, PathBuf::from("src/utils.rs"));
         assert_eq!(files[1].path, PathBuf::from("src/config.rs"));
     }
+
+    #[test]
+    fn test_extract_files_nested_paths() {
+        let response = r#"
+`src/components/button.tsx`
+```typescript
+export const Button = () => <button>Click</button>;
+```
+"#;
+        let files = extract_files_from_response(response);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, PathBuf::from("src/components/button.tsx"));
+        assert_eq!(files[0].language, Some("typescript".to_string()));
+    }
+
+    #[test]
+    fn test_extract_files_deeply_nested_paths() {
+        let response = r#"
+`src/app/features/auth/components/LoginForm.tsx`
+```typescript
+export const LoginForm = () => {
+    return <form>Login</form>;
+};
+```
+"#;
+        let files = extract_files_from_response(response);
+        assert_eq!(files.len(), 1);
+        assert_eq!(
+            files[0].path,
+            PathBuf::from("src/app/features/auth/components/LoginForm.tsx")
+        );
+    }
+
+    #[test]
+    fn test_extract_files_multiple_code_blocks_after_path() {
+        // Current behavior: all code blocks after a path marker are captured
+        // until a new path marker is encountered. Only content inside code
+        // fences is captured.
+        let response = r#"
+`src/main.rs`
+```rust
+fn main() {}
+```
+
+Some explanation text...
+
+```rust
+fn helper() {}
+```
+"#;
+        let files = extract_files_from_response(response);
+        // Both code blocks are associated with the path (concatenated)
+        assert_eq!(files.len(), 1);
+        assert!(files[0].content.contains("fn main()"));
+        // The second code block is also captured since there's no new path marker
+        assert!(files[0].content.contains("fn helper()"));
+    }
+
+    #[test]
+    fn test_extract_files_path_variations() {
+        // Test various path format variations
+        let test_cases = vec![
+            ("`Cargo.toml`", "Cargo.toml"),
+            ("**`package.json`**", "package.json"),
+            ("### app.py", "app.py"),
+            ("File: index.html", "index.html"),
+            ("Filename: `style.css`", "style.css"),
+            ("Path: config.yaml", "config.yaml"),
+        ];
+
+        for (input, expected) in test_cases {
+            let path = extract_file_path(input);
+            assert_eq!(
+                path,
+                Some(PathBuf::from(expected)),
+                "Failed for input: {}",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_extract_files_empty_code_block() {
+        let response = r#"
+`src/empty.rs`
+```rust
+```
+"#;
+        let files = extract_files_from_response(response);
+        // Empty code blocks should not create files
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn test_extract_files_whitespace_only_content() {
+        let response = r#"
+`src/whitespace.rs`
+```rust
+
+
+```
+"#;
+        let files = extract_files_from_response(response);
+        // Whitespace-only content should not create files
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn test_extract_files_preserves_indentation() {
+        let response = r#"
+`src/indented.py`
+```python
+def hello():
+    if True:
+        print("Hello!")
+```
+"#;
+        let files = extract_files_from_response(response);
+        assert_eq!(files.len(), 1);
+        // Check that indentation is preserved
+        assert!(files[0].content.contains("    if True:"));
+        assert!(files[0].content.contains("        print"));
+    }
+
+    #[test]
+    fn test_extract_files_consecutive_files() {
+        let response = r#"
+`src/a.rs`
+```rust
+fn a() {}
+```
+`src/b.rs`
+```rust
+fn b() {}
+```
+`src/c.rs`
+```rust
+fn c() {}
+```
+"#;
+        let files = extract_files_from_response(response);
+        assert_eq!(files.len(), 3);
+        assert_eq!(files[0].path, PathBuf::from("src/a.rs"));
+        assert_eq!(files[1].path, PathBuf::from("src/b.rs"));
+        assert_eq!(files[2].path, PathBuf::from("src/c.rs"));
+    }
+
+    #[test]
+    fn test_looks_like_path_edge_cases() {
+        // Valid paths with various extensions
+        assert!(looks_like_path("file.tsx"));
+        assert!(looks_like_path("file.jsx"));
+        assert!(looks_like_path("file.vue"));
+        assert!(looks_like_path("file.svelte"));
+        assert!(looks_like_path(".gitignore"));
+        assert!(looks_like_path(".env"));
+
+        // Special files without extensions
+        assert!(looks_like_path("Dockerfile"));
+        assert!(looks_like_path("Makefile"));
+
+        // Invalid paths
+        assert!(!looks_like_path(""));
+        assert!(!looks_like_path("no-extension"));
+        assert!(!looks_like_path("file.xyz123"));
+    }
 }
