@@ -102,8 +102,16 @@ cargo build --release
 ## Quick Start
 
 ```bash
-# Create a new project
-demiarch new my-app --framework nextjs --repo https://github.com/user/my-app
+# Create a new Next.js project
+demiarch new viral-shorts --framework nextjs --repo https://github.com/user/viral-shorts
+cd viral-shorts
+
+# Install Tailwind CSS and setup configuration
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+
+# Install shadcn/ui components
+npx shadcn-ui@latest init
 
 # Start conversational discovery
 demiarch chat
@@ -187,10 +195,20 @@ demiarch graph explore "error handling" --tree
 
 ## Tech Stack
 
-- **Language**: Rust
+For viral-shorts project:
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui
+- **State Management**: Zustand
+- **Form Handling**: React Hook Form
+- **Animation**: Framer Motion
+
+Core Demiarch Stack:
+- **Language**: Rust 
 - **Database**: SQLite (with vector extensions for semantic search)
 - **TUI**: ratatui
-- **GUI**: Tauri + React + TypeScript (future)
+- **GUI**: Tauri + React + TypeScript
 - **LLM**: OpenRouter API (Claude, GPT-4, etc.)
 - **Image AI**: OpenRouter (Gemini, DALL-E 3, Stable Diffusion XL, Nano Banana Pro)
 
