@@ -5,6 +5,7 @@ members = [
     "crates/demiarch-cli",
     "crates/demiarch-tui",
     "crates/demiarch-plugins",
+    "crates/demiarch-gui",
 ]
 
 [workspace.package]

@@ -33,7 +33,7 @@ impl ImageSize {
     }
 
     /// Parse from string (e.g., "square", "portrait", "landscape", "1024x768")
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "square" | "square1024" | "1024x1024" => Some(Self::Square1024),
             "portrait" | "1024x1536" => Some(Self::Portrait),
@@ -77,7 +77,7 @@ pub enum ImageStyle {
 
 impl ImageStyle {
     /// Parse from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "vivid" => Some(Self::Vivid),
             "natural" => Some(Self::Natural),
@@ -142,7 +142,7 @@ impl ImageFormat {
     }
 
     /// Parse from string or file extension
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "png" => Some(Self::Png),
             "jpg" | "jpeg" => Some(Self::Jpeg),
@@ -155,7 +155,7 @@ impl ImageFormat {
     pub fn from_path(path: &std::path::Path) -> Option<Self> {
         path.extension()
             .and_then(|ext| ext.to_str())
-            .and_then(Self::from_str)
+            .and_then(Self::parse)
     }
 }
 
@@ -438,26 +438,26 @@ mod tests {
 
     #[test]
     fn test_image_size_from_str() {
-        assert_eq!(ImageSize::from_str("square"), Some(ImageSize::Square1024));
-        assert_eq!(ImageSize::from_str("portrait"), Some(ImageSize::Portrait));
-        assert_eq!(ImageSize::from_str("landscape"), Some(ImageSize::Landscape));
+        assert_eq!(ImageSize::parse("square"), Some(ImageSize::Square1024));
+        assert_eq!(ImageSize::parse("portrait"), Some(ImageSize::Portrait));
+        assert_eq!(ImageSize::parse("landscape"), Some(ImageSize::Landscape));
         assert_eq!(
-            ImageSize::from_str("800x600"),
+            ImageSize::parse("800x600"),
             Some(ImageSize::Custom(800, 600))
         );
-        assert_eq!(ImageSize::from_str("invalid"), None);
+        assert_eq!(ImageSize::parse("invalid"), None);
     }
 
     #[test]
     fn test_image_style_from_str() {
-        assert_eq!(ImageStyle::from_str("vivid"), Some(ImageStyle::Vivid));
-        assert_eq!(ImageStyle::from_str("natural"), Some(ImageStyle::Natural));
+        assert_eq!(ImageStyle::parse("vivid"), Some(ImageStyle::Vivid));
+        assert_eq!(ImageStyle::parse("natural"), Some(ImageStyle::Natural));
         assert_eq!(
-            ImageStyle::from_str("photo"),
+            ImageStyle::parse("photo"),
             Some(ImageStyle::Photorealistic)
         );
-        assert_eq!(ImageStyle::from_str("art"), Some(ImageStyle::Artistic));
-        assert_eq!(ImageStyle::from_str("invalid"), None);
+        assert_eq!(ImageStyle::parse("art"), Some(ImageStyle::Artistic));
+        assert_eq!(ImageStyle::parse("invalid"), None);
     }
 
     #[test]
@@ -466,9 +466,9 @@ mod tests {
         assert_eq!(ImageFormat::Jpeg.extension(), "jpg");
         assert_eq!(ImageFormat::WebP.extension(), "webp");
 
-        assert_eq!(ImageFormat::from_str("png"), Some(ImageFormat::Png));
-        assert_eq!(ImageFormat::from_str("jpeg"), Some(ImageFormat::Jpeg));
-        assert_eq!(ImageFormat::from_str("webp"), Some(ImageFormat::WebP));
+        assert_eq!(ImageFormat::parse("png"), Some(ImageFormat::Png));
+        assert_eq!(ImageFormat::parse("jpeg"), Some(ImageFormat::Jpeg));
+        assert_eq!(ImageFormat::parse("webp"), Some(ImageFormat::WebP));
     }
 
     #[test]

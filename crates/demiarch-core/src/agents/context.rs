@@ -230,6 +230,7 @@ impl SharedAgentState {
             agent_registry: Arc::new(RwLock::new(HashMap::new())),
             context_budget: Arc::new(budget),
             event_writer: Arc::new(AgentEventWriter::new()),
+            cancellation_token: CancellationToken::new(),
         }
     }
 

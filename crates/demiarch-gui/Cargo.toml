@@ -1,0 +1,24 @@
+[package]
+name = "demiarch-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tauri GUI for Demiarch"
+default-run = "demiarch-gui"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+demiarch-core = { path = "../demiarch-core" }
+tauri = { version = "2.0", features = ["devtools"] }
+tauri-plugin-shell = "2.0"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

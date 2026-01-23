@@ -374,14 +374,14 @@ impl ImageClient {
                     return self.parse_image_data(content);
                 }
                 // Try as raw base64
-                if let Ok(bytes) = BASE64.decode(content.trim()) {
-                    if is_valid_image_data(&bytes) {
-                        let format = detect_image_format(&bytes);
-                        return Ok(ParsedImageResponse {
-                            image_data: bytes,
-                            format,
-                        });
-                    }
+                if let Ok(bytes) = BASE64.decode(content.trim())
+                    && is_valid_image_data(&bytes)
+                {
+                    let format = detect_image_format(&bytes);
+                    return Ok(ParsedImageResponse {
+                        image_data: bytes,
+                        format,
+                    });
                 }
             }
             None => {}

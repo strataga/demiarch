@@ -70,13 +70,13 @@ pub async fn transform_image(
         .map_err(|e| Error::ImageReadError(format!("{}: {}", request.input_image.display(), e)))?;
 
     // Check if model supports image-to-image
-    if let Some(model) = ImageModel::by_id(&request.model) {
-        if !model.supports_image_to_image() {
-            return Err(Error::ImageModelNotAvailable(format!(
-                "Model '{}' does not support image-to-image transformation",
-                request.model
-            )));
-        }
+    if let Some(model) = ImageModel::by_id(&request.model)
+        && !model.supports_image_to_image()
+    {
+        return Err(Error::ImageModelNotAvailable(format!(
+            "Model '{}' does not support image-to-image transformation",
+            request.model
+        )));
     }
 
     let response = client
@@ -118,22 +118,21 @@ pub async fn upscale_image(
         .map_err(|e| Error::ImageReadError(format!("{}: {}", request.input_image.display(), e)))?;
 
     // Try model-based upscaling first
-    if let Some(model_id) = &request.model {
-        if let Some(model) = ImageModel::by_id(model_id) {
-            if model.supports_upscaling() {
-                let prompt = format!(
-                    "Upscale this image by {}x, maintaining all details and enhancing quality",
-                    request.scale
-                );
-                let response = client.transform(model_id, &prompt, &input_data, 0.1).await?;
+    if let Some(model_id) = &request.model
+        && let Some(model) = ImageModel::by_id(model_id)
+        && model.supports_upscaling()
+    {
+        let prompt = format!(
+            "Upscale this image by {}x, maintaining all details and enhancing quality",
+            request.scale
+        );
+        let response = client.transform(model_id, &prompt, &input_data, 0.1).await?;
 
-                if let Some(path) = output_path {
-                    save_image(&response, path)?;
-                }
-
-                return Ok(response);
-            }
+        if let Some(path) = output_path {
+            save_image(&response, path)?;
         }
+
+        return Ok(response);
     }
 
     // Fallback to local upscaling using the image crate
@@ -170,13 +169,13 @@ pub async fn inpaint_image(
         .map_err(|e| Error::ImageReadError(format!("{}: {}", request.mask_image.display(), e)))?;
 
     // Check if model supports inpainting
-    if let Some(model) = ImageModel::by_id(&request.model) {
-        if !model.supports_inpainting() {
-            return Err(Error::ImageModelNotAvailable(format!(
-                "Model '{}' does not support inpainting",
-                request.model
-            )));
-        }
+    if let Some(model) = ImageModel::by_id(&request.model)
+        && !model.supports_inpainting()
+    {
+        return Err(Error::ImageModelNotAvailable(format!(
+            "Model '{}' does not support inpainting",
+            request.model
+        )));
     }
 
     let response = client

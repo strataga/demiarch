@@ -35,6 +35,7 @@ zeroize.workspace = true
 keyring.workspace = true
 hex.workspace = true
 async-trait.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
 rand.workspace = true
 rand_distr.workspace = true
 ratatui.workspace = true

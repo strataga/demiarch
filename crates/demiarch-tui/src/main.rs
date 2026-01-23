@@ -8,6 +8,9 @@
 //! - Skill activations
 //! - Hook executions
 
+#[cfg(test)]
+mod main_tests;
+
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,

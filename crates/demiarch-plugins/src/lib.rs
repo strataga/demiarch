@@ -11,6 +11,9 @@ pub mod loader;
 pub mod registry;
 pub mod sandbox;
 
+#[cfg(test)]
+mod lib_tests;
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]

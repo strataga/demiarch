@@ -36,7 +36,7 @@ pub async fn generate(
     }
 
     if let Some(s) = size {
-        let image_size = ImageSize::from_str(&s)
+        let image_size = ImageSize::parse(&s)
             .ok_or_else(|| Error::InvalidInput(format!(
                 "Invalid size '{}'. Use: square, portrait, landscape, or WxH (e.g., 1024x768)",
                 s
@@ -45,7 +45,7 @@ pub async fn generate(
     }
 
     if let Some(s) = style {
-        let image_style = ImageStyle::from_str(&s)
+        let image_style = ImageStyle::parse(&s)
             .ok_or_else(|| Error::InvalidInput(format!(
                 "Invalid style '{}'. Use: vivid, natural, photorealistic, or artistic",
                 s
@@ -150,7 +150,7 @@ pub async fn upscale(
     }
 
     // Validate scale
-    if scale < 1 || scale > 4 {
+    if !(1..=4).contains(&scale) {
         return Err(Error::InvalidInput(
             "Scale must be between 1 and 4".to_string(),
         ));

@@ -30,6 +30,7 @@ impl Sandbox {
         config.consume_fuel(true);
         config.wasm_threads(false);
         config.wasm_simd(false);
+        config.wasm_relaxed_simd(false);
         config.wasm_reference_types(false);
         config.async_support(false);
         config.epoch_interruption(true);

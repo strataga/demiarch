@@ -6,6 +6,5 @@
 pub mod errors;
 pub mod services;
 pub mod validators;
-pub mod video;
 
 pub use errors::ApplicationError;
