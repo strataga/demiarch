@@ -102,8 +102,45 @@ cargo build --release
 ## Quick Start
 
 ```bash
-# Create a new project
-demiarch new my-app --framework nextjs --repo https://github.com/user/my-app
+# Create a new Next.js project
+demiarch new viral-shorts --framework nextjs --repo https://github.com/user/viral-shorts
+cd viral-shorts
+
+# Initialize TypeScript (if not already set up)
+npm install --save-dev typescript @types/react @types/node
+
+# Install Tailwind CSS and setup configuration
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+
+# Configure Tailwind (update tailwind.config.js)
+echo "module.exports = {
+  content: [
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './lib/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}" > tailwind.config.js
+
+# Install shadcn/ui components
+npx shadcn-ui@latest init
+
+# Add essential shadcn/ui components
+npx shadcn-ui@latest add button
+npx shadcn-ui@latest add card
+npx shadcn-ui@latest add input
+npx shadcn-ui@latest add dropdown-menu
+npx shadcn-ui@latest add dialog
+
+# Add Next.js recommended ESLint config
+npm install --save-dev eslint eslint-config-next
+
+# Add Prettier for code formatting
+npm install --save-dev prettier eslint-config-prettier eslint-plugin-prettier
 
 # Start conversational discovery
 demiarch chat
@@ -187,10 +224,20 @@ demiarch graph explore "error handling" --tree
 
 ## Tech Stack
 
-- **Language**: Rust
+For viral-shorts project:
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui
+- **State Management**: Zustand
+- **Form Handling**: React Hook Form
+- **Animation**: Framer Motion
+
+Core Demiarch Stack:
+- **Language**: Rust 
 - **Database**: SQLite (with vector extensions for semantic search)
 - **TUI**: ratatui
-- **GUI**: Tauri + React + TypeScript (future)
+- **GUI**: Tauri + React + TypeScript
 - **LLM**: OpenRouter API (Claude, GPT-4, etc.)
 - **Image AI**: OpenRouter (Gemini, DALL-E 3, Stable Diffusion XL, Nano Banana Pro)
 
