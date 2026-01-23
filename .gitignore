@@ -57,3 +57,16 @@ tarpaulin-report.html
 
 # Windows named pipes (WSL artifacts)
 **/\\.\pipe/
+
+# Python virtual environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Aider AI assistant files
+.aider.*
+.aider.tags.cache.v3/
+
+# Beads agent execution logs
+.beads/agent-results/
