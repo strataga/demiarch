@@ -1,7 +1,10 @@
 //! Code block extraction utilities
 //!
-//! Provides utilities for extracting code blocks from markdown-formatted text
-//! and determining file extensions for various programming languages.
+//! Provides utilities for extracting code blocks from markdown-formatted text,
+//! extracting file paths from LLM responses, and determining file extensions
+//! for various programming languages.
+
+use std::path::PathBuf;
 
 /// A code block extracted from markdown
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,6 +124,164 @@ pub fn language_to_test_extension(language: &str) -> &'static str {
     }
 }
 
+/// A file extracted from LLM response with path and content
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtractedFile {
+    /// The file path
+    pub path: PathBuf,
+    /// The file content
+    pub content: String,
+    /// The language (if detected)
+    pub language: Option<String>,
+}
+
+impl ExtractedFile {
+    /// Create a new extracted file
+    pub fn new(path: PathBuf, content: String, language: Option<String>) -> Self {
+        Self {
+            path,
+            content,
+            language,
+        }
+    }
+}
+
+/// Extract files from LLM response with their paths
+///
+/// Parses an LLM response to find file paths and their associated code blocks.
+/// Supports various path formats:
+/// - `path/to/file.rs`
+/// - **path/to/file.rs**
+/// - ### path/to/file.rs
+/// - File: path/to/file.rs
+pub fn extract_files_from_response(content: &str) -> Vec<ExtractedFile> {
+    let mut files = Vec::new();
+    let mut current_path: Option<PathBuf> = None;
+    let mut current_language: Option<String> = None;
+    let mut current_content = String::new();
+    let mut in_code_block = false;
+
+    for line in content.lines() {
+        // Check for file path marker
+        if let Some(path) = extract_file_path(line) {
+            // Save previous file if exists
+            if let Some(prev_path) = current_path.take() {
+                let content = current_content.trim().to_string();
+                if !content.is_empty() {
+                    files.push(ExtractedFile::new(prev_path, content, current_language.take()));
+                }
+            }
+            current_path = Some(path);
+            current_content.clear();
+            current_language = None;
+            continue;
+        }
+
+        // Check for code fence
+        if line.starts_with("```") {
+            if in_code_block {
+                // End of code block
+                in_code_block = false;
+            } else {
+                // Start of code block
+                in_code_block = true;
+                let lang = line.trim_start_matches('`').trim();
+                if !lang.is_empty() {
+                    current_language = Some(lang.to_string());
+                }
+            }
+            continue;
+        }
+
+        // Add content if we're in a file
+        if in_code_block && current_path.is_some() {
+            current_content.push_str(line);
+            current_content.push('\n');
+        }
+    }
+
+    // Don't forget the last file
+    if let Some(path) = current_path {
+        let content = current_content.trim().to_string();
+        if !content.is_empty() {
+            files.push(ExtractedFile::new(path, content, current_language));
+        }
+    }
+
+    files
+}
+
+/// Extract file path from a line (supports multiple formats)
+pub fn extract_file_path(line: &str) -> Option<PathBuf> {
+    let line = line.trim();
+
+    // Format: `path/to/file.rs`
+    if line.starts_with('`') && line.ends_with('`') && !line.starts_with("```") {
+        let path = line.trim_matches('`').trim();
+        if looks_like_path(path) {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    // Format: **path/to/file.rs** or **`path/to/file.rs`**
+    if line.starts_with("**") && line.ends_with("**") {
+        let inner = line.trim_start_matches("**").trim_end_matches("**");
+        let path = inner.trim_matches('`').trim();
+        if looks_like_path(path) {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    // Format: ### path/to/file.rs or ## path/to/file.rs
+    if line.starts_with('#') {
+        let path = line.trim_start_matches('#').trim().trim_matches('`');
+        if looks_like_path(path) {
+            return Some(PathBuf::from(path));
+        }
+    }
+
+    // Format: File: path/to/file.rs or Filename: path/to/file.rs
+    let prefixes = ["File:", "Filename:", "Path:"];
+    for prefix in prefixes {
+        if let Some(rest) = line.strip_prefix(prefix) {
+            let path = rest.trim().trim_matches('`');
+            if looks_like_path(path) {
+                return Some(PathBuf::from(path));
+            }
+        }
+    }
+
+    None
+}
+
+/// Check if a string looks like a file path
+pub fn looks_like_path(s: &str) -> bool {
+    // Must have an extension or be a recognizable file
+    if s.contains('.') {
+        // Has extension
+        let ext = s.rsplit('.').next().unwrap_or("");
+        let common_exts = [
+            "rs", "py", "js", "ts", "tsx", "jsx", "go", "java", "c", "cpp", "h", "hpp",
+            "rb", "php", "swift", "kt", "scala", "clj", "ex", "exs", "erl", "hs", "ml",
+            "fs", "cs", "vb", "lua", "r", "jl", "nim", "zig", "v", "html", "css", "scss",
+            "sass", "less", "vue", "svelte", "json", "yaml", "yml", "toml", "xml", "md",
+            "txt", "sql", "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd", "dockerfile",
+            "makefile", "gitignore", "env",
+        ];
+        return common_exts.iter().any(|&e| ext.eq_ignore_ascii_case(e));
+    }
+
+    // Special filenames without extension
+    let special_files = [
+        "Makefile",
+        "Dockerfile",
+        "Rakefile",
+        "Gemfile",
+        "Cargo.toml",
+    ];
+    special_files.contains(&s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,5 +356,135 @@ function greet() {
         let js_block = CodeBlock::new("javascript", "console.log('hi')");
         assert_eq!(js_block.extension(), "js");
         assert_eq!(js_block.test_extension(), "test.js");
+    }
+
+    #[test]
+    fn test_extract_file_path_backticks() {
+        assert_eq!(
+            extract_file_path("`src/main.rs`"),
+            Some(PathBuf::from("src/main.rs"))
+        );
+    }
+
+    #[test]
+    fn test_extract_file_path_bold() {
+        assert_eq!(
+            extract_file_path("**`src/lib.rs`**"),
+            Some(PathBuf::from("src/lib.rs"))
+        );
+        assert_eq!(
+            extract_file_path("**src/lib.rs**"),
+            Some(PathBuf::from("src/lib.rs"))
+        );
+    }
+
+    #[test]
+    fn test_extract_file_path_heading() {
+        assert_eq!(
+            extract_file_path("### src/utils.rs"),
+            Some(PathBuf::from("src/utils.rs"))
+        );
+        assert_eq!(
+            extract_file_path("## `config.toml`"),
+            Some(PathBuf::from("config.toml"))
+        );
+    }
+
+    #[test]
+    fn test_extract_file_path_prefix() {
+        assert_eq!(
+            extract_file_path("File: src/main.rs"),
+            Some(PathBuf::from("src/main.rs"))
+        );
+        assert_eq!(
+            extract_file_path("Filename: `test.py`"),
+            Some(PathBuf::from("test.py"))
+        );
+    }
+
+    #[test]
+    fn test_extract_file_path_not_a_path() {
+        assert_eq!(extract_file_path("This is some text"), None);
+        assert_eq!(extract_file_path("```rust"), None);
+        assert_eq!(extract_file_path("# A heading"), None);
+    }
+
+    #[test]
+    fn test_looks_like_path() {
+        // Valid paths
+        assert!(looks_like_path("src/main.rs"));
+        assert!(looks_like_path("config.toml"));
+        assert!(looks_like_path("test.py"));
+        assert!(looks_like_path("Makefile"));
+        assert!(looks_like_path("Dockerfile"));
+
+        // Invalid paths
+        assert!(!looks_like_path("just text"));
+        assert!(!looks_like_path("some.unknownext"));
+    }
+
+    #[test]
+    fn test_extract_files_from_response() {
+        let response = r#"
+Here's the implementation:
+
+`src/main.rs`
+```rust
+fn main() {
+    println!("Hello!");
+}
+```
+
+`src/lib.rs`
+```rust
+pub fn greet() {
+    println!("Hi!");
+}
+```
+"#;
+
+        let files = extract_files_from_response(response);
+        assert_eq!(files.len(), 2);
+
+        assert_eq!(files[0].path, PathBuf::from("src/main.rs"));
+        assert!(files[0].content.contains("fn main()"));
+        assert_eq!(files[0].language, Some("rust".to_string()));
+
+        assert_eq!(files[1].path, PathBuf::from("src/lib.rs"));
+        assert!(files[1].content.contains("pub fn greet()"));
+        assert_eq!(files[1].language, Some("rust".to_string()));
+    }
+
+    #[test]
+    fn test_extract_files_from_response_no_paths() {
+        let response = r#"
+Here's some code:
+
+```rust
+fn main() {}
+```
+"#;
+        let files = extract_files_from_response(response);
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn test_extract_files_from_response_mixed_formats() {
+        let response = r#"
+**src/utils.rs**
+```rust
+pub fn helper() {}
+```
+
+File: src/config.rs
+```rust
+pub mod config {}
+```
+"#;
+
+        let files = extract_files_from_response(response);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].path, PathBuf::from("src/utils.rs"));
+        assert_eq!(files[1].path, PathBuf::from("src/config.rs"));
     }
 }

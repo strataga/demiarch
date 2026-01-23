@@ -4,6 +4,7 @@
 //! the Russian Doll pattern. It enforces hierarchy rules and manages
 //! the delegation of tasks between agent levels.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -89,6 +90,9 @@ impl AgentTool {
         if let Some(feature_id) = self.shared_state.feature_id {
             new_state = new_state.with_feature_id(feature_id);
         }
+        if let Some(ref project_path) = self.shared_state.project_path {
+            new_state = new_state.with_project_path(project_path.clone());
+        }
         self.shared_state = Arc::new(new_state);
         self
     }
@@ -102,6 +106,26 @@ impl AgentTool {
         }
         if let Some(project_id) = self.shared_state.project_id {
             new_state = new_state.with_project_id(project_id);
+        }
+        if let Some(ref project_path) = self.shared_state.project_path {
+            new_state = new_state.with_project_path(project_path.clone());
+        }
+        self.shared_state = Arc::new(new_state);
+        self
+    }
+
+    /// Configure with project filesystem path
+    pub fn with_project_path(mut self, path: PathBuf) -> Self {
+        let llm_client = Arc::clone(&self.shared_state.llm_client);
+        let mut new_state = SharedAgentState::new(llm_client).with_project_path(path);
+        if let Some(tracker) = self.shared_state.cost_tracker.clone() {
+            new_state = new_state.with_cost_tracker(tracker);
+        }
+        if let Some(project_id) = self.shared_state.project_id {
+            new_state = new_state.with_project_id(project_id);
+        }
+        if let Some(feature_id) = self.shared_state.feature_id {
+            new_state = new_state.with_feature_id(feature_id);
         }
         self.shared_state = Arc::new(new_state);
         self

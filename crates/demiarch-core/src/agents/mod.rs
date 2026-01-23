@@ -33,6 +33,10 @@ pub mod tester;
 pub mod tool;
 pub mod traits;
 
+pub use code_extraction::{
+    extract_code_blocks, extract_file_path, extract_files_from_response, looks_like_path,
+    CodeBlock, ExtractedFile,
+};
 pub use coder::CoderAgent;
 pub use context::{AgentContext, AgentId, AgentPath};
 pub use events::{

@@ -55,6 +55,8 @@ pub struct Project {
     pub status: ProjectStatus,
     /// Optional project description
     pub description: Option<String>,
+    /// Filesystem path to project directory
+    pub path: Option<String>,
     /// When the project was created
     pub created_at: DateTime<Utc>,
     /// When the project was last updated
@@ -76,6 +78,7 @@ impl Project {
             repo_url: repo_url.into(),
             status: ProjectStatus::Active,
             description: None,
+            path: None,
             created_at: now,
             updated_at: now,
         }
@@ -84,6 +87,12 @@ impl Project {
     /// Set the project description
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    /// Set the project filesystem path
+    pub fn with_path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
         self
     }
 }
@@ -103,8 +112,8 @@ impl<'a> ProjectRepository<'a> {
     pub async fn create(&self, project: &Project) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO projects (id, name, framework, repo_url, status, description, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO projects (id, name, framework, repo_url, status, description, path, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&project.id)
@@ -113,6 +122,7 @@ impl<'a> ProjectRepository<'a> {
         .bind(&project.repo_url)
         .bind(project.status.as_str())
         .bind(&project.description)
+        .bind(&project.path)
         .bind(project.created_at)
         .bind(project.updated_at)
         .execute(self.db.pool())
@@ -124,7 +134,7 @@ impl<'a> ProjectRepository<'a> {
     /// Get a project by ID
     pub async fn get(&self, id: &str) -> Result<Option<Project>> {
         let row = sqlx::query(
-            "SELECT id, name, framework, repo_url, status, description, created_at, updated_at FROM projects WHERE id = ?",
+            "SELECT id, name, framework, repo_url, status, description, path, created_at, updated_at FROM projects WHERE id = ?",
         )
         .bind(id)
         .fetch_optional(self.db.pool())
@@ -136,9 +146,21 @@ impl<'a> ProjectRepository<'a> {
     /// Get a project by name
     pub async fn get_by_name(&self, name: &str) -> Result<Option<Project>> {
         let row = sqlx::query(
-            "SELECT id, name, framework, repo_url, status, description, created_at, updated_at FROM projects WHERE name = ?",
+            "SELECT id, name, framework, repo_url, status, description, path, created_at, updated_at FROM projects WHERE name = ?",
         )
         .bind(name)
+        .fetch_optional(self.db.pool())
+        .await?;
+
+        Ok(row.map(|r| self.row_to_project(r)))
+    }
+
+    /// Get a project by filesystem path
+    pub async fn get_by_path(&self, path: &str) -> Result<Option<Project>> {
+        let row = sqlx::query(
+            "SELECT id, name, framework, repo_url, status, description, path, created_at, updated_at FROM projects WHERE path = ?",
+        )
+        .bind(path)
         .fetch_optional(self.db.pool())
         .await?;
 
@@ -149,14 +171,14 @@ impl<'a> ProjectRepository<'a> {
     pub async fn list(&self, status: Option<ProjectStatus>) -> Result<Vec<Project>> {
         let rows = if let Some(status) = status {
             sqlx::query(
-                "SELECT id, name, framework, repo_url, status, description, created_at, updated_at FROM projects WHERE status = ? ORDER BY name",
+                "SELECT id, name, framework, repo_url, status, description, path, created_at, updated_at FROM projects WHERE status = ? ORDER BY name",
             )
             .bind(status.as_str())
             .fetch_all(self.db.pool())
             .await?
         } else {
             sqlx::query(
-                "SELECT id, name, framework, repo_url, status, description, created_at, updated_at FROM projects ORDER BY name",
+                "SELECT id, name, framework, repo_url, status, description, path, created_at, updated_at FROM projects ORDER BY name",
             )
             .fetch_all(self.db.pool())
             .await?
@@ -170,7 +192,7 @@ impl<'a> ProjectRepository<'a> {
         sqlx::query(
             r#"
             UPDATE projects
-            SET name = ?, framework = ?, repo_url = ?, status = ?, description = ?, updated_at = ?
+            SET name = ?, framework = ?, repo_url = ?, status = ?, description = ?, path = ?, updated_at = ?
             WHERE id = ?
             "#,
         )
@@ -179,6 +201,7 @@ impl<'a> ProjectRepository<'a> {
         .bind(&project.repo_url)
         .bind(project.status.as_str())
         .bind(&project.description)
+        .bind(&project.path)
         .bind(Utc::now())
         .bind(&project.id)
         .execute(self.db.pool())
@@ -259,6 +282,7 @@ impl<'a> ProjectRepository<'a> {
             repo_url: row.get("repo_url"),
             status: ProjectStatus::parse(row.get("status")).unwrap_or_default(),
             description: row.get("description"),
+            path: row.get("path"),
             created_at: row.get("created_at"),
             updated_at: row.get("updated_at"),
         }
@@ -299,6 +323,57 @@ pub async fn create_with_db(
     let project = Project::new(name, framework, repo_url);
     repo.create(&project).await?;
     Ok(project)
+}
+
+/// Create a new project with a filesystem path and save to database
+pub async fn create_with_path(
+    db: &Database,
+    name: &str,
+    framework: &str,
+    repo_url: &str,
+    path: &std::path::Path,
+) -> Result<Project> {
+    let repo = ProjectRepository::new(db);
+
+    // Check if name already exists
+    if repo.name_exists(name).await? {
+        return Err(crate::Error::Validation(format!(
+            "A project with name '{}' already exists",
+            name
+        )));
+    }
+
+    let project = Project::new(name, framework, repo_url).with_path(path.to_string_lossy());
+    repo.create(&project).await?;
+    Ok(project)
+}
+
+/// Find a project by checking if the given directory matches any project path
+pub async fn find_by_directory(db: &Database, directory: &std::path::Path) -> Result<Option<Project>> {
+    let repo = ProjectRepository::new(db);
+    let projects = repo.list(None).await?;
+
+    // Try exact match first
+    let dir_str = directory.to_string_lossy();
+    for project in &projects {
+        if let Some(ref path) = project.path {
+            if path == &*dir_str {
+                return Ok(Some(project.clone()));
+            }
+        }
+    }
+
+    // Try prefix match (we're inside a project directory)
+    for project in &projects {
+        if let Some(ref path) = project.path {
+            let project_path = std::path::PathBuf::from(path);
+            if directory.starts_with(&project_path) {
+                return Ok(Some(project.clone()));
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 /// List all projects (legacy API)

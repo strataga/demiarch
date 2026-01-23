@@ -8,7 +8,9 @@ use std::pin::Pin;
 use tracing::{debug, info};
 
 use super::AgentType;
-use super::code_extraction::{extract_code_blocks, language_to_extension};
+use super::code_extraction::{
+    extract_code_blocks, extract_files_from_response, language_to_extension,
+};
 use super::context::AgentContext;
 use super::message_builder::build_messages_from_input;
 use super::status::StatusTracker;
@@ -80,15 +82,34 @@ impl CoderAgent {
 
         debug!(tokens = response.tokens_used, "Coder received LLM response");
 
-        // Extract code blocks from the response
-        let code_blocks = extract_code_blocks(&response.content);
-
         // Build result with artifacts
         let mut result = AgentResult::success(&response.content).with_tokens(response.tokens_used);
+        let file_count;
 
-        for (i, block) in code_blocks.iter().enumerate() {
-            let filename = format!("generated-{}.{}", i + 1, language_to_extension(&block.language));
-            result = result.with_artifact(AgentArtifact::code(&filename, &block.code));
+        // First, try to extract files with proper paths from the response
+        let extracted_files = extract_files_from_response(&response.content);
+
+        if !extracted_files.is_empty() {
+            // Use properly named files from the response
+            for file in &extracted_files {
+                let path_str = file.path.to_string_lossy().to_string();
+                result = result.with_artifact(AgentArtifact::code(&path_str, &file.content));
+            }
+            file_count = extracted_files.len();
+            info!(
+                agent_id = %context.id,
+                files = extracted_files.len(),
+                "Coder extracted files with paths"
+            );
+        } else {
+            // Fallback: extract code blocks and generate generic filenames
+            let code_blocks = extract_code_blocks(&response.content);
+            for (i, block) in code_blocks.iter().enumerate() {
+                let filename =
+                    format!("generated-{}.{}", i + 1, language_to_extension(&block.language));
+                result = result.with_artifact(AgentArtifact::code(&filename, &block.code));
+            }
+            file_count = code_blocks.len();
         }
 
         // Mark as completed
@@ -98,7 +119,7 @@ impl CoderAgent {
         info!(
             agent_id = %context.id,
             tokens = response.tokens_used,
-            code_blocks = code_blocks.len(),
+            files = file_count,
             "Coder completed"
         );
 

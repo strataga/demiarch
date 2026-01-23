@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 11;
+pub const CURRENT_VERSION: i32 = 12;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -735,6 +735,21 @@ const MIGRATION_V11: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_knowledge_events_created ON knowledge_events(created_at);
 "#;
 
+/// Migration 12: Add project path for workspace management
+///
+/// Adds a `path` column to the projects table to store the filesystem path
+/// where the project directory is located. This enables:
+/// - Writing generated code to the project directory
+/// - Auto-detecting projects based on current working directory
+/// - Git operations within the project directory
+const MIGRATION_V12: &str = r#"
+    -- Add path column to projects table for workspace management
+    ALTER TABLE projects ADD COLUMN path TEXT;
+
+    -- Index for efficient path lookups (e.g., finding project by current directory)
+    CREATE INDEX IF NOT EXISTS idx_projects_path ON projects(path);
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -837,6 +852,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v11: Knowledge graph for GraphRAG");
         sqlx::raw_sql(MIGRATION_V11).execute(pool).await?;
         record_migration(pool, 11).await?;
+    }
+
+    if current_version < 12 {
+        tracing::info!("Applying migration v12: Project path for workspace management");
+        sqlx::raw_sql(MIGRATION_V12).execute(pool).await?;
+        record_migration(pool, 12).await?;
     }
 
     tracing::info!("Database migrations completed");

@@ -8,6 +8,7 @@
 //! - Progressive disclosure settings for token management
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio_util::sync::CancellationToken;
@@ -181,6 +182,8 @@ pub struct SharedAgentState {
     pub project_id: Option<Uuid>,
     /// Feature ID being worked on
     pub feature_id: Option<Uuid>,
+    /// Filesystem path to the project directory (for writing generated files)
+    pub project_path: Option<PathBuf>,
     /// Global counter for generating unique names
     counter: Arc<AtomicU64>,
     /// Registry of all active agents
@@ -201,6 +204,7 @@ impl SharedAgentState {
             cost_tracker: None,
             project_id: None,
             feature_id: None,
+            project_path: None,
             counter: Arc::new(AtomicU64::new(0)),
             agent_registry: Arc::new(RwLock::new(HashMap::new())),
             context_budget: Arc::new(ContextBudget::default()),
@@ -226,6 +230,7 @@ impl SharedAgentState {
             cost_tracker: None,
             project_id: None,
             feature_id: None,
+            project_path: None,
             counter: Arc::new(AtomicU64::new(0)),
             agent_registry: Arc::new(RwLock::new(HashMap::new())),
             context_budget: Arc::new(budget),
@@ -259,6 +264,12 @@ impl SharedAgentState {
     /// Set the feature ID
     pub fn with_feature_id(mut self, id: Uuid) -> Self {
         self.feature_id = Some(id);
+        self
+    }
+
+    /// Set the project filesystem path
+    pub fn with_project_path(mut self, path: PathBuf) -> Self {
+        self.project_path = Some(path);
         self
     }
 
@@ -371,6 +382,7 @@ impl std::fmt::Debug for SharedAgentState {
         f.debug_struct("SharedAgentState")
             .field("project_id", &self.project_id)
             .field("feature_id", &self.feature_id)
+            .field("project_path", &self.project_path)
             .field("has_cost_tracker", &self.cost_tracker.is_some())
             .field("context_budget_tokens", &self.context_budget.total_tokens)
             .finish()
@@ -458,6 +470,11 @@ impl AgentContext {
     /// Get the feature ID
     pub fn feature_id(&self) -> Option<Uuid> {
         self.shared_state.feature_id
+    }
+
+    /// Get the project filesystem path
+    pub fn project_path(&self) -> Option<&PathBuf> {
+        self.shared_state.project_path.as_ref()
     }
 
     /// Get the shared state

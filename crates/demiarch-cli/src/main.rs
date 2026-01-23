@@ -1,7 +1,7 @@
 //! Demiarch CLI - local-first AI app builder
 
 use clap::{Parser, Subcommand};
-use demiarch_core::agents::{AgentTool, AgentToolResult};
+use demiarch_core::agents::{extract_files_from_response, AgentTool, AgentToolResult};
 use demiarch_core::commands::{chat, checkpoint, document, feature, generate, graph, image, project};
 use demiarch_core::domain::knowledge::{EntityType, RelationshipType};
 use demiarch_core::config::Config;
@@ -828,21 +828,74 @@ async fn cmd_new(
         println!("Creating project '{}'...", name);
     }
 
+    // Determine project path (current dir + name)
+    let current_dir = std::env::current_dir()?;
+    let project_path = current_dir.join(name);
+
+    // Check if directory already exists
+    if project_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Directory '{}' already exists. Please choose a different name or remove the existing directory.",
+            project_path.display()
+        ));
+    }
+
+    // Create directory structure
+    std::fs::create_dir_all(&project_path)?;
+    std::fs::create_dir_all(project_path.join("src"))?;
+
+    // Initialize git repository
+    let git_init = std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(&project_path)
+        .output();
+
+    match git_init {
+        Ok(output) if output.status.success() => {
+            if !quiet {
+                println!("  Initialized git repository");
+            }
+        }
+        Ok(output) => {
+            warn!(
+                "Git init failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        Err(e) => {
+            warn!("Could not run git init: {}. Continuing without git.", e);
+        }
+    }
+
+    // Create .gitignore
+    let gitignore_content = match framework.to_lowercase().as_str() {
+        "rust" => "/target\n.env\n*.log\n",
+        "node" | "nodejs" | "react" | "vue" | "nextjs" | "next" => {
+            "node_modules/\n.env\n.env.local\n*.log\ndist/\nbuild/\n.next/\n"
+        }
+        "python" | "py" => "__pycache__/\n*.pyc\n.env\nvenv/\n.venv/\n*.log\n",
+        "go" | "golang" => "*.exe\n*.log\n.env\nvendor/\n",
+        _ => ".env\n*.log\n",
+    };
+    std::fs::write(project_path.join(".gitignore"), gitignore_content)?;
+
     let repo_url = repo.unwrap_or("");
-    let created_project = project::create_with_db(db, name, framework, repo_url).await?;
+    let created_project =
+        project::create_with_path(db, name, framework, repo_url, &project_path).await?;
 
     if !quiet {
         println!("Project created successfully!");
         println!("  ID: {}", created_project.id);
         println!("  Name: {}", created_project.name);
         println!("  Framework: {}", created_project.framework);
+        println!("  Path: {}", project_path.display());
         if !repo_url.is_empty() {
             println!("  Repository: {}", repo_url);
         }
         println!("\nNext steps:");
-        println!("  1. cd into your project directory");
+        println!("  1. cd {}", name);
         println!("  2. Run `demiarch chat` to start conversational discovery");
-        println!("  3. Run `demiarch features create <title>` to add features");
+        println!("  3. Use `/generate` in chat to generate code");
     }
 
     Ok(())
@@ -852,7 +905,18 @@ async fn cmd_new(
 ///
 /// This spawns an orchestrator agent which coordinates planners and workers
 /// to complete complex code generation tasks.
+#[allow(dead_code)]
 async fn run_with_agents(task: &str) -> anyhow::Result<AgentToolResult> {
+    run_with_agents_in_project(task, None).await
+}
+
+/// Run a task through the agent orchestration system with an optional project path
+///
+/// If a project path is provided, generated files will be written to that directory.
+async fn run_with_agents_in_project(
+    task: &str,
+    project_path: Option<&std::path::Path>,
+) -> anyhow::Result<AgentToolResult> {
     let config = Config::load()?;
     let api_key = config
         .llm
@@ -872,7 +936,11 @@ async fn run_with_agents(task: &str) -> anyhow::Result<AgentToolResult> {
             .map_err(|e| anyhow::anyhow!("Failed to create LLM client: {}", e))?,
     );
 
-    let tool = AgentTool::new(llm_client);
+    let mut tool = AgentTool::new(llm_client);
+    if let Some(path) = project_path {
+        tool = tool.with_project_path(path.to_path_buf());
+    }
+
     let result = tool
         .spawn_orchestrator(task)
         .await
@@ -887,18 +955,30 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("Failed to open database: {}", e))?;
 
-    // Get the most recent project or prompt to create one
-    let project_repo = project::ProjectRepository::new(&db);
-    let projects = project_repo.list(None).await?;
-
-    let active_project = if let Some(p) = projects.first() {
-        p.clone()
-    } else {
+    // Try to detect project from current directory first
+    let current_dir = std::env::current_dir()?;
+    let active_project = if let Some(p) = project::find_by_directory(&db, &current_dir)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to find project: {}", e))?
+    {
         if !quiet {
-            println!("No projects found. Create one first with:");
-            println!("  demiarch new <name> --framework <framework>");
+            println!("Detected project '{}' from current directory", p.name);
         }
-        return Ok(());
+        p
+    } else {
+        // Fall back to most recent project
+        let project_repo = project::ProjectRepository::new(&db);
+        let projects = project_repo.list(None).await?;
+
+        if let Some(p) = projects.first() {
+            p.clone()
+        } else {
+            if !quiet {
+                println!("No projects found. Create one first with:");
+                println!("  demiarch new <name> --framework <framework>");
+            }
+            return Ok(());
+        }
     };
 
     // Get API key for LLM
@@ -1008,16 +1088,50 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
                                 .collect::<Vec<_>>()
                                 .join("\n");
 
+                            // Get project path for writing generated files
+                            let project_path = active_project
+                                .path
+                                .as_ref()
+                                .map(std::path::PathBuf::from);
+
                             if !quiet {
-                                println!("\nGenerating code based on conversation...\n");
+                                println!("\nGenerating code based on conversation...");
+                                if let Some(ref path) = project_path {
+                                    println!("  Output directory: {}\n", path.display());
+                                }
                             }
 
-                            match run_with_agents(&task).await {
+                            match run_with_agents_in_project(
+                                &task,
+                                project_path.as_deref(),
+                            )
+                            .await
+                            {
                                 Ok(result) => {
                                     if result.success {
                                         println!("Generation complete!");
                                         println!("  Tokens used: {}", result.total_tokens);
                                         println!("  Children spawned: {}", result.children_spawned);
+
+                                        // Write artifacts to project directory if available
+                                        if let Some(ref path) = project_path {
+                                            // Parse the output to extract code artifacts
+                                            // The agent output contains the generated code
+                                            let files = extract_files_from_response(&result.output);
+                                            if !files.is_empty() {
+                                                println!("  Writing {} file(s) to project:", files.len());
+                                                for file in &files {
+                                                    let file_path = path.join(&file.path);
+                                                    if let Some(parent) = file_path.parent() {
+                                                        if !parent.exists() {
+                                                            std::fs::create_dir_all(parent)?;
+                                                        }
+                                                    }
+                                                    std::fs::write(&file_path, &file.content)?;
+                                                    println!("    {}", file_path.display());
+                                                }
+                                            }
+                                        }
                                     } else {
                                         println!("Generation failed: {}", result.output);
                                     }
