@@ -306,13 +306,13 @@ impl<'a> HierarchyTreeWidget<'a> {
         }
 
         // Token usage
-        if self.options.show_tokens
-            && let Some(tokens) = node.tokens_used
-        {
-            spans.push(Span::styled(
-                format!(" {}tok", format_tokens(tokens)),
-                Style::default().fg(self.colors.tokens),
-            ));
+        if self.options.show_tokens {
+            if let Some(tokens) = node.tokens_used {
+                spans.push(Span::styled(
+                    format!(" {}tok", format_tokens(tokens)),
+                    Style::default().fg(self.colors.tokens),
+                ));
+            }
         }
 
         // Status text for terminal states

@@ -739,7 +739,7 @@ fn validate_license_key_on_startup() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Load .env file if present (silently ignore if not found)
-    let _ = dotenvy::dotenv();
+    dotenvy::dotenv().ok();
 
     // Initialize tracing
     tracing_subscriber::fmt()
@@ -1392,7 +1392,9 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
     }
 
     // Save history
-    let _ = std::fs::create_dir_all(history_path.parent().unwrap());
+    if let Some(parent) = history_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let _ = rl.save_history(&history_path);
 
     Ok(())

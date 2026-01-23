@@ -274,9 +274,7 @@ impl PlannerAgent {
         let mut plan = ExecutionPlan::new(original_task);
 
         // Try to parse JSON if present
-        if let Some(json_start) = response.find('{')
-            && let Some(json_end) = response.rfind('}')
-        {
+        if let (Some(json_start), Some(json_end)) = (response.find('{'), response.rfind('}')) {
             let json_str = &response[json_start..=json_end];
             if let Ok(parsed) = serde_json::from_str::<ExecutionPlan>(json_str) {
                 return parsed;

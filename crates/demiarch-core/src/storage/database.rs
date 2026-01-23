@@ -98,12 +98,13 @@ impl Database {
     /// Create a new database connection with the given configuration
     pub async fn new(config: DatabaseConfig) -> Result<Self> {
         // Ensure the directory exists
-        if let Some(parent) = config.path.parent()
-            && !parent.exists()
-            && config.path.to_string_lossy() != ":memory:"
-        {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create database directory: {:?}", parent))?;
+        if config.path.to_string_lossy() != ":memory:" {
+            if let Some(parent) = config.path.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent)
+                        .with_context(|| format!("Failed to create database directory: {:?}", parent))?;
+                }
+            }
         }
 
         let connection_str = if config.path.to_string_lossy() == ":memory:" {

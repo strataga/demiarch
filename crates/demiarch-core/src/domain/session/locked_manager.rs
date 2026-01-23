@@ -573,13 +573,11 @@ mod tests {
         // Recover with locking
         let result = manager.recover().await.unwrap();
 
-        match result {
-            RecoveryResult::Recovered(info) => {
-                assert_eq!(info.session.id, session.id);
-                assert!(info.session.is_active());
-            }
-            _ => panic!("Expected RecoveryResult::Recovered"),
-        }
+        let RecoveryResult::Recovered(info) = result else {
+            panic!("Expected RecoveryResult::Recovered, got {:?}", result);
+        };
+        assert_eq!(info.session.id, session.id);
+        assert!(info.session.is_active());
     }
 
     #[tokio::test]
@@ -592,12 +590,10 @@ mod tests {
             .await
             .unwrap();
 
-        match result {
-            RecoveryResult::CreatedNew(session) => {
-                assert!(session.is_active());
-            }
-            _ => panic!("Expected RecoveryResult::CreatedNew"),
-        }
+        let RecoveryResult::CreatedNew(session) = result else {
+            panic!("Expected RecoveryResult::CreatedNew, got {:?}", result);
+        };
+        assert!(session.is_active());
     }
 
     #[tokio::test]

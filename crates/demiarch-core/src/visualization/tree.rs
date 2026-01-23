@@ -363,11 +363,11 @@ impl TreeBuilder {
         // Add level 3 children to level 2 nodes
         for child in &mut root_children {
             for info in agents.iter() {
-                if let Some(parent_path) = info.path.parent()
-                    && parent_path.to_string() == child.path.to_string()
-                {
-                    let grandchild = AgentTreeNode::from_agent_info(info);
-                    child.children.push(grandchild);
+                if let Some(parent_path) = info.path.parent() {
+                    if parent_path.to_string() == child.path.to_string() {
+                        let grandchild = AgentTreeNode::from_agent_info(info);
+                        child.children.push(grandchild);
+                    }
                 }
             }
         }
@@ -708,10 +708,10 @@ impl HierarchyTree {
         }
 
         // Tokens
-        if self.options.show_tokens
-            && let Some(tokens) = node.tokens_used
-        {
-            line.push_str(&format!(" {}tok", tokens));
+        if self.options.show_tokens {
+            if let Some(tokens) = node.tokens_used {
+                line.push_str(&format!(" {}tok", tokens));
+            }
         }
 
         // Status text for terminal states

@@ -181,12 +181,12 @@ impl LlmClient {
         let model = model.unwrap_or(&self.config.default_model);
 
         // Check budget before making request
-        if let Some(tracker) = &self.cost_tracker
-            && tracker.is_over_limit()
-        {
-            let today = tracker.today_total();
-            let limit = tracker.daily_limit();
-            return Err(Error::BudgetExceeded(today, limit, limit * 1.5));
+        if let Some(tracker) = &self.cost_tracker {
+            if tracker.is_over_limit() {
+                let today = tracker.today_total();
+                let limit = tracker.daily_limit();
+                return Err(Error::BudgetExceeded(today, limit, limit * 1.5));
+            }
         }
 
         let request = ChatRequest::new(model, messages)
@@ -244,12 +244,12 @@ impl LlmClient {
         let model = model.unwrap_or(&self.config.default_model).to_string();
 
         // Check budget before making request
-        if let Some(tracker) = &self.cost_tracker
-            && tracker.is_over_limit()
-        {
-            let today = tracker.today_total();
-            let limit = tracker.daily_limit();
-            return Err(Error::BudgetExceeded(today, limit, limit * 1.5));
+        if let Some(tracker) = &self.cost_tracker {
+            if tracker.is_over_limit() {
+                let today = tracker.today_total();
+                let limit = tracker.daily_limit();
+                return Err(Error::BudgetExceeded(today, limit, limit * 1.5));
+            }
         }
 
         let request = ChatRequest::new(model, messages)
@@ -389,10 +389,10 @@ impl LlmClient {
             }
 
             // Process any remaining content in buffer
-            if !buffer.trim().is_empty()
-                && let Some(event) = parse_sse_line(&buffer)
-            {
-                yield Ok(event);
+            if !buffer.trim().is_empty() {
+                if let Some(event) = parse_sse_line(&buffer) {
+                    yield Ok(event);
+                }
             }
         };
 
@@ -649,10 +649,10 @@ fn extract_retry_after(body: &str) -> Option<u64> {
         if let Some(retry_after) = json.get("retry_after").and_then(|v| v.as_u64()) {
             return Some(retry_after);
         }
-        if let Some(error) = json.get("error")
-            && let Some(retry_after) = error.get("retry_after").and_then(|v| v.as_u64())
-        {
-            return Some(retry_after);
+        if let Some(error) = json.get("error") {
+            if let Some(retry_after) = error.get("retry_after").and_then(|v| v.as_u64()) {
+                return Some(retry_after);
+            }
         }
     }
     None

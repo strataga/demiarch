@@ -322,11 +322,11 @@ impl ShutdownHandler {
     async fn pause_active_session(&self) -> Result<Option<Uuid>> {
         let active = self.session_manager.get_active().await?;
 
-        if let Some(session) = active
-            && session.status == SessionStatus::Active
-        {
-            self.session_manager.pause(session.id).await?;
-            return Ok(Some(session.id));
+        if let Some(session) = active {
+            if session.status == SessionStatus::Active {
+                self.session_manager.pause(session.id).await?;
+                return Ok(Some(session.id));
+            }
         }
 
         Ok(None)

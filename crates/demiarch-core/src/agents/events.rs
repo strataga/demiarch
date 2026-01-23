@@ -123,12 +123,14 @@ impl AgentEventWriter {
             agent,
         };
 
-        if let Ok(mut file_guard) = self.file.lock()
-            && let Some(ref mut file) = *file_guard
-                && let Ok(json) = serde_json::to_string(&event) {
+        if let Ok(mut file_guard) = self.file.lock() {
+            if let Some(ref mut file) = *file_guard {
+                if let Ok(json) = serde_json::to_string(&event) {
                     let _ = writeln!(file, "{}", json);
                     let _ = file.flush();
                 }
+            }
+        }
     }
 
     /// Emit a spawned event
@@ -251,10 +253,11 @@ impl AgentEventReader {
                 Ok(_) => {
                     if let Ok(event) = serde_json::from_str::<AgentEvent>(&line) {
                         // Apply session filter if set
-                        if let Some(filter) = self.filter_session
-                            && event.session_id != filter {
+                        if let Some(filter) = self.filter_session {
+                            if event.session_id != filter {
                                 continue;
                             }
+                        }
                         return Some(event);
                     }
                 }

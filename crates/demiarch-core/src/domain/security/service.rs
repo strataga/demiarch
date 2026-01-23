@@ -333,46 +333,74 @@ mod tests {
     #[async_trait]
     impl KeyRepository for MockKeyRepository {
         async fn store(&self, key: &EncryptedKey) -> Result<(), KeyError> {
-            self.keys.lock().unwrap().insert(key.id, key.clone());
+            self.keys
+                .lock()
+                .expect("mock key repository lock poisoned")
+                .insert(key.id, key.clone());
             Ok(())
         }
 
         async fn get_by_id(&self, id: Uuid) -> Result<Option<EncryptedKey>, KeyError> {
-            Ok(self.keys.lock().unwrap().get(&id).cloned())
+            Ok(self
+                .keys
+                .lock()
+                .expect("mock key repository lock poisoned")
+                .get(&id)
+                .cloned())
         }
 
         async fn get_by_name(&self, name: &str) -> Result<Option<EncryptedKey>, KeyError> {
             Ok(self
                 .keys
                 .lock()
-                .unwrap()
+                .expect("mock key repository lock poisoned")
                 .values()
                 .find(|k| k.name == name)
                 .cloned())
         }
 
         async fn update(&self, key: &EncryptedKey) -> Result<(), KeyError> {
-            self.keys.lock().unwrap().insert(key.id, key.clone());
+            self.keys
+                .lock()
+                .expect("mock key repository lock poisoned")
+                .insert(key.id, key.clone());
             Ok(())
         }
 
         async fn delete(&self, id: Uuid) -> Result<(), KeyError> {
-            self.keys.lock().unwrap().remove(&id);
+            self.keys
+                .lock()
+                .expect("mock key repository lock poisoned")
+                .remove(&id);
             Ok(())
         }
 
         async fn delete_by_name(&self, name: &str) -> Result<(), KeyError> {
-            let mut keys = self.keys.lock().unwrap();
+            let mut keys = self
+                .keys
+                .lock()
+                .expect("mock key repository lock poisoned");
             keys.retain(|_, v| v.name != name);
             Ok(())
         }
 
         async fn list_all(&self) -> Result<Vec<EncryptedKey>, KeyError> {
-            Ok(self.keys.lock().unwrap().values().cloned().collect())
+            Ok(self
+                .keys
+                .lock()
+                .expect("mock key repository lock poisoned")
+                .values()
+                .cloned()
+                .collect())
         }
 
         async fn exists(&self, name: &str) -> Result<bool, KeyError> {
-            Ok(self.keys.lock().unwrap().values().any(|k| k.name == name))
+            Ok(self
+                .keys
+                .lock()
+                .expect("mock key repository lock poisoned")
+                .values()
+                .any(|k| k.name == name))
         }
     }
 
@@ -392,12 +420,19 @@ mod tests {
     #[async_trait]
     impl MasterKeyRepository for MockMasterKeyRepository {
         async fn store(&self, key: &MasterKey) -> Result<(), KeyError> {
-            *self.key.lock().unwrap() = Some(key.clone());
+            *self
+                .key
+                .lock()
+                .expect("mock master key repository lock poisoned") = Some(key.clone());
             Ok(())
         }
 
         async fn get(&self) -> Result<Option<MasterKey>, KeyError> {
-            Ok(self.key.lock().unwrap().clone())
+            Ok(self
+                .key
+                .lock()
+                .expect("mock master key repository lock poisoned")
+                .clone())
         }
 
         async fn delete(&self) -> Result<(), KeyError> {

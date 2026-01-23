@@ -337,10 +337,10 @@ impl<R: KnowledgeGraphRepository> HybridRanker<R> {
         for entity_id in &query.anchor_entities {
             let linked_skills = self.repository.get_skills_for_entity(entity_id).await?;
             for skill_id in linked_skills {
-                if candidates.insert(skill_id.clone())
-                    && let Some(skill) = self.skill_store.get(&skill_id).await?
-                {
-                    skills.push(skill);
+                if candidates.insert(skill_id.clone()) {
+                    if let Some(skill) = self.skill_store.get(&skill_id).await? {
+                        skills.push(skill);
+                    }
                 }
             }
         }
@@ -461,13 +461,14 @@ impl<R: KnowledgeGraphRepository> HybridRanker<R> {
         breakdown.text_score = if text_match { 0.8 } else { 0.0 };
 
         // Embedding score: if we have embeddings, compute similarity
-        if let (Some(query_embedding), Some(model)) = (&query.embedding, &query.embedding_model)
-            && let Some(embedding) = self
+        if let (Some(query_embedding), Some(model)) = (&query.embedding, &query.embedding_model) {
+            if let Some(embedding) = self
                 .skill_store
                 .get_embedding(&skill.id, model)
                 .await?
-        {
-            breakdown.embedding_score = cosine_similarity(query_embedding, &embedding.embedding);
+            {
+                breakdown.embedding_score = cosine_similarity(query_embedding, &embedding.embedding);
+            }
         }
 
         // Graph score: based on connections to matched entities

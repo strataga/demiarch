@@ -544,12 +544,12 @@ impl LockManager {
         _holder_description: &str,
     ) -> LockResult<()> {
         // Ensure parent directory exists
-        if let Some(parent) = lock_file.parent()
-            && !parent.exists()
-        {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                LockError::IoError(format!("Failed to create lock directory: {}", e))
-            })?;
+        if let Some(parent) = lock_file.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    LockError::IoError(format!("Failed to create lock directory: {}", e))
+                })?;
+            }
         }
 
         // Check if lock file exists and is valid

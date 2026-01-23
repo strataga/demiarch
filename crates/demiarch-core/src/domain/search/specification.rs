@@ -172,28 +172,28 @@ impl SearchSpecBuilder {
     /// Check if a result satisfies all specifications
     pub fn is_satisfied_by(&self, result: &SearchResult) -> bool {
         // Check each spec if present
-        if let Some(ref spec) = self.privacy_spec
-            && !spec.is_satisfied_by(result)
-        {
-            return false;
+        if let Some(ref spec) = self.privacy_spec {
+            if !spec.is_satisfied_by(result) {
+                return false;
+            }
         }
 
-        if let Some(ref spec) = self.entity_type_spec
-            && !spec.is_satisfied_by(result)
-        {
-            return false;
+        if let Some(ref spec) = self.entity_type_spec {
+            if !spec.is_satisfied_by(result) {
+                return false;
+            }
         }
 
-        if let Some(ref spec) = self.scope_spec
-            && !spec.is_satisfied_by(result)
-        {
-            return false;
+        if let Some(ref spec) = self.scope_spec {
+            if !spec.is_satisfied_by(result) {
+                return false;
+            }
         }
 
-        if let Some(ref spec) = self.min_relevance_spec
-            && !spec.is_satisfied_by(result)
-        {
-            return false;
+        if let Some(ref spec) = self.min_relevance_spec {
+            if !spec.is_satisfied_by(result) {
+                return false;
+            }
         }
 
         true

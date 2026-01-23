@@ -266,15 +266,15 @@ impl SessionManager {
         }
 
         // Pause any other active session
-        if let Some(mut active) = self.repository.get_active().await?
-            && active.id != session_id
-        {
-            info!(session_id = %active.id, "Pausing existing active session");
-            active.pause();
-            self.repository.update(&active).await?;
-            self.repository
-                .save_event(&SessionEvent::paused(active.id))
-                .await?;
+        if let Some(mut active) = self.repository.get_active().await? {
+            if active.id != session_id {
+                info!(session_id = %active.id, "Pausing existing active session");
+                active.pause();
+                self.repository.update(&active).await?;
+                self.repository
+                    .save_event(&SessionEvent::paused(active.id))
+                    .await?;
+            }
         }
 
         session.resume();
@@ -894,15 +894,13 @@ mod tests {
         // Recover should resume the paused session
         let result = manager.recover().await.unwrap();
 
-        match result {
-            RecoveryResult::Recovered(info) => {
-                assert_eq!(info.session.id, session.id);
-                assert!(!info.was_unclean_shutdown);
-                assert_eq!(info.previous_status, SessionStatus::Paused);
-                assert!(info.session.is_active());
-            }
-            _ => panic!("Expected RecoveryResult::Recovered"),
-        }
+        let RecoveryResult::Recovered(info) = result else {
+            panic!("Expected RecoveryResult::Recovered, got {:?}", result);
+        };
+        assert_eq!(info.session.id, session.id);
+        assert!(!info.was_unclean_shutdown);
+        assert_eq!(info.previous_status, SessionStatus::Paused);
+        assert!(info.session.is_active());
     }
 
     #[tokio::test]
@@ -919,15 +917,13 @@ mod tests {
         // Recover should detect unclean shutdown
         let result = manager.recover().await.unwrap();
 
-        match result {
-            RecoveryResult::Recovered(info) => {
-                assert_eq!(info.session.id, session.id);
-                assert!(info.was_unclean_shutdown);
-                assert_eq!(info.previous_status, SessionStatus::Active);
-                assert!(info.session.is_active());
-            }
-            _ => panic!("Expected RecoveryResult::Recovered"),
-        }
+        let RecoveryResult::Recovered(info) = result else {
+            panic!("Expected RecoveryResult::Recovered, got {:?}", result);
+        };
+        assert_eq!(info.session.id, session.id);
+        assert!(info.was_unclean_shutdown);
+        assert_eq!(info.previous_status, SessionStatus::Active);
+        assert!(info.session.is_active());
     }
 
     #[tokio::test]

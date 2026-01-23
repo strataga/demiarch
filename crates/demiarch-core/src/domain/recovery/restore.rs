@@ -336,16 +336,16 @@ async fn restore_files(snapshot: &SnapshotData) -> Result<usize> {
 
         // Ensure parent directory exists
         let path = std::path::Path::new(&code_file.path);
-        if let Some(parent) = path.parent()
-            && !parent.exists()
-        {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                RestoreError::FileRestoreFailed(format!(
-                    "Failed to create directory {}: {}",
-                    parent.display(),
-                    e
-                ))
-            })?;
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    RestoreError::FileRestoreFailed(format!(
+                        "Failed to create directory {}: {}",
+                        parent.display(),
+                        e
+                    ))
+                })?;
+            }
         }
 
         // Write file content

@@ -78,7 +78,7 @@ impl App {
 
 fn main() -> anyhow::Result<()> {
     // Load .env file if present (silently ignore if not found)
-    let _ = dotenvy::dotenv();
+    dotenvy::dotenv().ok();
 
     // Setup terminal
     enable_raw_mode()?;
@@ -147,22 +147,23 @@ fn run_app(
         })?;
 
         // Handle input
-        if event::poll(std::time::Duration::from_millis(100))?
-            && let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                KeyCode::Tab | KeyCode::Right => app.next_tab(),
-                KeyCode::BackTab | KeyCode::Left => app.prev_tab(),
-                KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
-                KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
-                KeyCode::Char('a') => app.toggle_ascii(),
-                KeyCode::Char('1') => app.current_tab = 0,
-                KeyCode::Char('2') => app.current_tab = 1,
-                KeyCode::Char('3') => app.current_tab = 2,
-                KeyCode::Char('4') | KeyCode::Char('?') => app.current_tab = 3,
-                _ => {}
+        if event::poll(std::time::Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    match key.code {
+                        KeyCode::Char('q') => return Ok(()),
+                        KeyCode::Tab | KeyCode::Right => app.next_tab(),
+                        KeyCode::BackTab | KeyCode::Left => app.prev_tab(),
+                        KeyCode::Up | KeyCode::Char('k') => app.scroll_up(),
+                        KeyCode::Down | KeyCode::Char('j') => app.scroll_down(),
+                        KeyCode::Char('a') => app.toggle_ascii(),
+                        KeyCode::Char('1') => app.current_tab = 0,
+                        KeyCode::Char('2') => app.current_tab = 1,
+                        KeyCode::Char('3') => app.current_tab = 2,
+                        KeyCode::Char('4') | KeyCode::Char('?') => app.current_tab = 3,
+                        _ => {}
+                    }
+                }
             }
         }
     }

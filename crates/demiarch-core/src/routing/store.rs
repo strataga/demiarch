@@ -385,24 +385,22 @@ impl RoutingStoreSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use tempfile::{tempdir, TempDir};
 
-    async fn create_test_store() -> RoutingStore {
+    async fn create_test_store() -> (RoutingStore, TempDir) {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test_routing.db");
 
         let store = RoutingStore::connect(&db_path).await.unwrap();
         store.init().await.unwrap();
 
-        // Need to leak the dir to prevent cleanup during test
-        std::mem::forget(dir);
-
-        store
+        // Return the dir to keep it alive for the test duration
+        (store, dir)
     }
 
     #[tokio::test]
     async fn test_save_and_load_stats() {
-        let store = create_test_store().await;
+        let (store, _temp) = create_test_store().await;
 
         let stats = ModelStats::new("coder:medium".to_string(), "test/model-a".to_string());
 
@@ -420,7 +418,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_existing_stats() {
-        let store = create_test_store().await;
+        let (store, _temp) = create_test_store().await;
 
         let mut stats = ModelStats::new("coder:medium".to_string(), "test/model-a".to_string());
 
@@ -443,7 +441,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_batch() {
-        let store = create_test_store().await;
+        let (store, _temp) = create_test_store().await;
 
         let stats = vec![
             ModelStats::new("coder:simple".to_string(), "model-a".to_string()),
@@ -462,7 +460,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_stats() {
-        let store = create_test_store().await;
+        let (store, _temp) = create_test_store().await;
 
         // Save some stats
         let stats = vec![
@@ -482,7 +480,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_summary() {
-        let store = create_test_store().await;
+        let (store, _temp) = create_test_store().await;
 
         let mut stats1 = ModelStats::new("coder:simple".to_string(), "model-a".to_string());
         stats1.total_uses = 10;
@@ -505,7 +503,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_top_models() {
-        let store = create_test_store().await;
+        let (store, _temp) = create_test_store().await;
 
         // Create stats with different expected values
         let mut stats1 = ModelStats::new("coder:simple".to_string(), "model-a".to_string());
@@ -533,7 +531,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_clear_all() {
-        let store = create_test_store().await;
+        let (store, _temp) = create_test_store().await;
 
         // Save some stats
         let stats = vec![

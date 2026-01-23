@@ -407,10 +407,10 @@ impl ContextWindow {
 
         for message in &self.context_messages {
             if current_role != Some(message.role) {
-                if !current_content.is_empty()
-                    && let Some(role) = current_role
-                {
-                    result.push(Message::new(role, summarize_text(&current_content)));
+                if !current_content.is_empty() {
+                    if let Some(role) = current_role {
+                        result.push(Message::new(role, summarize_text(&current_content)));
+                    }
                 }
                 current_content.clear();
                 current_role = Some(message.role);
@@ -423,10 +423,10 @@ impl ContextWindow {
         }
 
         // Add final accumulated content
-        if !current_content.is_empty()
-            && let Some(role) = current_role
-        {
-            result.push(Message::new(role, summarize_text(&current_content)));
+        if !current_content.is_empty() {
+            if let Some(role) = current_role {
+                result.push(Message::new(role, summarize_text(&current_content)));
+            }
         }
 
         result

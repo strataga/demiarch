@@ -383,9 +383,10 @@ mod tests {
         for _ in 0..50 {
             if let Some((model, _, _)) =
                 bandit.select("test:simple", &refs, RoutingPreference::Balanced)
-                && model.model_id == "model-a"
             {
-                a_count += 1;
+                if model.model_id == "model-a" {
+                    a_count += 1;
+                }
             }
         }
 
@@ -414,9 +415,10 @@ mod tests {
         for _ in 0..100 {
             if let Some((model, _, _)) =
                 bandit.select("test:simple", &refs, RoutingPreference::Fast)
-                && model.model_id == "model-b"
             {
-                b_count += 1;
+                if model.model_id == "model-b" {
+                    b_count += 1;
+                }
             }
         }
 
@@ -445,9 +447,10 @@ mod tests {
         for _ in 0..100 {
             if let Some((model, _, _)) =
                 bandit.select("test:simple", &refs, RoutingPreference::Quality)
-                && model.model_id == "model-c"
             {
-                c_count += 1;
+                if model.model_id == "model-c" {
+                    c_count += 1;
+                }
             }
         }
 
@@ -476,9 +479,10 @@ mod tests {
         for _ in 0..100 {
             if let Some((model, _, _)) =
                 bandit.select("test:simple", &refs, RoutingPreference::Cost)
-                && model.model_id == "model-b"
             {
-                b_count += 1;
+                if model.model_id == "model-b" {
+                    b_count += 1;
+                }
             }
         }
 
