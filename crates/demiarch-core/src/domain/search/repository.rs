@@ -3,7 +3,9 @@
 //! Handles all database interactions for cross-project search.
 
 use super::entity::{CrossProjectSearchLog, ProjectSearchSettings, SearchEntityType, SearchResult};
+use super::repository_trait::SearchRepositoryTrait;
 use crate::error::{Error, Result};
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -456,6 +458,79 @@ impl SearchRepository {
         .map_err(Error::DatabaseError)?;
 
         rows.into_iter().map(|row| row.into_log()).collect()
+    }
+}
+
+// ========== Trait Implementation ==========
+
+#[async_trait]
+impl SearchRepositoryTrait for SearchRepository {
+    async fn get_settings(&self, project_id: Uuid) -> Result<Option<ProjectSearchSettings>> {
+        self.get_settings(project_id).await
+    }
+
+    async fn get_or_create_settings(&self, project_id: Uuid) -> Result<ProjectSearchSettings> {
+        self.get_or_create_settings(project_id).await
+    }
+
+    async fn save_settings(&self, settings: &ProjectSearchSettings) -> Result<()> {
+        self.save_settings(settings).await
+    }
+
+    async fn get_searchable_projects(&self, searcher_project_id: Uuid) -> Result<Vec<Uuid>> {
+        self.get_searchable_projects(searcher_project_id).await
+    }
+
+    async fn search_features(
+        &self,
+        query: &str,
+        project_ids: &[Uuid],
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<SearchResult>> {
+        self.search_features(query, project_ids, limit, offset).await
+    }
+
+    async fn search_documents(
+        &self,
+        query: &str,
+        project_ids: &[Uuid],
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<SearchResult>> {
+        self.search_documents(query, project_ids, limit, offset).await
+    }
+
+    async fn search_messages(
+        &self,
+        query: &str,
+        project_ids: &[Uuid],
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<SearchResult>> {
+        self.search_messages(query, project_ids, limit, offset).await
+    }
+
+    async fn search_skills(
+        &self,
+        query: &str,
+        project_ids: &[Uuid],
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<SearchResult>> {
+        self.search_skills(query, project_ids, limit, offset).await
+    }
+
+    async fn log_search(&self, log: &CrossProjectSearchLog) -> Result<()> {
+        self.log_search(log).await
+    }
+
+    async fn get_search_history(
+        &self,
+        project_id: Uuid,
+        limit: u32,
+    ) -> Result<Vec<CrossProjectSearchLog>> {
+        self.get_search_history(project_id, limit).await
     }
 }
 

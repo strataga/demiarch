@@ -51,6 +51,7 @@ pub mod edit_detection;
 pub mod event;
 pub mod manager;
 pub mod repository;
+pub mod repository_trait;
 pub mod restore;
 pub mod signing;
 
@@ -68,6 +69,7 @@ pub use manager::{
     DEFAULT_RETENTION_DAYS, compute_content_hash,
 };
 pub use repository::CheckpointRepository;
+pub use repository_trait::{CheckpointRepositoryTrait, FeatureRow, MessageRow, PhaseRow};
 pub use restore::{RestoreError, RestoreResult, restore_checkpoint};
 pub use signing::{
     CheckpointSigner, CheckpointVerifier, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE, SIGNATURE_SIZE,

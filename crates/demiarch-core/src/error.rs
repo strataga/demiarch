@@ -1,6 +1,14 @@
 //! Error types for Demiarch
+//!
+//! This module provides a unified error type for the entire application.
+//! Domain-specific errors (LockError, KeyError, SigningError, etc.) are wrapped
+//! in the main Error enum for consistent error handling.
 
 use thiserror::Error;
+
+use crate::domain::locking::types::LockError;
+use crate::domain::recovery::signing::SigningError;
+use crate::domain::security::entity::KeyError;
 
 /// Result type alias using Demiarch's Error
 pub type Result<T> = std::result::Result<T, Error>;
@@ -43,9 +51,19 @@ pub enum Error {
     #[error("Lock timeout: Resource '{0}' is held by another agent. Try again later.")]
     LockTimeout(String),
 
+    #[error("Lock error: {0}")]
+    Lock(#[from] LockError),
+
     // Database errors (E400-E499)
     #[error("Database error: {0}")]
     DatabaseError(#[from] sqlx::Error),
+
+    // Security errors (E450-E499)
+    #[error("Security error: {0}")]
+    Security(#[from] KeyError),
+
+    #[error("Signing error: {0}")]
+    Signing(#[from] SigningError),
 
     // Plugin errors (E500-E599)
     #[error("Plugin '{0}' not found. Install with `demiarch plugin install {0}`.")]
@@ -165,7 +183,10 @@ impl Error {
             Self::RateLimited(_) => "E103",
             Self::BudgetExceeded(..) => "E200",
             Self::LockTimeout(_) => "E300",
+            Self::Lock(e) => e.code(),
             Self::DatabaseError(_) => "E400",
+            Self::Security(_) => "E450",
+            Self::Signing(_) => "E451",
             Self::PluginNotFound(_) => "E500",
             Self::PluginValidationFailed(_) => "E501",
             Self::LicenseExpired(..) => "E502",

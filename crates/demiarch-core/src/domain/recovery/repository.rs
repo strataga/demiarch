@@ -3,7 +3,12 @@
 //! Handles all database interactions for checkpoints.
 
 use super::checkpoint::{Checkpoint, CheckpointInfo};
+use super::repository_trait::{
+    CheckpointRepositoryTrait, FeatureRow as TraitFeatureRow, MessageRow as TraitMessageRow,
+    PhaseRow as TraitPhaseRow,
+};
 use crate::error::{Error, Result};
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -240,6 +245,55 @@ impl CheckpointRepository {
         .map_err(Error::DatabaseError)?;
 
         Ok(count)
+    }
+}
+
+// ========== Trait Implementation ==========
+
+#[async_trait]
+impl CheckpointRepositoryTrait for CheckpointRepository {
+    async fn save(&self, checkpoint: &Checkpoint) -> Result<()> {
+        self.save(checkpoint).await
+    }
+
+    async fn get(&self, checkpoint_id: Uuid) -> Result<Option<Checkpoint>> {
+        self.get(checkpoint_id).await
+    }
+
+    async fn list_by_project(&self, project_id: Uuid) -> Result<Vec<CheckpointInfo>> {
+        self.list_by_project(project_id).await
+    }
+
+    async fn delete(&self, checkpoint_id: Uuid) -> Result<bool> {
+        self.delete(checkpoint_id).await
+    }
+
+    async fn delete_all_for_project(&self, project_id: Uuid) -> Result<u64> {
+        self.delete_all_for_project(project_id).await
+    }
+
+    async fn delete_older_than(&self, project_id: Uuid, days: i64) -> Result<u64> {
+        self.delete_older_than(project_id, days).await
+    }
+
+    async fn count_by_project(&self, project_id: Uuid) -> Result<i64> {
+        self.count_by_project(project_id).await
+    }
+
+    async fn get_phases(&self, project_id: Uuid) -> Result<Vec<TraitPhaseRow>> {
+        self.get_phases(project_id).await
+    }
+
+    async fn get_features(&self, project_id: Uuid) -> Result<Vec<TraitFeatureRow>> {
+        self.get_features(project_id).await
+    }
+
+    async fn get_recent_messages(
+        &self,
+        project_id: Uuid,
+        limit: i32,
+    ) -> Result<Vec<TraitMessageRow>> {
+        self.get_recent_messages(project_id, limit).await
     }
 }
 

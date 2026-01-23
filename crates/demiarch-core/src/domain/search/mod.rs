@@ -38,6 +38,7 @@
 pub mod entity;
 pub mod event;
 pub mod repository;
+pub mod repository_trait;
 pub mod service;
 pub mod specification;
 
@@ -48,6 +49,7 @@ pub use entity::{
 };
 pub use event::{SearchEvent, SearchEventType};
 pub use repository::SearchRepository;
+pub use repository_trait::SearchRepositoryTrait;
 pub use service::SearchService;
 pub use specification::{
     EntityTypeSpec, MinRelevanceSpec, PrivacyAllowedSpec, ScopeSpec, SearchSpecBuilder,

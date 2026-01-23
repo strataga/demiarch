@@ -45,6 +45,7 @@ pub mod event;
 pub mod locked_manager;
 pub mod manager;
 pub mod repository;
+pub mod repository_trait;
 #[allow(clippy::module_inception)]
 pub mod session;
 pub mod shutdown;
@@ -54,6 +55,7 @@ pub use event::{SessionEvent, SessionEventType};
 pub use locked_manager::LockedSessionManager;
 pub use manager::{CleanupSummary, SessionManager, SessionStats};
 pub use repository::SessionRepository;
+pub use repository_trait::SessionRepositoryTrait;
 pub use session::{
     RecoveryInfo, RecoveryResult, Session, SessionInfo, SessionPhase, SessionStatus,
 };

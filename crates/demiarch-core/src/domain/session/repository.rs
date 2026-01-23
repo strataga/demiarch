@@ -3,8 +3,10 @@
 //! Handles all database interactions for sessions and session events.
 
 use super::event::{SessionEvent, SessionEventType};
+use super::repository_trait::SessionRepositoryTrait;
 use super::session::{Session, SessionInfo, SessionPhase, SessionStatus};
 use crate::error::{Error, Result};
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -456,6 +458,91 @@ impl SessionRepository {
         .map_err(Error::DatabaseError)?;
 
         Ok(count)
+    }
+}
+
+// ========== Trait Implementation ==========
+
+#[async_trait]
+impl SessionRepositoryTrait for SessionRepository {
+    async fn save(&self, session: &Session) -> Result<()> {
+        self.save(session).await
+    }
+
+    async fn update(&self, session: &Session) -> Result<()> {
+        self.update(session).await
+    }
+
+    async fn get(&self, session_id: Uuid) -> Result<Option<Session>> {
+        self.get(session_id).await
+    }
+
+    async fn get_active(&self) -> Result<Option<Session>> {
+        self.get_active().await
+    }
+
+    async fn get_ongoing(&self) -> Result<Option<Session>> {
+        self.get_ongoing().await
+    }
+
+    async fn list(&self, limit: Option<i32>) -> Result<Vec<SessionInfo>> {
+        self.list(limit).await
+    }
+
+    async fn list_by_status(&self, status: SessionStatus) -> Result<Vec<SessionInfo>> {
+        self.list_by_status(status).await
+    }
+
+    async fn list_by_project(&self, project_id: Uuid) -> Result<Vec<SessionInfo>> {
+        self.list_by_project(project_id).await
+    }
+
+    async fn delete(&self, session_id: Uuid) -> Result<bool> {
+        self.delete(session_id).await
+    }
+
+    async fn delete_older_than(&self, days: i64) -> Result<u64> {
+        self.delete_older_than(days).await
+    }
+
+    async fn count_by_status(&self, status: SessionStatus) -> Result<i64> {
+        self.count_by_status(status).await
+    }
+
+    async fn save_event(&self, event: &SessionEvent) -> Result<()> {
+        self.save_event(event).await
+    }
+
+    async fn get_events(&self, session_id: Uuid, limit: Option<i32>) -> Result<Vec<SessionEvent>> {
+        self.get_events(session_id, limit).await
+    }
+
+    async fn get_events_by_type(
+        &self,
+        session_id: Uuid,
+        event_type: SessionEventType,
+    ) -> Result<Vec<SessionEvent>> {
+        self.get_events_by_type(session_id, event_type).await
+    }
+
+    async fn count_events(&self, session_id: Uuid) -> Result<i64> {
+        self.count_events(session_id).await
+    }
+
+    async fn delete_old_events(&self, days: i64) -> Result<u64> {
+        self.delete_old_events(days).await
+    }
+
+    async fn delete_events_for_ended_sessions(&self) -> Result<u64> {
+        self.delete_events_for_ended_sessions().await
+    }
+
+    async fn delete_events_for_session(&self, session_id: Uuid) -> Result<u64> {
+        self.delete_events_for_session(session_id).await
+    }
+
+    async fn count_all_events(&self) -> Result<i64> {
+        self.count_all_events().await
     }
 }
 
