@@ -1,0 +1,493 @@
+{
+  "project_name": "Demiarch",
+  "tasks": [
+    {
+      "id": "task-001",
+      "title": "Initialize Rust project structure",
+      "description": "Create the base Rust project with workspace configuration, setting up the core library and CLI/GUI binary crates",
+      "task_type": "architecture",
+      "complexity": "low",
+      "dependencies": [],
+      "files_affected": [
+        "Cargo.toml",
+        "src/lib.rs",
+        "src/bin/cli/main.rs",
+        "src/bin/gui/main.rs"
+      ],
+      "phase": "planning"
+    },
+    {
+      "id": "task-002",
+      "title": "Set up SQLite database schema and migrations",
+      "description": "Implement the complete database schema as defined in the PRD section 3, including all tables, indexes, and migration infrastructure using sqlx",
+      "task_type": "architecture",
+      "complexity": "high",
+      "dependencies": [
+        "task-001"
+      ],
+      "files_affected": [
+        "migrations/V1__initial.sql",
+        "src/db/mod.rs",
+        "src/db/schema.rs",
+        "src/db/migrations.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-003",
+      "title": "Implement core error handling system",
+      "description": "Create the comprehensive error handling system with all error types, error codes, and user-friendly messages as specified in section 9.1",
+      "task_type": "architecture",
+      "complexity": "medium",
+      "dependencies": [
+        "task-001"
+      ],
+      "files_affected": [
+        "src/error.rs",
+        "src/lib.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-004",
+      "title": "Create project management commands",
+      "description": "Implement project CRUD operations including create, list, switch, status, archive, and delete commands",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-002",
+        "task-003"
+      ],
+      "files_affected": [
+        "src/commands/project.rs",
+        "src/commands/mod.rs",
+        "src/models/project.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-005",
+      "title": "Implement feature management system",
+      "description": "Create feature CRUD operations with support for phases, priorities, dependencies, and status tracking",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-002",
+        "task-003"
+      ],
+      "files_affected": [
+        "src/commands/features.rs",
+        "src/models/feature.rs",
+        "src/models/phase.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-006",
+      "title": "Build LLM client with retry and fallback",
+      "description": "Implement the LLM client with OpenRouter integration, including retry logic, exponential backoff, model fallback, and rate limiting as specified in section 7",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-003"
+      ],
+      "files_affected": [
+        "src/llm/client.rs",
+        "src/llm/config.rs",
+        "src/llm/retry.rs",
+        "src/llm/rate_limiter.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-007",
+      "title": "Implement Russian Doll agent architecture",
+      "description": "Create the hierarchical agent system with Orchestrator, Planner, and Tool agents (Coder, Reviewer, Tester) as defined in section 6.1",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-006"
+      ],
+      "files_affected": [
+        "src/agents/mod.rs",
+        "src/agents/orchestrator.rs",
+        "src/agents/planner.rs",
+        "src/agents/coder.rs",
+        "src/agents/reviewer.rs",
+        "src/agents/tester.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-008",
+      "title": "Create context management system",
+      "description": "Implement context management with token counting, pruning, and summarization capabilities for efficient LLM usage",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-006"
+      ],
+      "files_affected": [
+        "src/context/manager.rs",
+        "src/context/token_counter.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-009",
+      "title": "Build progressive disclosure system",
+      "description": "Implement the 3-layer context retrieval system (index, timeline, full) with vector embeddings for ~10x token savings",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-002",
+        "task-006"
+      ],
+      "files_affected": [
+        "src/context/progressive.rs",
+        "src/context/embeddings.rs",
+        "src/db/vector_extension.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-010",
+      "title": "Implement learned skills extraction",
+      "description": "Create the autonomous skill extraction system that captures debugging knowledge as reusable skills with quality gating",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-007",
+        "task-009"
+      ],
+      "files_affected": [
+        "src/skills/extractor.rs",
+        "src/skills/matcher.rs",
+        "src/skills/models.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-011",
+      "title": "Build dynamic model routing with RL",
+      "description": "Implement the model routing system that selects between specialized and generalist models based on task type and learned performance",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-006"
+      ],
+      "files_affected": [
+        "src/routing/router.rs",
+        "src/routing/registry.rs",
+        "src/routing/performance.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-012",
+      "title": "Create lifecycle hooks system",
+      "description": "Implement the extensible hook system for session, generation, and error events with sandboxed execution",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-003"
+      ],
+      "files_affected": [
+        "src/hooks/manager.rs",
+        "src/hooks/executor.rs",
+        "src/hooks/sandbox.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-013",
+      "title": "Implement code generation engine",
+      "description": "Create the code generation system that produces files for features, handles conflicts, and tracks checksums",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-007"
+      ],
+      "files_affected": [
+        "src/codegen/generator.rs",
+        "src/codegen/conflict_resolver.rs",
+        "src/codegen/file_manager.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-014",
+      "title": "Build plugin system with WASM sandbox",
+      "description": "Implement the plugin architecture with WASM sandboxing, capability restrictions, and resource limits",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-003"
+      ],
+      "files_affected": [
+        "src/plugins/manager.rs",
+        "src/plugins/sandbox.rs",
+        "src/plugins/loader.rs",
+        "src/plugins/traits.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-015",
+      "title": "Create cost tracking and budget enforcement",
+      "description": "Implement cost tracking per model/request with daily budgets, alerts, and enforcement as specified in section 8",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-002",
+        "task-006"
+      ],
+      "files_affected": [
+        "src/cost/tracker.rs",
+        "src/cost/budget.rs",
+        "src/cost/models.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-016",
+      "title": "Implement multi-project session management",
+      "description": "Create session management for handling 3-5 concurrent projects with context switching and recovery",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-004"
+      ],
+      "files_affected": [
+        "src/session/manager.rs",
+        "src/session/models.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-017",
+      "title": "Build resource lock manager",
+      "description": "Implement the distributed lock system for preventing conflicts between concurrent agents using semaphores",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-002"
+      ],
+      "files_affected": [
+        "src/locks/manager.rs",
+        "src/locks/models.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-018",
+      "title": "Create sync system for Git integration",
+      "description": "Implement SQLite to JSONL export/import for Git-friendly storage with validation and topological sorting",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-002"
+      ],
+      "files_affected": [
+        "src/sync/exporter.rs",
+        "src/sync/importer.rs",
+        "src/sync/validator.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-019",
+      "title": "Implement recovery and checkpoint system",
+      "description": "Create checkpoint/restore functionality with signature verification and automatic cleanup",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-002"
+      ],
+      "files_affected": [
+        "src/recovery/checkpoint.rs",
+        "src/recovery/backup.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-020",
+      "title": "Build API key encryption system",
+      "description": "Implement AES-256-GCM encryption with Argon2id key derivation for secure API key storage",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-003"
+      ],
+      "files_affected": [
+        "src/security/encryption.rs",
+        "src/security/key_manager.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-021",
+      "title": "Create input validation and sanitization",
+      "description": "Implement comprehensive input validation for paths, SQL identifiers, and user input to prevent injection attacks",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-003"
+      ],
+      "files_affected": [
+        "src/security/validator.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-022",
+      "title": "Implement plugin security scanning",
+      "description": "Create static analysis, dependency audit, and WASM validation for plugin security",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-014"
+      ],
+      "files_affected": [
+        "src/plugins/security.rs",
+        "src/plugins/scanner.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-023",
+      "title": "Build CLI with TUI dashboard",
+      "description": "Implement the command-line interface with all commands and the TUI watch mode using ratatui",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-004",
+        "task-005",
+        "task-013"
+      ],
+      "files_affected": [
+        "src/bin/cli/main.rs",
+        "src/cli/commands.rs",
+        "src/cli/tui/mod.rs",
+        "src/cli/tui/dashboard.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-024",
+      "title": "Create Tauri GUI application",
+      "description": "Build the desktop GUI with React/TypeScript frontend including project management, chat interface, and code diff viewer",
+      "task_type": "feature",
+      "complexity": "high",
+      "dependencies": [
+        "task-004",
+        "task-005",
+        "task-013"
+      ],
+      "files_affected": [
+        "src/bin/gui/main.rs",
+        "src-tauri/src/main.rs",
+        "src/gui/App.tsx",
+        "src/gui/components/*.tsx"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-025",
+      "title": "Implement offline mode and operation queue",
+      "description": "Create network monitoring and operation queuing for offline functionality",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-002",
+        "task-006"
+      ],
+      "files_affected": [
+        "src/network/monitor.rs",
+        "src/network/queue.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-026",
+      "title": "Build update system with signature verification",
+      "description": "Implement self-update functionality with Ed25519 signature verification for security",
+      "task_type": "feature",
+      "complexity": "medium",
+      "dependencies": [
+        "task-020"
+      ],
+      "files_affected": [
+        "src/update/updater.rs",
+        "src/update/verifier.rs"
+      ],
+      "phase": "development"
+    },
+    {
+      "id": "task-027",
+      "title": "Create comprehensive test suite",
+      "description": "Write unit tests, integration tests, and test helpers for all major components",
+      "task_type": "testing",
+      "complexity": "high",
+      "dependencies": [
+        "task-001",
+        "task-002",
+        "task-003"
+      ],
+      "files_affected": [
+        "tests/common/mod.rs",
+        "tests/integration/*.rs",
+        "src/**/*_test.rs"
+      ],
+      "phase": "testing"
+    },
+    {
+      "id": "task-028",
+      "title": "Implement performance benchmarks",
+      "description": "Create performance benchmarks using Criterion for critical operations like feature listing and lock acquisition",
+      "task_type": "testing",
+      "complexity": "medium",
+      "dependencies": [
+        "task-027"
+      ],
+      "files_affected": [
+        "benches/features.rs",
+        "benches/locks.rs"
+      ],
+      "phase": "testing"
+    },
+    {
+      "id": "task-029",
+      "title": "Add fuzz testing for parsers",
+      "description": "Implement fuzz tests for JSONL parser and input validators using cargo-fuzz",
+      "task_type": "testing",
+      "complexity": "medium",
+      "dependencies": [
+        "task-018",
+        "task-021"
+      ],
+      "files_affected": [
+        "fuzz/fuzz_targets/jsonl_parser.rs",
+        "fuzz/fuzz_targets/input_validator.rs"
+      ],
+      "phase": "testing"
+    },
+    {
+      "id": "task-030",
+      "title": "Create user documentation",
+      "description": "Write comprehensive user documentation including getting started guide, CLI reference, and configuration guide",
+      "task_type": "documentation",
+      "complexity": "medium",
+      "dependencies": [
+        "task-023",
+        "task-024"
+      ],
+      "files_affected": [
+        "docs/getting-started.md",
+        "docs/cli-reference.md",
+        "docs/configuration.md"
+      ],
+      "phase": "qa"
+    }
+  ]
+}
