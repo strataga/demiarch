@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tokio_util::sync::CancellationToken;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
@@ -188,6 +189,8 @@ pub struct SharedAgentState {
     context_budget: Arc<ContextBudget>,
     /// Event writer for real-time monitoring
     event_writer: Arc<AgentEventWriter>,
+    /// Token for cancelling agent execution
+    cancellation_token: CancellationToken,
 }
 
 impl SharedAgentState {
@@ -202,7 +205,18 @@ impl SharedAgentState {
             agent_registry: Arc::new(RwLock::new(HashMap::new())),
             context_budget: Arc::new(ContextBudget::default()),
             event_writer: Arc::new(AgentEventWriter::new()),
+            cancellation_token: CancellationToken::new(),
         }
+    }
+
+    /// Get the cancellation token
+    pub fn cancellation_token(&self) -> &CancellationToken {
+        &self.cancellation_token
+    }
+
+    /// Cancel all agents in this hierarchy
+    pub fn cancel_all(&self) {
+        self.cancellation_token.cancel();
     }
 
     /// Create new shared state with custom context budget
@@ -448,6 +462,16 @@ impl AgentContext {
     /// Get the shared state
     pub fn shared_state(&self) -> &Arc<SharedAgentState> {
         &self.shared_state
+    }
+
+    /// Get the cancellation token
+    pub fn cancellation_token(&self) -> &CancellationToken {
+        &self.shared_state.cancellation_token
+    }
+
+    /// Check if cancellation was requested
+    pub fn is_cancelled(&self) -> bool {
+        self.shared_state.cancellation_token.is_cancelled()
     }
 
     /// Register this agent with the shared registry
