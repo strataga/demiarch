@@ -243,5 +243,83 @@ fn test_new_command_with_repo_url() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Repository:"));
+        .stdout(predicate::str::contains("Repo:"));
+}
+
+#[test]
+fn test_new_command_with_custom_path() {
+    let temp_dir = TempDir::new().unwrap();
+    let custom_location = TempDir::new().unwrap();
+    let project_name = unique_project_name("path-test-project");
+
+    demiarch_cmd()
+        .current_dir(&temp_dir)
+        .args([
+            "new",
+            &project_name,
+            "--framework",
+            "rust",
+            "--path",
+            custom_location.path().to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[ok] Project created successfully!"));
+
+    // Verify project was created in custom location
+    let project_path = custom_location.path().join(&project_name);
+    assert!(project_path.exists(), "Project directory should exist at custom path");
+    assert!(project_path.join(".git").exists(), "Git should be initialized");
+    assert!(project_path.join("src").exists(), "src directory should exist");
+}
+
+#[test]
+fn test_init_command_in_existing_directory() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create a file to simulate an existing project
+    std::fs::write(temp_dir.path().join("existing_file.txt"), "test").unwrap();
+
+    demiarch_cmd()
+        .current_dir(&temp_dir)
+        .args(["init", "--framework", "rust"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[ok] Project initialized successfully!"))
+        .stdout(predicate::str::contains("Framework: rust"));
+
+    // .gitignore should be created
+    assert!(temp_dir.path().join(".gitignore").exists());
+}
+
+#[test]
+fn test_init_command_preserves_existing_gitignore() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create a custom .gitignore
+    let custom_gitignore = "# My custom gitignore\n*.custom\n";
+    std::fs::write(temp_dir.path().join(".gitignore"), custom_gitignore).unwrap();
+
+    demiarch_cmd()
+        .current_dir(&temp_dir)
+        .args(["init", "--framework", "rust"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Existing .gitignore preserved"));
+
+    // Verify .gitignore was not overwritten
+    let content = std::fs::read_to_string(temp_dir.path().join(".gitignore")).unwrap();
+    assert_eq!(content, custom_gitignore);
+}
+
+#[test]
+fn test_init_command_warns_on_empty_directory() {
+    let temp_dir = TempDir::new().unwrap();
+
+    demiarch_cmd()
+        .current_dir(&temp_dir)
+        .args(["init", "--framework", "python"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Directory is empty"));
 }

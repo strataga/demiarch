@@ -56,6 +56,19 @@ enum Commands {
         /// Git repository URL
         #[arg(short, long)]
         repo: Option<String>,
+        /// Custom project location (default: current directory)
+        #[arg(short = 'P', long)]
+        path: Option<std::path::PathBuf>,
+    },
+
+    /// Initialize demiarch in an existing directory
+    Init {
+        /// Framework (nextjs, react, vue, etc.)
+        #[arg(short, long)]
+        framework: String,
+        /// Git repository URL
+        #[arg(short, long)]
+        repo: Option<String>,
     },
 
     /// Start conversational discovery
@@ -750,9 +763,15 @@ async fn main() -> anyhow::Result<()> {
             name,
             framework,
             repo,
+            path,
         } => {
             let db = get_db().await?;
-            cmd_new(&db, &name, &framework, repo.as_deref(), cli.quiet).await
+            cmd_new(&db, &name, &framework, repo.as_deref(), path, cli.quiet).await
+        }
+
+        Commands::Init { framework, repo } => {
+            let db = get_db().await?;
+            cmd_init(&db, &framework, repo.as_deref(), cli.quiet).await
         }
 
         Commands::Chat => cmd_chat(cli.quiet).await,
@@ -817,58 +836,18 @@ async fn main() -> anyhow::Result<()> {
 // Command Implementations
 // ============================================================================
 
-async fn cmd_new(
-    db: &Database,
-    name: &str,
-    framework: &str,
-    repo: Option<&str>,
-    quiet: bool,
-) -> anyhow::Result<()> {
-    if !quiet {
-        println!("Creating project '{}'...", name);
-    }
+/// Check if git is available on the system
+fn is_git_available() -> bool {
+    std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
 
-    // Determine project path (current dir + name)
-    let current_dir = std::env::current_dir()?;
-    let project_path = current_dir.join(name);
-
-    // Check if directory already exists
-    if project_path.exists() {
-        return Err(anyhow::anyhow!(
-            "Directory '{}' already exists. Please choose a different name or remove the existing directory.",
-            project_path.display()
-        ));
-    }
-
-    // Create directory structure
-    std::fs::create_dir_all(&project_path)?;
-    std::fs::create_dir_all(project_path.join("src"))?;
-
-    // Initialize git repository
-    let git_init = std::process::Command::new("git")
-        .args(["init"])
-        .current_dir(&project_path)
-        .output();
-
-    match git_init {
-        Ok(output) if output.status.success() => {
-            if !quiet {
-                println!("  Initialized git repository");
-            }
-        }
-        Ok(output) => {
-            warn!(
-                "Git init failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-        Err(e) => {
-            warn!("Could not run git init: {}. Continuing without git.", e);
-        }
-    }
-
-    // Create .gitignore
-    let gitignore_content = match framework.to_lowercase().as_str() {
+/// Get framework-specific gitignore content
+fn get_gitignore_content(framework: &str) -> &'static str {
+    match framework.to_lowercase().as_str() {
         "rust" => "/target\n.env\n*.log\n",
         "node" | "nodejs" | "react" | "vue" | "nextjs" | "next" => {
             "node_modules/\n.env\n.env.local\n*.log\ndist/\nbuild/\n.next/\n"
@@ -876,26 +855,196 @@ async fn cmd_new(
         "python" | "py" => "__pycache__/\n*.pyc\n.env\nvenv/\n.venv/\n*.log\n",
         "go" | "golang" => "*.exe\n*.log\n.env\nvendor/\n",
         _ => ".env\n*.log\n",
+    }
+}
+
+async fn cmd_new(
+    db: &Database,
+    name: &str,
+    framework: &str,
+    repo: Option<&str>,
+    custom_path: Option<std::path::PathBuf>,
+    quiet: bool,
+) -> anyhow::Result<()> {
+    // Determine project path
+    let project_path = if let Some(base_path) = custom_path {
+        // Use custom path, joining with project name
+        base_path.join(name)
+    } else {
+        // Default: current directory + name
+        std::env::current_dir()?.join(name)
     };
+
+    if !quiet {
+        println!("Creating project '{}' at {}...", name, project_path.display());
+    }
+
+    // Check if directory already exists
+    if project_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Directory '{}' already exists.\n\
+             Hint: Choose a different name, use --path to specify a different location,\n\
+             or remove the existing directory.",
+            project_path.display()
+        ));
+    }
+
+    // Check if git is available before proceeding
+    let git_available = is_git_available();
+    if !git_available && !quiet {
+        println!("  Warning: git is not installed or not in PATH. Skipping git initialization.");
+    }
+
+    // Create directory structure
+    std::fs::create_dir_all(&project_path).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to create directory '{}': {}",
+            project_path.display(),
+            e
+        )
+    })?;
+    std::fs::create_dir_all(project_path.join("src")).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to create src directory in '{}': {}",
+            project_path.display(),
+            e
+        )
+    })?;
+
+    if !quiet {
+        println!("  [ok] Created directory structure");
+    }
+
+    // Initialize git repository if available
+    if git_available {
+        let git_init = std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&project_path)
+            .output();
+
+        match git_init {
+            Ok(output) if output.status.success() => {
+                if !quiet {
+                    println!("  [ok] Initialized git repository");
+                }
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!("Git init failed: {}", stderr);
+                if !quiet {
+                    println!("  [warn] Git init failed: {}", stderr.trim());
+                }
+            }
+            Err(e) => {
+                warn!("Could not run git init: {}", e);
+                if !quiet {
+                    println!("  [warn] Could not run git init: {}", e);
+                }
+            }
+        }
+    }
+
+    // Create .gitignore
+    let gitignore_content = get_gitignore_content(framework);
     std::fs::write(project_path.join(".gitignore"), gitignore_content)?;
+
+    if !quiet {
+        println!("  [ok] Created .gitignore for {} framework", framework);
+    }
 
     let repo_url = repo.unwrap_or("");
     let created_project =
         project::create_with_path(db, name, framework, repo_url, &project_path).await?;
 
     if !quiet {
-        println!("Project created successfully!");
-        println!("  ID: {}", created_project.id);
-        println!("  Name: {}", created_project.name);
+        println!("\n[ok] Project created successfully!");
+        println!();
+        println!("  ID:        {}", created_project.id);
+        println!("  Name:      {}", created_project.name);
         println!("  Framework: {}", created_project.framework);
-        println!("  Path: {}", project_path.display());
+        println!("  Path:      {}", project_path.display());
         if !repo_url.is_empty() {
-            println!("  Repository: {}", repo_url);
+            println!("  Repo:      {}", repo_url);
         }
-        println!("\nNext steps:");
-        println!("  1. cd {}", name);
+        println!();
+        println!("Next steps:");
+        println!("  1. cd {}", project_path.display());
         println!("  2. Run `demiarch chat` to start conversational discovery");
         println!("  3. Use `/generate` in chat to generate code");
+    }
+
+    Ok(())
+}
+
+/// Initialize demiarch in an existing directory
+///
+/// Unlike `new`, this does NOT create directories or initialize git.
+/// It registers the current directory as a demiarch project.
+async fn cmd_init(
+    db: &Database,
+    framework: &str,
+    repo: Option<&str>,
+    quiet: bool,
+) -> anyhow::Result<()> {
+    let current_dir = std::env::current_dir()?;
+    let name = current_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("Could not determine directory name"))?
+        .to_string();
+
+    if !quiet {
+        println!("Initializing demiarch in '{}'...", current_dir.display());
+    }
+
+    // Check if directory is empty or has content
+    let is_empty = current_dir.read_dir()?.next().is_none();
+    if is_empty && !quiet {
+        println!("  Note: Directory is empty. Consider using `demiarch new` instead.");
+    }
+
+    // Check if already a demiarch project
+    if let Ok(Some(existing)) = project::find_by_directory(db, &current_dir).await {
+        return Err(anyhow::anyhow!(
+            "Directory '{}' is already registered as project '{}' (ID: {}).\n\
+             Use `demiarch projects show {}` to view details.",
+            current_dir.display(),
+            existing.name,
+            existing.id,
+            existing.id
+        ));
+    }
+
+    // Create .gitignore if it doesn't exist
+    let gitignore_path = current_dir.join(".gitignore");
+    if !gitignore_path.exists() {
+        let gitignore_content = get_gitignore_content(framework);
+        std::fs::write(&gitignore_path, gitignore_content)?;
+        if !quiet {
+            println!("  [ok] Created .gitignore for {} framework", framework);
+        }
+    } else if !quiet {
+        println!("  [ok] Existing .gitignore preserved");
+    }
+
+    let repo_url = repo.unwrap_or("");
+    let created_project =
+        project::create_with_path(db, &name, framework, repo_url, &current_dir).await?;
+
+    if !quiet {
+        println!("\n[ok] Project initialized successfully!");
+        println!();
+        println!("  ID:        {}", created_project.id);
+        println!("  Name:      {}", created_project.name);
+        println!("  Framework: {}", created_project.framework);
+        println!("  Path:      {}", current_dir.display());
+        if !repo_url.is_empty() {
+            println!("  Repo:      {}", repo_url);
+        }
+        println!();
+        println!("Next steps:");
+        println!("  1. Run `demiarch chat` to start conversational discovery");
+        println!("  2. Use `/generate` in chat to generate code");
     }
 
     Ok(())
