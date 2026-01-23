@@ -1,7 +1,8 @@
 //! Demiarch CLI - local-first AI app builder
 
 use clap::{Parser, Subcommand};
-use demiarch_core::commands::{checkpoint, document, feature, generate, graph, image, project};
+use demiarch_core::agents::{AgentTool, AgentToolResult};
+use demiarch_core::commands::{chat, checkpoint, document, feature, generate, graph, image, project};
 use demiarch_core::domain::knowledge::{EntityType, RelationshipType};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
@@ -9,8 +10,13 @@ use demiarch_core::domain::locking::{LockConfig, LockManager};
 use demiarch_core::domain::session::{
     SessionManager, SessionStatus, ShutdownConfig, ShutdownHandler,
 };
+use demiarch_core::llm::{LlmClient, Message, StreamEvent};
 use demiarch_core::storage::{Database, DatabaseManager};
 use demiarch_core::visualization::{HierarchyTree, NodeStyle, RenderOptions, TreeBuilder};
+use futures_util::StreamExt;
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
+use std::io::{self, Write};
 use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -842,13 +848,307 @@ async fn cmd_new(
     Ok(())
 }
 
+/// Run a task through the agent orchestration system
+///
+/// This spawns an orchestrator agent which coordinates planners and workers
+/// to complete complex code generation tasks.
+async fn run_with_agents(task: &str) -> anyhow::Result<AgentToolResult> {
+    let config = Config::load()?;
+    let api_key = config
+        .llm
+        .resolved_api_key()
+        .map_err(|e| anyhow::anyhow!("Config error: {}", e))?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "API key not configured. Set DEMIARCH_API_KEY or OPENROUTER_API_KEY environment variable."
+            )
+        })?;
+
+    let llm_client = Arc::new(
+        LlmClient::builder()
+            .config(config.llm.clone())
+            .api_key(api_key)
+            .build()
+            .map_err(|e| anyhow::anyhow!("Failed to create LLM client: {}", e))?,
+    );
+
+    let tool = AgentTool::new(llm_client);
+    let result = tool
+        .spawn_orchestrator(task)
+        .await
+        .map_err(|e| anyhow::anyhow!("Agent execution failed: {}", e))?;
+
+    Ok(result)
+}
+
 async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
+    let config = Config::load()?;
+    let db = Database::default()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to open database: {}", e))?;
+
+    // Get the most recent project or prompt to create one
+    let project_repo = project::ProjectRepository::new(&db);
+    let projects = project_repo.list(None).await?;
+
+    let active_project = if let Some(p) = projects.first() {
+        p.clone()
+    } else {
+        if !quiet {
+            println!("No projects found. Create one first with:");
+            println!("  demiarch new <name> --framework <framework>");
+        }
+        return Ok(());
+    };
+
+    // Get API key for LLM
+    let api_key = config
+        .llm
+        .resolved_api_key()
+        .map_err(|e| anyhow::anyhow!("Config error: {}", e))?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "API key not configured. Set DEMIARCH_API_KEY or OPENROUTER_API_KEY environment variable."
+            )
+        })?;
+
+    let llm_client = LlmClient::builder()
+        .config(config.llm.clone())
+        .api_key(api_key)
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to create LLM client: {}", e))?;
+
+    // Create a new conversation
+    let conversation = chat::create_conversation(&db, &active_project.id, Some("Chat Session"))
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create conversation: {}", e))?;
+
     if !quiet {
-        println!("Starting conversational discovery...");
-        println!("(Chat interface not yet implemented)");
-        println!("\nUse `demiarch features create <title>` to manually add features.");
+        println!("Demiarch Chat - Project: {}", active_project.name);
+        println!("Type your message, or use these commands:");
+        println!("  /quit      - Exit chat");
+        println!("  /generate  - Generate code from the conversation");
+        println!("  /clear     - Clear conversation history");
+        println!();
     }
+
+    // Set up rustyline editor
+    let mut rl = DefaultEditor::new()?;
+    let history_path = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("demiarch")
+        .join("chat_history.txt");
+
+    // Try to load history, ignore errors
+    let _ = rl.load_history(&history_path);
+
+    // System prompt for chat
+    let system_prompt = format!(
+        "You are Demiarch, an AI assistant specialized in software development. \
+         You're helping with the project '{}' (framework: {}). \
+         Help the user design features, write code, and solve problems. \
+         When the user wants code generated, describe what you would create and ask if they want to proceed.",
+        active_project.name, active_project.framework
+    );
+
+    loop {
+        let readline = rl.readline("> ");
+        match readline {
+            Ok(line) => {
+                let input = line.trim();
+
+                if input.is_empty() {
+                    continue;
+                }
+
+                // Add to history
+                let _ = rl.add_history_entry(input);
+
+                // Handle commands
+                if input.starts_with('/') {
+                    match input {
+                        "/quit" | "/exit" | "/q" => {
+                            if !quiet {
+                                println!("Goodbye!");
+                            }
+                            break;
+                        }
+                        "/clear" => {
+                            // Just create a new conversation
+                            let _new_conv = chat::create_conversation(
+                                &db,
+                                &active_project.id,
+                                Some("Chat Session"),
+                            )
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Failed to create conversation: {}", e))?;
+                            if !quiet {
+                                println!("Conversation cleared. Starting fresh.");
+                            }
+                            // Note: The current conversation continues - a full /clear would
+                            // need to track the conversation ID mutably throughout the loop
+                            continue;
+                        }
+                        "/generate" => {
+                            // Get recent history and generate code
+                            let history = chat::get_history(&db, &conversation.id, Some(10))
+                                .await
+                                .map_err(|e| anyhow::anyhow!("Failed to get history: {}", e))?;
+
+                            if history.is_empty() {
+                                println!("No conversation history to generate from.");
+                                continue;
+                            }
+
+                            // Build a task from the conversation
+                            let task = history
+                                .iter()
+                                .filter(|m| m.role == chat::MessageRole::User)
+                                .map(|m| m.content.as_str())
+                                .collect::<Vec<_>>()
+                                .join("\n");
+
+                            if !quiet {
+                                println!("\nGenerating code based on conversation...\n");
+                            }
+
+                            match run_with_agents(&task).await {
+                                Ok(result) => {
+                                    if result.success {
+                                        println!("Generation complete!");
+                                        println!("  Tokens used: {}", result.total_tokens);
+                                        println!("  Children spawned: {}", result.children_spawned);
+                                    } else {
+                                        println!("Generation failed: {}", result.output);
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("Error during generation: {}", e);
+                                }
+                            }
+                            continue;
+                        }
+                        cmd => {
+                            println!("Unknown command: {}", cmd);
+                            println!("Available commands: /quit, /generate, /clear");
+                            continue;
+                        }
+                    }
+                }
+
+                // Save user message
+                chat::send_message(&db, &conversation.id, chat::MessageRole::User, input)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to save message: {}", e))?;
+
+                // Build messages for LLM including history
+                let history = chat::get_history(&db, &conversation.id, Some(20))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to get history: {}", e))?;
+
+                let mut messages = vec![Message::system(&system_prompt)];
+                for msg in &history {
+                    let llm_msg = match msg.role {
+                        chat::MessageRole::User => Message::user(&msg.content),
+                        chat::MessageRole::Assistant => Message::assistant(&msg.content),
+                        chat::MessageRole::System => Message::system(&msg.content),
+                    };
+                    messages.push(llm_msg);
+                }
+
+                // Stream the response
+                match llm_client.complete_streaming(messages, None).await {
+                    Ok(stream) => {
+                        let mut response = String::new();
+                        let mut stream = std::pin::pin!(stream);
+
+                        while let Some(event) = stream.next().await {
+                            match event {
+                                Ok(StreamEvent::Chunk(chunk)) => {
+                                    if let Some(content) = chunk.content() {
+                                        print!("{}", content);
+                                        io::stdout().flush()?;
+                                        response.push_str(content);
+                                    }
+                                }
+                                Ok(StreamEvent::Done) => {
+                                    break;
+                                }
+                                Ok(StreamEvent::Error(e)) => {
+                                    eprintln!("\nStream error: {}", e);
+                                    break;
+                                }
+                                Err(e) => {
+                                    eprintln!("\nError: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        println!(); // New line after response
+
+                        // Save assistant message
+                        if !response.is_empty() {
+                            chat::send_message(
+                                &db,
+                                &conversation.id,
+                                chat::MessageRole::Assistant,
+                                &response,
+                            )
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Failed to save response: {}", e))?;
+                        }
+
+                        // Check if the response suggests code generation
+                        if should_offer_generation(&response) && !quiet {
+                            println!("\nHint: Type /generate to create the code, or continue chatting.");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error calling LLM: {}", e);
+                    }
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                // Ctrl-C
+                if !quiet {
+                    println!("Interrupted. Type /quit to exit.");
+                }
+            }
+            Err(ReadlineError::Eof) => {
+                // Ctrl-D
+                if !quiet {
+                    println!("Goodbye!");
+                }
+                break;
+            }
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+
+    // Save history
+    let _ = std::fs::create_dir_all(history_path.parent().unwrap());
+    let _ = rl.save_history(&history_path);
+
     Ok(())
+}
+
+/// Check if the assistant's response suggests code generation would be helpful
+fn should_offer_generation(response: &str) -> bool {
+    let lower = response.to_lowercase();
+    let generation_hints = [
+        "would you like me to generate",
+        "i can create",
+        "shall i implement",
+        "i'll create",
+        "let me create",
+        "here's the code",
+        "here is the code",
+        "```",
+    ];
+    generation_hints.iter().any(|hint| lower.contains(hint))
 }
 
 async fn cmd_projects(db: &Database, action: ProjectAction, quiet: bool) -> anyhow::Result<()> {

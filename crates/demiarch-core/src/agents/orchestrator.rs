@@ -43,6 +43,12 @@ impl OrchestratorAgent {
 
     /// Execute the orchestration logic
     async fn orchestrate(&self, input: AgentInput, context: AgentContext) -> Result<AgentResult> {
+        // Check for cancellation at start
+        if context.is_cancelled() {
+            self.status.set(AgentStatus::Cancelled);
+            return Ok(AgentResult::failure("Cancelled"));
+        }
+
         info!(
             agent_id = %context.id,
             path = %context.path,
@@ -81,6 +87,14 @@ impl OrchestratorAgent {
         let plan = self.parse_orchestration_plan(&response.content);
 
         let result = if plan.needs_planner {
+            // Check for cancellation before spawning child
+            if context.is_cancelled() {
+                self.status.set(AgentStatus::Cancelled);
+                let cancelled_result = AgentResult::failure("Cancelled");
+                context.complete(cancelled_result.clone()).await;
+                return Ok(cancelled_result);
+            }
+
             // Spawn a Planner agent to decompose the feature
             self.status.set(AgentStatus::WaitingForChildren);
             context.update_status(AgentStatus::WaitingForChildren).await;

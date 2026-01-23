@@ -44,6 +44,12 @@ impl CoderAgent {
 
     /// Execute the coding task
     async fn code(&self, input: AgentInput, context: AgentContext) -> Result<AgentResult> {
+        // Check for cancellation at start
+        if context.is_cancelled() {
+            self.status.set(AgentStatus::Cancelled);
+            return Ok(AgentResult::failure("Cancelled"));
+        }
+
         info!(
             agent_id = %context.id,
             path = %context.path,

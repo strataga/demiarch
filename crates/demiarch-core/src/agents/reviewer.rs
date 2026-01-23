@@ -135,6 +135,12 @@ impl ReviewerAgent {
 
     /// Execute the review task
     async fn review(&self, input: AgentInput, context: AgentContext) -> Result<AgentResult> {
+        // Check for cancellation at start
+        if context.is_cancelled() {
+            self.status.set(AgentStatus::Cancelled);
+            return Ok(AgentResult::failure("Cancelled"));
+        }
+
         info!(
             agent_id = %context.id,
             path = %context.path,

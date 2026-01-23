@@ -15,9 +15,10 @@ use super::message_builder::build_messages_from_input;
 use super::reviewer::ReviewerAgent;
 use super::status::StatusTracker;
 use super::tester::TesterAgent;
-use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
+use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus, ArtifactType};
 use crate::domain::feature_decomposition::{ExecutionPlan, PlanTask, TaskStatus};
 use crate::error::Result;
+use crate::llm::Message;
 
 /// Planner agent - coordinates task decomposition
 ///
@@ -44,6 +45,12 @@ impl PlannerAgent {
 
     /// Execute the planning logic
     async fn plan(&self, input: AgentInput, context: AgentContext) -> Result<AgentResult> {
+        // Check for cancellation at start
+        if context.is_cancelled() {
+            self.status.set(AgentStatus::Cancelled);
+            return Ok(AgentResult::failure("Cancelled"));
+        }
+
         info!(
             agent_id = %context.id,
             path = %context.path,
@@ -91,17 +98,59 @@ impl PlannerAgent {
             self.status.set(AgentStatus::WaitingForChildren);
             context.update_status(AgentStatus::WaitingForChildren).await;
 
+            // Collect code artifacts from coder results to pass to reviewers/testers
+            let mut code_artifacts: Vec<AgentArtifact> = Vec::new();
+
             // Execute coding tasks first
             for task in plan.coding_tasks() {
+                // Check for cancellation before each task
+                if context.is_cancelled() {
+                    self.status.set(AgentStatus::Cancelled);
+                    let cancelled_result = AgentResult::failure("Cancelled by user");
+                    context.complete(cancelled_result.clone()).await;
+                    return Ok(cancelled_result);
+                }
+
                 let coder_result = self.execute_coder_task(task, &context).await?;
+
+                // Collect code artifacts for downstream agents
+                code_artifacts.extend(
+                    coder_result
+                        .artifacts
+                        .iter()
+                        .filter(|a| a.artifact_type == ArtifactType::Code)
+                        .cloned(),
+                );
+
                 context.add_child_result(coder_result.clone()).await;
                 result = result.with_child_result(coder_result);
             }
 
+            // Build code context for reviewers and testers
+            let code_context = if !code_artifacts.is_empty() {
+                let code_summary: String = code_artifacts
+                    .iter()
+                    .map(|a| format!("**{}**\n```\n{}\n```", a.name, a.content))
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                Some(code_summary)
+            } else {
+                None
+            };
+
             // Then review if required
             if plan.requires_review {
                 for task in plan.review_tasks() {
-                    let review_result = self.execute_reviewer_task(task, &context).await?;
+                    if context.is_cancelled() {
+                        self.status.set(AgentStatus::Cancelled);
+                        let cancelled_result = AgentResult::failure("Cancelled by user");
+                        context.complete(cancelled_result.clone()).await;
+                        return Ok(cancelled_result);
+                    }
+
+                    let review_result =
+                        self.execute_reviewer_task(task, &context, code_context.as_deref())
+                            .await?;
                     context.add_child_result(review_result.clone()).await;
                     result = result.with_child_result(review_result);
                 }
@@ -110,7 +159,16 @@ impl PlannerAgent {
             // Finally tests if required
             if plan.requires_tests {
                 for task in plan.test_tasks() {
-                    let test_result = self.execute_tester_task(task, &context).await?;
+                    if context.is_cancelled() {
+                        self.status.set(AgentStatus::Cancelled);
+                        let cancelled_result = AgentResult::failure("Cancelled by user");
+                        context.complete(cancelled_result.clone()).await;
+                        return Ok(cancelled_result);
+                    }
+
+                    let test_result =
+                        self.execute_tester_task(task, &context, code_context.as_deref())
+                            .await?;
                     context.add_child_result(test_result.clone()).await;
                     result = result.with_child_result(test_result);
                 }
@@ -150,10 +208,30 @@ impl PlannerAgent {
         &self,
         task: &PlanTask,
         context: &AgentContext,
+        code_context: Option<&str>,
     ) -> Result<AgentResult> {
         let reviewer = ReviewerAgent::new();
         let reviewer_context = context.child_context(AgentType::Reviewer);
-        let reviewer_input = AgentInput::new(&task.description);
+
+        // Include code context if available
+        let task_with_context = if let Some(code) = code_context {
+            format!(
+                "{}\n\n## Code to Review\n\n{}",
+                task.description, code
+            )
+        } else {
+            task.description.clone()
+        };
+
+        let reviewer_input = AgentInput::new(task_with_context).with_context(
+            if code_context.is_some() {
+                vec![Message::user(
+                    "Please review the code above for issues, best practices, and suggestions.",
+                )]
+            } else {
+                vec![]
+            },
+        );
 
         reviewer.execute(reviewer_input, reviewer_context).await
     }
@@ -163,10 +241,30 @@ impl PlannerAgent {
         &self,
         task: &PlanTask,
         context: &AgentContext,
+        code_context: Option<&str>,
     ) -> Result<AgentResult> {
         let tester = TesterAgent::new();
         let tester_context = context.child_context(AgentType::Tester);
-        let tester_input = AgentInput::new(&task.description);
+
+        // Include code context if available
+        let task_with_context = if let Some(code) = code_context {
+            format!(
+                "{}\n\n## Code to Test\n\n{}",
+                task.description, code
+            )
+        } else {
+            task.description.clone()
+        };
+
+        let tester_input = AgentInput::new(task_with_context).with_context(
+            if code_context.is_some() {
+                vec![Message::user(
+                    "Please write tests for the code above.",
+                )]
+            } else {
+                vec![]
+            },
+        );
 
         tester.execute(tester_input, tester_context).await
     }
