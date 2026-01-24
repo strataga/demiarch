@@ -80,6 +80,7 @@ export function useAutoBuild(
   const processingRef = useRef(false);
   const featuresRef = useRef(features);
   const configRef = useRef(config);
+  const processingLockRef = useRef(false); // Prevent concurrent processNextFeature calls
 
   // Keep config ref in sync
   useEffect(() => {
@@ -116,6 +117,12 @@ export function useAutoBuild(
   }, []);
 
   const processNextFeature = useCallback(async () => {
+    // Prevent concurrent calls
+    if (processingLockRef.current) {
+      return;
+    }
+    processingLockRef.current = true;
+
     // Get pending features sorted by priority (P0 first)
     const pendingFeatures = featuresRef.current
       .filter((f) => f.status === 'pending')
@@ -135,6 +142,7 @@ export function useAutoBuild(
         message: 'All features processed',
         type: 'success',
       });
+      processingLockRef.current = false;
       return;
     }
 
@@ -145,6 +153,7 @@ export function useAutoBuild(
         processing: false,
         currentFeatureId: null,
       }));
+      processingLockRef.current = false;
       return;
     }
 
@@ -389,7 +398,10 @@ export function useAutoBuild(
       if (enabledRef.current) {
         // Small delay between features
         await new Promise((resolve) => setTimeout(resolve, 500));
+        processingLockRef.current = false;
         processNextFeature();
+      } else {
+        processingLockRef.current = false;
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -434,7 +446,10 @@ export function useAutoBuild(
       // Continue with next feature if enabled
       if (enabledRef.current) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
+        processingLockRef.current = false;
         processNextFeature();
+      } else {
+        processingLockRef.current = false;
       }
     }
   }, [projectName, framework, onFeatureUpdated, addLog]);

@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw, FolderOpen, History, Copy, Check, GitBranch, CheckCircle2, Clock, XCircle, Loader2, Wand2 } from 'lucide-react';
-import { invoke, Feature, UIPreview } from '../lib/api';
+import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw, FolderOpen, History, Copy, Check, GitBranch, CheckCircle2, Clock, XCircle, Loader2 } from 'lucide-react';
+import { invoke, Feature } from '../lib/api';
 import { useModalShortcuts } from '../hooks/useKeyboardShortcuts';
 import { openFolder, copyToClipboard, getGitHistory, GitCommit } from '../lib/shell';
-import FeaturePreviewTab from './FeaturePreviewTab';
-import { toast } from '../stores/toastStore';
 
 interface FeatureDetailModalProps {
   feature: Feature;
@@ -49,8 +47,7 @@ export default function FeatureDetailModal({
   const [commitHistory, setCommitHistory] = useState<GitCommit[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'preview' | 'code' | 'setup'>('overview');
-  const [previewGenerating, setPreviewGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'code' | 'setup'>('overview');
 
   // Edit form state
   const [name, setName] = useState(feature.name);
@@ -61,14 +58,10 @@ export default function FeatureDetailModal({
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>(feature.tags || []);
 
-  // Safe close handler - prevent closing during generation
+  // Close handler
   const handleClose = useCallback(() => {
-    if (previewGenerating) {
-      toast.warning('Please wait for preview generation to complete');
-      return;
-    }
     onClose();
-  }, [previewGenerating, onClose]);
+  }, [onClose]);
 
   // Keyboard shortcuts
   useModalShortcuts(handleClose);
@@ -193,18 +186,6 @@ export default function FeatureDetailModal({
     setLoadingHistory(false);
   }
 
-  const handlePreviewChange = useCallback(async (preview: UIPreview | undefined) => {
-    try {
-      const updated = await invoke<Feature>('update_feature', {
-        id: feature.id,
-        ui_preview: preview,
-      });
-      onUpdated(updated);
-    } catch (err) {
-      console.error('Failed to update feature preview:', err);
-    }
-  }, [feature.id, onUpdated]);
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-background-mid border border-background-surface rounded-lg w-full max-w-lg max-h-[90vh] flex flex-col">
@@ -230,7 +211,7 @@ export default function FeatureDetailModal({
             <button
               onClick={handleClose}
               className="text-gray-400 hover:text-white transition-colors"
-              title={previewGenerating ? 'Please wait for generation to complete' : 'Close'}
+              title="Close"
             >
               <X className="w-5 h-5" />
             </button>
@@ -274,10 +255,10 @@ export default function FeatureDetailModal({
                   <select
                     value={priority}
                     onChange={(e) => setPriority(Number(e.target.value))}
-                    className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent-teal"
+                    className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-teal"
                   >
                     {PRIORITY_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
+                      <option key={opt.value} value={opt.value} className="bg-background-surface text-white">
                         {opt.label}
                       </option>
                     ))}
@@ -288,10 +269,10 @@ export default function FeatureDetailModal({
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
-                    className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent-teal"
+                    className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-teal"
                   >
                     {STATUS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
+                      <option key={opt.value} value={opt.value} className="bg-background-surface text-white">
                         {opt.label}
                       </option>
                     ))}
@@ -458,24 +439,6 @@ export default function FeatureDetailModal({
                       Overview
                     </button>
                     <button
-                      onClick={() => setActiveTab('preview')}
-                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1 ${
-                        activeTab === 'preview'
-                          ? 'border-accent-teal text-accent-teal'
-                          : 'border-transparent text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {previewGenerating ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Wand2 className="w-3 h-3" />
-                      )}
-                      Preview
-                      {feature.ui_preview?.approved && (
-                        <Check className="w-3 h-3 text-green-400" />
-                      )}
-                    </button>
-                    <button
                       onClick={() => setActiveTab('code')}
                       className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1 ${
                         activeTab === 'code'
@@ -552,17 +515,6 @@ export default function FeatureDetailModal({
                           </div>
                         )}
                       </div>
-                    )}
-
-                    {activeTab === 'preview' && (
-                      <FeaturePreviewTab
-                        feature={feature}
-                        projectName={projectName}
-                        onPreviewChange={handlePreviewChange}
-                        currentPreview={feature.ui_preview}
-                        generating={previewGenerating}
-                        onGeneratingChange={setPreviewGenerating}
-                      />
                     )}
 
                     {activeTab === 'code' && (

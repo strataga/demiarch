@@ -143,10 +143,10 @@ export default function FeatureCreateModal({ projectId, onClose, onCreated }: Fe
               <select
                 value={priority}
                 onChange={(e) => setPriority(Number(e.target.value))}
-                className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent-teal"
+                className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-teal"
               >
                 {PRIORITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
+                  <option key={opt.value} value={opt.value} className="bg-background-surface text-white">
                     {opt.label}
                   </option>
                 ))}
@@ -157,10 +157,10 @@ export default function FeatureCreateModal({ projectId, onClose, onCreated }: Fe
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent-teal"
+                className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-teal"
               >
                 {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
+                  <option key={opt.value} value={opt.value} className="bg-background-surface text-white">
                     {opt.label}
                   </option>
                 ))}
