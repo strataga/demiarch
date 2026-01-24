@@ -4,7 +4,7 @@
  * Allows users to generate and approve UI previews using json-render.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, Component, ReactNode } from 'react';
 import { Renderer, JSONUIProvider } from '@json-render/react';
 import {
   Wand2,
@@ -29,6 +29,58 @@ import {
 import { Feature, UIPreview } from '../lib/api';
 import type { UITree } from '@json-render/core';
 import { toast } from '../stores/toastStore';
+
+// Error boundary to catch rendering failures in json-render
+interface RendererErrorBoundaryProps {
+  children: ReactNode;
+  onReset: () => void;
+}
+
+interface RendererErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class RendererErrorBoundary extends Component<RendererErrorBoundaryProps, RendererErrorBoundaryState> {
+  constructor(props: RendererErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): RendererErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Preview render error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center p-6 text-center">
+          <AlertCircle className="w-10 h-10 text-red-400 mb-3" />
+          <p className="text-red-400 font-medium mb-2">Preview failed to render</p>
+          <p className="text-sm text-gray-500 mb-4">
+            {this.state.error?.message || 'The UI tree may be invalid'}
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              this.props.onReset();
+            }}
+            className="flex items-center gap-2 px-3 py-2 bg-background-surface text-gray-300 rounded-lg hover:text-white transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 interface FeaturePreviewTabProps {
   feature: Feature;
@@ -312,23 +364,25 @@ export default function FeaturePreviewTab({
             {/* Preview Content */}
             {viewMode === 'preview' ? (
               <div className="bg-background-deep border border-background-surface rounded-lg p-4 min-h-[200px]">
-                <JSONUIProvider
-                  registry={registry}
-                  actionHandlers={{
-                    // Preview mode - log actions but don't execute
-                    submit: async () => console.log('Preview: submit action'),
-                    navigate: async () => console.log('Preview: navigate action'),
-                    delete: async () => console.log('Preview: delete action'),
-                    edit: async () => console.log('Preview: edit action'),
-                    refresh: async () => console.log('Preview: refresh action'),
-                    toggleModal: async () => console.log('Preview: toggleModal action'),
-                  }}
-                >
-                  <Renderer
-                    tree={currentPreview.tree as UITree}
+                <RendererErrorBoundary onReset={() => onPreviewChange(undefined)}>
+                  <JSONUIProvider
                     registry={registry}
-                  />
-                </JSONUIProvider>
+                    actionHandlers={{
+                      // Preview mode - log actions but don't execute
+                      submit: async () => console.log('Preview: submit action'),
+                      navigate: async () => console.log('Preview: navigate action'),
+                      delete: async () => console.log('Preview: delete action'),
+                      edit: async () => console.log('Preview: edit action'),
+                      refresh: async () => console.log('Preview: refresh action'),
+                      toggleModal: async () => console.log('Preview: toggleModal action'),
+                    }}
+                  >
+                    <Renderer
+                      tree={currentPreview.tree as UITree}
+                      registry={registry}
+                    />
+                  </JSONUIProvider>
+                </RendererErrorBoundary>
               </div>
             ) : (
               <div className="relative">

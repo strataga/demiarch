@@ -125,7 +125,8 @@ export default function Kanban() {
 
   function handleFeatureUpdated(updated: Feature) {
     setFeatures((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
-    setSelectedFeature(null);
+    // Update selectedFeature if it's the same feature being updated (don't close modal)
+    setSelectedFeature((prev) => (prev?.id === updated.id ? updated : prev));
   }
 
   function handleFeatureDeleted(featureId: string) {
