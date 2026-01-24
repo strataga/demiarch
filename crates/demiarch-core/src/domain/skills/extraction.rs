@@ -240,30 +240,28 @@ impl DebugSkillExtractor {
         let mut last_timestamp: Option<chrono::DateTime<chrono::Utc>> = None;
 
         for event in events {
-            match event {
-                KnowledgeEvent::EntityCreated {
-                    entity_type,
-                    name,
-                    timestamp,
-                    ..
-                } => {
-                    // Check if this is a continuation of the current sequence
-                    let is_continuation = last_timestamp
-                        .map(|lt| (*timestamp - lt).num_seconds() < 60)
-                        .unwrap_or(true);
+            if let KnowledgeEvent::EntityCreated {
+                entity_type,
+                name,
+                timestamp,
+                ..
+            } = event
+            {
+                // Check if this is a continuation of the current sequence
+                let is_continuation = last_timestamp
+                    .map(|lt| (*timestamp - lt).num_seconds() < 60)
+                    .unwrap_or(true);
 
-                    if is_continuation {
-                        current_sequence.push(format!("{:?}: {}", entity_type, name));
-                    } else {
-                        // Start a new sequence
-                        if current_sequence.len() >= 2 {
-                            entity_sequences.push(current_sequence.clone());
-                        }
-                        current_sequence = vec![format!("{:?}: {}", entity_type, name)];
+                if is_continuation {
+                    current_sequence.push(format!("{:?}: {}", entity_type, name));
+                } else {
+                    // Start a new sequence
+                    if current_sequence.len() >= 2 {
+                        entity_sequences.push(current_sequence.clone());
                     }
-                    last_timestamp = Some(*timestamp);
+                    current_sequence = vec![format!("{:?}: {}", entity_type, name)];
                 }
-                _ => {}
+                last_timestamp = Some(*timestamp);
             }
         }
 
@@ -305,14 +303,12 @@ impl DebugSkillExtractor {
         let mut rel_patterns: HashMap<String, u32> = HashMap::new();
 
         for event in events {
-            match event {
-                KnowledgeEvent::RelationshipCreated {
-                    relationship_type, ..
-                } => {
-                    let key = format!("{:?}", relationship_type);
-                    *rel_patterns.entry(key).or_insert(0) += 1;
-                }
-                _ => {}
+            if let KnowledgeEvent::RelationshipCreated {
+                relationship_type, ..
+            } = event
+            {
+                let key = format!("{:?}", relationship_type);
+                *rel_patterns.entry(key).or_insert(0) += 1;
             }
         }
 
