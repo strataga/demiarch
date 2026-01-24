@@ -151,15 +151,6 @@ export default function ProjectDetail() {
         {/* Edit/Save/Delete buttons */}
         {!isEditing ? (
           <div className="flex gap-2">
-            {project.prd && (
-              <button
-                onClick={() => setShowExtractModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-accent-teal/10 text-accent-teal hover:bg-accent-teal/20 rounded-lg transition-colors"
-              >
-                <Sparkles className="w-4 h-4" />
-                Extract Features
-              </button>
-            )}
             <button
               onClick={handleStartEdit}
               className="flex items-center gap-2 px-4 py-2 bg-background-surface text-gray-300 hover:text-white rounded-lg transition-colors"
@@ -209,13 +200,26 @@ export default function ProjectDetail() {
           <FileText className="w-4 h-4" />
           PRD
         </button>
-        <Link
-          to={`/projects/${projectId}/kanban`}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-background-surface text-gray-400 hover:text-white transition-colors"
-        >
-          <LayoutGrid className="w-4 h-4" />
-          Kanban Board
-        </Link>
+        {/* Show Extract Features tab when PRD exists but no features yet */}
+        {project.prd && project.feature_count === 0 && (
+          <button
+            onClick={() => setShowExtractModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-accent-teal/10 text-accent-teal hover:bg-accent-teal/20 transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+            Extract Features
+          </button>
+        )}
+        {/* Only show Kanban Board when features exist */}
+        {project.feature_count > 0 && (
+          <Link
+            to={`/projects/${projectId}/kanban`}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-background-surface text-gray-400 hover:text-white transition-colors"
+          >
+            <LayoutGrid className="w-4 h-4" />
+            Kanban Board ({project.feature_count})
+          </Link>
+        )}
       </div>
 
       {/* Content */}
