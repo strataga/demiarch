@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { invoke } from '../lib/api';
-import { ArrowLeft, FileText, LayoutGrid, Clock } from 'lucide-react';
+import { ArrowLeft, FileText, LayoutGrid, Clock, Edit3, Save, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Project {
@@ -20,6 +20,9 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'prd' | 'kanban'>('prd');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedPrd, setEditedPrd] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function loadProject() {
@@ -27,6 +30,7 @@ export default function ProjectDetail() {
       try {
         const data = await invoke<Project>('get_project', { id: projectId });
         setProject(data);
+        setEditedPrd(data?.prd || '');
       } catch (error) {
         console.error('Failed to load project:', error);
       } finally {
@@ -35,6 +39,34 @@ export default function ProjectDetail() {
     }
     loadProject();
   }, [projectId]);
+
+  function handleStartEdit() {
+    setEditedPrd(project?.prd || '');
+    setIsEditing(true);
+  }
+
+  function handleCancelEdit() {
+    setEditedPrd(project?.prd || '');
+    setIsEditing(false);
+  }
+
+  async function handleSavePrd() {
+    if (!project) return;
+    setSaving(true);
+    try {
+      const updated = await invoke<Project>('update_project', {
+        id: project.id,
+        prd: editedPrd,
+        status: editedPrd ? 'planning' : 'discovery',
+      });
+      setProject(updated);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to save PRD:', error);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -82,6 +114,34 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
+        {/* Edit/Save buttons */}
+        {!isEditing ? (
+          <button
+            onClick={handleStartEdit}
+            className="flex items-center gap-2 px-4 py-2 bg-background-surface text-gray-300 hover:text-white rounded-lg transition-colors"
+          >
+            <Edit3 className="w-4 h-4" />
+            Edit PRD
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={handleCancelEdit}
+              className="flex items-center gap-2 px-4 py-2 bg-background-surface text-gray-300 hover:text-white rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Cancel
+            </button>
+            <button
+              onClick={handleSavePrd}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-accent-teal text-background-deep rounded-lg font-medium hover:bg-accent-teal/90 transition-colors disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -108,7 +168,25 @@ export default function ProjectDetail() {
 
       {/* Content */}
       <div className="flex-1 overflow-auto bg-background-mid rounded-lg border border-background-surface p-6">
-        {project.prd ? (
+        {isEditing ? (
+          <textarea
+            value={editedPrd}
+            onChange={(e) => setEditedPrd(e.target.value)}
+            placeholder="# Product Requirements Document
+
+## Executive Summary
+What are we building and why?
+
+## Problem Statement
+- **The Problem**:
+- **Who Has It**:
+- **Current Alternatives**:
+
+## Core Features (MVP)
+..."
+            className="w-full h-full min-h-[500px] bg-background-deep border border-background-surface rounded-lg p-4 text-white font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent-teal"
+          />
+        ) : project.prd ? (
           <div className="prose prose-invert max-w-none">
             <ReactMarkdown>{project.prd}</ReactMarkdown>
           </div>
@@ -117,8 +195,15 @@ export default function ProjectDetail() {
             <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p>No PRD generated yet</p>
             <p className="text-sm mt-2">
-              This project was created without a PRD. You can add one by editing the project.
+              Click "Edit PRD" to add a Product Requirements Document.
             </p>
+            <button
+              onClick={handleStartEdit}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-accent-teal text-background-deep rounded-lg font-medium hover:bg-accent-teal/90 transition-colors"
+            >
+              <Edit3 className="w-4 h-4" />
+              Add PRD
+            </button>
           </div>
         )}
       </div>

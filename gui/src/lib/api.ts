@@ -56,6 +56,22 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
     return projects.find((p) => p.id === args?.id) || null;
   },
 
+  update_project: (args) => {
+    const projects = getStorage<Array<Record<string, unknown>>>(STORAGE_KEYS.projects, []);
+    const projectIndex = projects.findIndex((p) => p.id === args?.id);
+    if (projectIndex === -1) return null;
+
+    const project = projects[projectIndex];
+    // Update allowed fields
+    if (args?.name !== undefined) project.name = args.name;
+    if (args?.prd !== undefined) project.prd = args.prd;
+    if (args?.status !== undefined) project.status = args.status;
+    if (args?.description !== undefined) project.description = args.description;
+
+    setStorage(STORAGE_KEYS.projects, projects);
+    return project;
+  },
+
   create_project: (args) => {
     const projects = getStorage<Array<Record<string, unknown>>>(STORAGE_KEYS.projects, []);
     const newProject = {
