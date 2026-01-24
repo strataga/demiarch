@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.demiarch.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "cd ../../gui && npm run dev",
     "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../../gui/dist"
