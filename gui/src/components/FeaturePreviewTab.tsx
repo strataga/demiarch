@@ -28,12 +28,15 @@ import {
 } from '../lib/json-render/preview';
 import { Feature, UIPreview } from '../lib/api';
 import type { UITree } from '@json-render/core';
+import { toast } from '../stores/toastStore';
 
 interface FeaturePreviewTabProps {
   feature: Feature;
   projectName?: string;
   onPreviewChange: (preview: UIPreview | undefined) => void;
   currentPreview?: UIPreview;
+  generating: boolean;
+  onGeneratingChange: (generating: boolean) => void;
 }
 
 export default function FeaturePreviewTab({
@@ -41,9 +44,10 @@ export default function FeaturePreviewTab({
   projectName,
   onPreviewChange,
   currentPreview,
+  generating,
+  onGeneratingChange,
 }: FeaturePreviewTabProps) {
   const [prompt, setPrompt] = useState(currentPreview?.prompt || '');
-  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'preview' | 'json'>('preview');
   const [copied, setCopied] = useState(false);
@@ -54,7 +58,7 @@ export default function FeaturePreviewTab({
       return;
     }
 
-    setGenerating(true);
+    onGeneratingChange(true);
     setError(null);
 
     const result = await generatePreview(prompt.trim(), {
@@ -63,10 +67,11 @@ export default function FeaturePreviewTab({
       projectName,
     });
 
-    setGenerating(false);
+    onGeneratingChange(false);
 
     if (result.error) {
       setError(result.error);
+      toast.error(result.error);
       return;
     }
 
@@ -77,15 +82,16 @@ export default function FeaturePreviewTab({
         approved: false,
         generatedAt: new Date().toISOString(),
       });
+      toast.success('Preview generated successfully');
     }
-  }, [prompt, feature, projectName, onPreviewChange]);
+  }, [prompt, feature, projectName, onPreviewChange, onGeneratingChange]);
 
   const handleRegenerate = useCallback(async () => {
     if (!currentPreview?.tree || !prompt.trim()) {
       return handleGenerate();
     }
 
-    setGenerating(true);
+    onGeneratingChange(true);
     setError(null);
 
     const result = await regeneratePreview(currentPreview.tree, prompt.trim(), {
@@ -93,10 +99,11 @@ export default function FeaturePreviewTab({
       projectName,
     });
 
-    setGenerating(false);
+    onGeneratingChange(false);
 
     if (result.error) {
       setError(result.error);
+      toast.error(result.error);
       return;
     }
 
@@ -107,8 +114,9 @@ export default function FeaturePreviewTab({
         approved: false,
         generatedAt: new Date().toISOString(),
       });
+      toast.success('Preview regenerated successfully');
     }
-  }, [currentPreview, prompt, feature, projectName, onPreviewChange, handleGenerate]);
+  }, [currentPreview, prompt, feature, projectName, onPreviewChange, onGeneratingChange, handleGenerate]);
 
   const handleApprove = useCallback(() => {
     if (!currentPreview) return;
@@ -117,6 +125,7 @@ export default function FeaturePreviewTab({
       ...currentPreview,
       approved: true,
     });
+    toast.success('Preview approved for code generation');
   }, [currentPreview, onPreviewChange]);
 
   const handleExport = useCallback(() => {

@@ -4,6 +4,7 @@ import { invoke, Feature, UIPreview } from '../lib/api';
 import { useModalShortcuts } from '../hooks/useKeyboardShortcuts';
 import { openFolder, copyToClipboard, getGitHistory, GitCommit } from '../lib/shell';
 import FeaturePreviewTab from './FeaturePreviewTab';
+import { toast } from '../stores/toastStore';
 
 interface FeatureDetailModalProps {
   feature: Feature;
@@ -49,6 +50,7 @@ export default function FeatureDetailModal({
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'preview' | 'code' | 'setup'>('overview');
+  const [previewGenerating, setPreviewGenerating] = useState(false);
 
   // Edit form state
   const [name, setName] = useState(feature.name);
@@ -59,8 +61,17 @@ export default function FeatureDetailModal({
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>(feature.tags || []);
 
+  // Safe close handler - prevent closing during generation
+  const handleClose = useCallback(() => {
+    if (previewGenerating) {
+      toast.warning('Please wait for preview generation to complete');
+      return;
+    }
+    onClose();
+  }, [previewGenerating, onClose]);
+
   // Keyboard shortcuts
-  useModalShortcuts(onClose);
+  useModalShortcuts(handleClose);
 
   // Reset form when feature changes
   useEffect(() => {
@@ -217,8 +228,9 @@ export default function FeatureDetailModal({
               </button>
             )}
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="text-gray-400 hover:text-white transition-colors"
+              title={previewGenerating ? 'Please wait for generation to complete' : 'Close'}
             >
               <X className="w-5 h-5" />
             </button>
@@ -453,7 +465,11 @@ export default function FeatureDetailModal({
                           : 'border-transparent text-gray-400 hover:text-white'
                       }`}
                     >
-                      <Wand2 className="w-3 h-3" />
+                      {previewGenerating ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Wand2 className="w-3 h-3" />
+                      )}
                       Preview
                       {feature.ui_preview?.approved && (
                         <Check className="w-3 h-3 text-green-400" />
@@ -544,6 +560,8 @@ export default function FeatureDetailModal({
                         projectName={projectName}
                         onPreviewChange={handlePreviewChange}
                         currentPreview={feature.ui_preview}
+                        generating={previewGenerating}
+                        onGeneratingChange={setPreviewGenerating}
                       />
                     )}
 
