@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw, FolderOpen, History, Copy, Check } from 'lucide-react';
+import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw, FolderOpen, History, Copy, Check, GitBranch, CheckCircle2, Clock, XCircle, Loader2 } from 'lucide-react';
 import { invoke, Feature } from '../lib/api';
 import { useModalShortcuts } from '../hooks/useKeyboardShortcuts';
 import { openFolder, copyToClipboard, getGitHistory, GitCommit } from '../lib/shell';
@@ -45,6 +45,7 @@ export default function FeatureDetailModal({
   const [commitHistory, setCommitHistory] = useState<GitCommit[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'code' | 'setup'>('overview');
 
   // Edit form state
   const [name, setName] = useState(feature.name);
@@ -347,231 +348,400 @@ export default function FeatureDetailModal({
           ) : (
             // View Mode
             <>
-              <div>
-                <h3 className="text-xl font-semibold">{feature.name}</h3>
-                <span
-                  className={`inline-block mt-2 px-2 py-1 rounded text-xs font-medium ${
-                    statusInfo.color
-                  } text-white`}
-                >
-                  {statusInfo.label}
+              {/* Feature Header with Status */}
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-xl font-semibold">{feature.name}</h3>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${statusInfo.color} text-white`}
+                    >
+                      {feature.status === 'complete' && <CheckCircle2 className="w-3 h-3" />}
+                      {feature.status === 'in_progress' && <Loader2 className="w-3 h-3 animate-spin" />}
+                      {feature.status === 'blocked' && <XCircle className="w-3 h-3" />}
+                      {feature.status === 'pending' && <Clock className="w-3 h-3" />}
+                      {statusInfo.label}
+                    </span>
+                    <span className={`text-xs ${priorityInfo.color}`}>{priorityInfo.label}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Build Summary Card for Completed/Built Features */}
+              {(feature.status === 'complete' || feature.generated_code?.length) && (
+                <div className="bg-gradient-to-r from-accent-teal/10 to-accent-teal/5 border border-accent-teal/20 rounded-lg p-3">
+                  <h4 className="text-sm font-medium text-accent-teal mb-2 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Build Summary
+                  </h4>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-background-surface/50 rounded p-2">
+                      <div className="text-lg font-bold text-white">
+                        {feature.generated_code?.length || 0}
+                      </div>
+                      <div className="text-xs text-gray-400">Files</div>
+                    </div>
+                    <div className="bg-background-surface/50 rounded p-2">
+                      <div className="text-lg font-bold text-white">
+                        {feature.dependencies?.length || 0}
+                      </div>
+                      <div className="text-xs text-gray-400">Dependencies</div>
+                    </div>
+                    <div className="bg-background-surface/50 rounded p-2">
+                      <div className="text-lg font-bold text-white">
+                        {feature.setup_requirements?.length || 0}
+                      </div>
+                      <div className="text-xs text-gray-400">Setup Steps</div>
+                    </div>
+                  </div>
+                  {!feature.generated_code?.length && feature.status === 'complete' && (
+                    <div className="mt-2 text-xs text-gray-400 text-center">
+                      No code generated yet. Use Auto Build to generate implementation.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Git Branch Info */}
+              <div className="flex items-center gap-2 text-sm bg-background-surface rounded-lg px-3 py-2">
+                <GitBranch className="w-4 h-4 text-accent-amber" />
+                <span className="text-gray-400">Branch:</span>
+                <span className="font-mono text-white">main</span>
+                <span className="text-gray-500 ml-auto text-xs">
+                  {feature.updated_at !== feature.created_at
+                    ? `Updated ${new Date(feature.updated_at).toLocaleDateString()}`
+                    : `Created ${new Date(feature.created_at).toLocaleDateString()}`
+                  }
                 </span>
               </div>
 
-              {feature.description && (
-                <div>
-                  <h4 className="text-sm text-gray-400 mb-1">Description</h4>
-                  <p className="text-sm">{feature.description}</p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm text-gray-400 mb-1">Priority</h4>
-                  <span className={`text-sm font-medium ${priorityInfo.color}`}>
-                    {priorityInfo.label}
-                  </span>
-                </div>
-                <div>
-                  <h4 className="text-sm text-gray-400 mb-1 flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    Due Date
-                  </h4>
-                  {feature.due_date ? (
-                    <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : ''}`}>
-                      {isOverdue && <AlertTriangle className="w-4 h-4 inline mr-1" />}
-                      {new Date(feature.due_date).toLocaleDateString()}
-                    </span>
-                  ) : (
-                    <span className="text-sm text-gray-500">Not set</span>
-                  )}
-                </div>
-              </div>
-
-              {feature.tags && feature.tags.length > 0 && (
-                <div>
-                  <h4 className="text-sm text-gray-400 mb-1 flex items-center gap-1">
-                    <Tag className="w-4 h-4" />
-                    Tags
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {feature.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-2 py-1 bg-accent-teal/10 text-accent-teal text-xs rounded"
-                      >
-                        {tag}
-                      </span>
-                    ))}
+              {/* Tabs for Details */}
+              {(feature.generated_code?.length || feature.dependencies?.length || feature.setup_requirements?.length) ? (
+                <>
+                  <div className="flex border-b border-background-surface">
+                    <button
+                      onClick={() => setActiveTab('overview')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'overview'
+                          ? 'border-accent-teal text-accent-teal'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Overview
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('code')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1 ${
+                        activeTab === 'code'
+                          ? 'border-accent-teal text-accent-teal'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <FileCode className="w-3 h-3" />
+                      Code ({feature.generated_code?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('setup')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1 ${
+                        activeTab === 'setup'
+                          ? 'border-accent-teal text-accent-teal'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Settings className="w-3 h-3" />
+                      Setup ({(feature.dependencies?.length || 0) + (feature.setup_requirements?.length || 0)})
+                    </button>
                   </div>
-                </div>
-              )}
 
-              {/* Dependencies Section */}
-              {feature.dependencies && feature.dependencies.length > 0 && (
-                <div>
-                  <h4 className="text-sm text-gray-400 mb-2 flex items-center gap-1">
-                    <Package className="w-4 h-4" />
-                    Dependencies ({feature.dependencies.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {feature.dependencies.map((dep, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-2 p-2 bg-background-surface rounded text-sm"
-                      >
-                        <span className="font-mono text-accent-amber">
-                          {dep.name}
-                          {dep.version && <span className="text-gray-500">@{dep.version}</span>}
-                        </span>
-                        {dep.dev && (
-                          <span className="px-1 py-0.5 bg-gray-700 text-gray-400 text-xs rounded">
-                            dev
-                          </span>
+                  {/* Tab Content */}
+                  <div className="min-h-[100px]">
+                    {activeTab === 'overview' && (
+                      <div className="space-y-4">
+                        {feature.description && (
+                          <div>
+                            <h4 className="text-sm text-gray-400 mb-1">Description</h4>
+                            <p className="text-sm">{feature.description}</p>
+                          </div>
                         )}
-                        <span className="text-gray-400 text-xs ml-auto">{dep.reason}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
-              {/* Setup Requirements Section */}
-              {feature.setup_requirements && feature.setup_requirements.length > 0 && (
-                <div>
-                  <h4 className="text-sm text-gray-400 mb-2 flex items-center gap-1">
-                    <Settings className="w-4 h-4" />
-                    Setup Required ({feature.setup_requirements.length} steps)
-                  </h4>
-                  <div className="space-y-2">
-                    {feature.setup_requirements.map((setup, idx) => (
-                      <div
-                        key={idx}
-                        className="p-2 bg-background-surface rounded text-sm"
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium">{idx + 1}. {setup.step}</span>
-                          <span className={`px-1 py-0.5 text-xs rounded ${
-                            setup.type === 'install' ? 'bg-accent-teal/20 text-accent-teal' :
-                            setup.type === 'config' ? 'bg-accent-amber/20 text-accent-amber' :
-                            setup.type === 'env' ? 'bg-accent-magenta/20 text-accent-magenta' :
-                            'bg-gray-700 text-gray-400'
-                          }`}>
-                            {setup.type}
-                          </span>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <h4 className="text-sm text-gray-400 mb-1">Priority</h4>
+                            <span className={`text-sm font-medium ${priorityInfo.color}`}>
+                              {priorityInfo.label}
+                            </span>
+                          </div>
+                          <div>
+                            <h4 className="text-sm text-gray-400 mb-1 flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />
+                              Due Date
+                            </h4>
+                            {feature.due_date ? (
+                              <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : ''}`}>
+                                {isOverdue && <AlertTriangle className="w-4 h-4 inline mr-1" />}
+                                {new Date(feature.due_date).toLocaleDateString()}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-500">Not set</span>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-gray-400 text-xs">{setup.description}</p>
-                        {setup.command && (
-                          <div className="mt-1 flex items-center gap-1">
-                            <Terminal className="w-3 h-3 text-gray-500" />
-                            <code className="font-mono text-xs text-gray-400 bg-background-deep px-2 py-1 rounded">
-                              {setup.command}
-                            </code>
+
+                        {feature.tags && feature.tags.length > 0 && (
+                          <div>
+                            <h4 className="text-sm text-gray-400 mb-1 flex items-center gap-1">
+                              <Tag className="w-4 h-4" />
+                              Tags
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {feature.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="px-2 py-1 bg-accent-teal/10 text-accent-teal text-xs rounded"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    )}
 
-              {/* Generated Files Section */}
-              {feature.generated_code && feature.generated_code.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm text-gray-400 flex items-center gap-1">
-                      <FileCode className="w-4 h-4" />
-                      Generated Files ({feature.generated_code.length})
-                    </h4>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleOpenFolder}
-                        className="flex items-center gap-1 px-2 py-1 text-xs bg-background-surface text-gray-400 rounded hover:text-white transition-colors"
-                        title="Open folder in file explorer"
-                      >
-                        <FolderOpen className="w-3 h-3" />
-                        Open Folder
-                      </button>
-                      <button
-                        onClick={handleViewHistory}
-                        className="flex items-center gap-1 px-2 py-1 text-xs bg-background-surface text-gray-400 rounded hover:text-white transition-colors"
-                        title="View git commit history"
-                      >
-                        <History className="w-3 h-3" />
-                        History
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    {feature.generated_code.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 p-2 bg-background-surface rounded text-sm font-mono group"
-                      >
-                        <FileCode className="w-3 h-3 text-gray-500" />
-                        <span className="text-gray-300 flex-1">{file.path}</span>
-                        <button
-                          onClick={() => handleCopyPath(file.path)}
-                          className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-white transition-all"
-                          title="Copy path"
-                        >
-                          {copiedPath === file.path ? (
-                            <Check className="w-3 h-3 text-accent-teal" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                        <span className="text-xs text-gray-500">{file.language}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Commit History Panel */}
-                  {showCommitHistory && (
-                    <div className="mt-3 p-3 bg-background-deep rounded-lg border border-background-surface">
-                      <div className="flex items-center justify-between mb-2">
-                        <h5 className="text-sm font-medium flex items-center gap-1">
-                          <History className="w-3 h-3" />
-                          Commit History
-                        </h5>
-                        <button
-                          onClick={() => setShowCommitHistory(false)}
-                          className="text-gray-500 hover:text-white"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {loadingHistory ? (
-                        <div className="text-sm text-gray-500 py-2">Loading...</div>
-                      ) : commitHistory.length > 0 ? (
-                        <div className="space-y-2">
-                          {commitHistory.map((commit, idx) => (
-                            <div key={idx} className="text-xs border-l-2 border-accent-teal pl-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-accent-teal">{commit.shortHash}</span>
-                                <span className="text-gray-400">{commit.author}</span>
-                              </div>
-                              <p className="text-gray-300 mt-0.5">{commit.message}</p>
-                              <span className="text-gray-500">{new Date(commit.date).toLocaleString()}</span>
+                    {activeTab === 'code' && (
+                      <div className="space-y-3">
+                        {feature.generated_code && feature.generated_code.length > 0 ? (
+                          <>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={handleOpenFolder}
+                                className="flex items-center gap-1 px-2 py-1 text-xs bg-background-surface text-gray-400 rounded hover:text-white transition-colors"
+                                title="Open folder in file explorer"
+                              >
+                                <FolderOpen className="w-3 h-3" />
+                                Open Folder
+                              </button>
+                              <button
+                                onClick={handleViewHistory}
+                                className="flex items-center gap-1 px-2 py-1 text-xs bg-background-surface text-gray-400 rounded hover:text-white transition-colors"
+                                title="View git commit history"
+                              >
+                                <History className="w-3 h-3" />
+                                History
+                              </button>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-500 py-2">
-                          No commits found for these files
-                        </div>
-                      )}
+
+                            <div className="space-y-1">
+                              {feature.generated_code.map((file, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center gap-2 p-2 bg-background-surface rounded text-sm font-mono group"
+                                >
+                                  <FileCode className="w-3 h-3 text-gray-500" />
+                                  <span className="text-gray-300 flex-1 truncate">{file.path}</span>
+                                  <button
+                                    onClick={() => handleCopyPath(file.path)}
+                                    className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-white transition-all"
+                                    title="Copy path"
+                                  >
+                                    {copiedPath === file.path ? (
+                                      <Check className="w-3 h-3 text-accent-teal" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                  <span className="text-xs text-gray-500">{file.language}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {showCommitHistory && (
+                              <div className="p-3 bg-background-deep rounded-lg border border-background-surface">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h5 className="text-sm font-medium flex items-center gap-1">
+                                    <History className="w-3 h-3" />
+                                    Commit History
+                                  </h5>
+                                  <button
+                                    onClick={() => setShowCommitHistory(false)}
+                                    className="text-gray-500 hover:text-white"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                {loadingHistory ? (
+                                  <div className="text-sm text-gray-500 py-2">Loading...</div>
+                                ) : commitHistory.length > 0 ? (
+                                  <div className="space-y-2">
+                                    {commitHistory.map((commit, idx) => (
+                                      <div key={idx} className="text-xs border-l-2 border-accent-teal pl-2">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono text-accent-teal">{commit.shortHash}</span>
+                                          <span className="text-gray-400">{commit.author}</span>
+                                        </div>
+                                        <p className="text-gray-300 mt-0.5">{commit.message}</p>
+                                        <span className="text-gray-500">{new Date(commit.date).toLocaleString()}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-gray-500 py-2">
+                                    No commits found for these files
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-center py-8 text-gray-500">
+                            <FileCode className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No code generated yet</p>
+                            <p className="text-xs mt-1">Enable Auto Build to generate implementation</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activeTab === 'setup' && (
+                      <div className="space-y-4">
+                        {/* Dependencies */}
+                        {feature.dependencies && feature.dependencies.length > 0 && (
+                          <div>
+                            <h4 className="text-sm text-gray-400 mb-2 flex items-center gap-1">
+                              <Package className="w-4 h-4" />
+                              Dependencies ({feature.dependencies.length})
+                            </h4>
+                            <div className="space-y-1">
+                              {feature.dependencies.map((dep, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center gap-2 p-2 bg-background-surface rounded text-sm"
+                                >
+                                  <span className="font-mono text-accent-amber">
+                                    {dep.name}
+                                    {dep.version && <span className="text-gray-500">@{dep.version}</span>}
+                                  </span>
+                                  {dep.dev && (
+                                    <span className="px-1 py-0.5 bg-gray-700 text-gray-400 text-xs rounded">
+                                      dev
+                                    </span>
+                                  )}
+                                  <span className="text-gray-400 text-xs ml-auto truncate max-w-[150px]">{dep.reason}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Setup Requirements */}
+                        {feature.setup_requirements && feature.setup_requirements.length > 0 && (
+                          <div>
+                            <h4 className="text-sm text-gray-400 mb-2 flex items-center gap-1">
+                              <Settings className="w-4 h-4" />
+                              Setup Steps ({feature.setup_requirements.length})
+                            </h4>
+                            <div className="space-y-2">
+                              {feature.setup_requirements.map((setup, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-2 bg-background-surface rounded text-sm"
+                                >
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-medium">{idx + 1}. {setup.step}</span>
+                                    <span className={`px-1 py-0.5 text-xs rounded ${
+                                      setup.type === 'install' ? 'bg-accent-teal/20 text-accent-teal' :
+                                      setup.type === 'config' ? 'bg-accent-amber/20 text-accent-amber' :
+                                      setup.type === 'env' ? 'bg-accent-magenta/20 text-accent-magenta' :
+                                      'bg-gray-700 text-gray-400'
+                                    }`}>
+                                      {setup.type}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-400 text-xs">{setup.description}</p>
+                                  {setup.command && (
+                                    <div className="mt-1 flex items-center gap-1">
+                                      <Terminal className="w-3 h-3 text-gray-500" />
+                                      <code className="font-mono text-xs text-gray-400 bg-background-deep px-2 py-1 rounded">
+                                        {setup.command}
+                                      </code>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {!feature.dependencies?.length && !feature.setup_requirements?.length && (
+                          <div className="text-center py-8 text-gray-500">
+                            <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No dependencies or setup required</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                // Simple view for features without generated content
+                <div className="space-y-4">
+                  {feature.description && (
+                    <div>
+                      <h4 className="text-sm text-gray-400 mb-1">Description</h4>
+                      <p className="text-sm">{feature.description}</p>
                     </div>
                   )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="text-sm text-gray-400 mb-1">Priority</h4>
+                      <span className={`text-sm font-medium ${priorityInfo.color}`}>
+                        {priorityInfo.label}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="text-sm text-gray-400 mb-1 flex items-center gap-1">
+                        <Calendar className="w-4 h-4" />
+                        Due Date
+                      </h4>
+                      {feature.due_date ? (
+                        <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : ''}`}>
+                          {isOverdue && <AlertTriangle className="w-4 h-4 inline mr-1" />}
+                          {new Date(feature.due_date).toLocaleDateString()}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-500">Not set</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {feature.tags && feature.tags.length > 0 && (
+                    <div>
+                      <h4 className="text-sm text-gray-400 mb-1 flex items-center gap-1">
+                        <Tag className="w-4 h-4" />
+                        Tags
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {feature.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="px-2 py-1 bg-accent-teal/10 text-accent-teal text-xs rounded"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-xs text-gray-500">
+                    Created: {new Date(feature.created_at).toLocaleString()}
+                    {feature.updated_at !== feature.created_at && (
+                      <> · Updated: {new Date(feature.updated_at).toLocaleString()}</>
+                    )}
+                  </div>
                 </div>
               )}
-
-              <div className="text-xs text-gray-500 pt-2">
-                Created: {new Date(feature.created_at).toLocaleString()}
-                {feature.updated_at !== feature.created_at && (
-                  <> · Updated: {new Date(feature.updated_at).toLocaleString()}</>
-                )}
-              </div>
 
               {/* Retry Button for Blocked Features */}
               {feature.status === 'blocked' && onRetry && (
