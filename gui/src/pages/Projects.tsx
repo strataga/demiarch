@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { invoke } from '../lib/api';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, FolderOpen, ArrowRight, X, Send, Bot, User, Sparkles, Settings, Check, Search } from 'lucide-react';
 import SearchInput from '../components/SearchInput';
 import { ProjectCardSkeletonList } from '../components/Skeleton';
@@ -37,6 +37,7 @@ const STATUS_FILTERS = [
 ];
 
 export default function Projects() {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +63,12 @@ export default function Projects() {
     loadProjects();
   }, []);
 
-  function handleProjectCreated(project: ProjectSummary) {
+  function handleProjectCreated(project: ProjectSummary, shouldNavigate: boolean = false) {
     setProjects([...projects, project]);
     setShowModal(false);
+    if (shouldNavigate) {
+      navigate(`/projects/${project.id}`);
+    }
   }
 
   // Filter projects
@@ -215,7 +219,7 @@ export default function Projects() {
 
 interface ProjectChatModalProps {
   onClose: () => void;
-  onProjectCreated: (project: ProjectSummary) => void;
+  onProjectCreated: (project: ProjectSummary, shouldNavigate?: boolean) => void;
 }
 
 function ProjectChatModal({ onClose, onProjectCreated }: ProjectChatModalProps) {
@@ -323,7 +327,7 @@ This enables a live AI conversation to help you create a detailed PRD. Get a fre
         prd: conversationState.prd,
         description: firstUserMsg?.content || '',
       });
-      onProjectCreated(created);
+      onProjectCreated(created, true);  // Navigate to the new project
     } catch (err) {
       console.error('Failed to create project:', err);
       // Show error in chat

@@ -185,10 +185,23 @@ Get one free at [openrouter.ai/keys](https://openrouter.ai/keys)`,
     // Detect if the response contains a full PRD
     const isPRD = aiResponse.includes('# Product Requirements Document');
 
+    // Detect if AI is offering to generate the PRD (transition to generation phase)
+    const isOfferingToGenerate = !isPRD && (
+      aiResponse.toLowerCase().includes('generate the prd') ||
+      aiResponse.toLowerCase().includes('ready to create') ||
+      aiResponse.toLowerCase().includes('draft the prd') ||
+      aiResponse.toLowerCase().includes('write up the prd') ||
+      aiResponse.toLowerCase().includes('enough information') ||
+      aiResponse.toLowerCase().includes('shall i proceed') ||
+      aiResponse.toLowerCase().includes('ready to proceed')
+    );
+
     // Update phase based on conversation progress
     let newPhase = state.phase;
     if (isPRD) {
       newPhase = 'refinement';
+    } else if (isOfferingToGenerate && history.length >= 4) {
+      newPhase = 'generation';
     } else if (history.length >= 2) {
       newPhase = 'clarification';
     }
