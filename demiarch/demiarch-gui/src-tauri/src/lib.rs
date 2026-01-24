@@ -3,9 +3,9 @@
 //! Tauri command implementations and application entry point
 //! for the Demiarch GUI interface.
 
-use std::path::PathBuf;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::fs::File;
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -312,9 +312,8 @@ async fn list_features(
         .map(|row: sqlx::sqlite::SqliteRow| {
             let labels_str: Option<String> = row.get("labels");
             let labels = labels_str.map(|s: String| {
-                serde_json::from_str::<Vec<String>>(&s).unwrap_or_else(|_| {
-                    s.split(',').map(|l| l.trim().to_string()).collect()
-                })
+                serde_json::from_str::<Vec<String>>(&s)
+                    .unwrap_or_else(|_| s.split(',').map(|l| l.trim().to_string()).collect())
             });
 
             FeatureInfo {
@@ -451,7 +450,9 @@ async fn start_agent_watcher(app: tauri::AppHandle) -> Result<(), String> {
                             if let Ok(line) = line {
                                 if let Ok(event) = serde_json::from_str::<AgentEvent>(&line) {
                                     // Track session ID - only emit events from current session
-                                    if last_session_id.is_none() || last_session_id == Some(event.session_id) {
+                                    if last_session_id.is_none()
+                                        || last_session_id == Some(event.session_id)
+                                    {
                                         last_session_id = Some(event.session_id);
 
                                         // Emit to frontend
@@ -460,7 +461,10 @@ async fn start_agent_watcher(app: tauri::AppHandle) -> Result<(), String> {
                                         // New session started, update filter and emit
                                         last_session_id = Some(event.session_id);
                                         // Emit session change event
-                                        let _ = app.emit("agent-session-change", event.session_id.to_string());
+                                        let _ = app.emit(
+                                            "agent-session-change",
+                                            event.session_id.to_string(),
+                                        );
                                         let _ = app.emit("agent-event", &event);
                                     }
                                 }
@@ -485,7 +489,8 @@ async fn get_recent_agent_events(count: Option<usize>) -> Result<Vec<AgentEvent>
     let events_path = get_agent_events_path();
     let count = count.unwrap_or(100);
 
-    let file = File::open(&events_path).map_err(|e| format!("Failed to open events file: {}", e))?;
+    let file =
+        File::open(&events_path).map_err(|e| format!("Failed to open events file: {}", e))?;
     let reader = BufReader::new(file);
 
     let mut all_events: Vec<AgentEvent> = reader

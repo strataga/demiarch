@@ -4,8 +4,8 @@ use crate::{Permission, PluginError, PluginResult};
 use std::{
     collections::HashSet,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
     thread,
     time::Duration,

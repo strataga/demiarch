@@ -14,18 +14,18 @@ mod main_tests;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use demiarch_core::agents::events::read_current_session_events;
 use demiarch_core::visualization::{
     AgentStatusBar, HierarchyTreeWidget, RenderOptions, TreeBuilder, TreeColors,
 };
 use ratatui::{
-    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Paragraph, Tabs},
+    Terminal,
 };
 use std::io;
 
