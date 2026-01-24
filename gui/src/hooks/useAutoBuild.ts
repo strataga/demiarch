@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Feature, invoke } from '../lib/api';
+import { Feature, AgentStatus, invoke } from '../lib/api';
 import { generateSingleFeatureCode } from '../lib/ai';
 import { writeGeneratedCode } from '../lib/fileWriter';
 import { commitFeature } from '../lib/git';
@@ -163,6 +163,27 @@ export function useAutoBuild(
       type: 'info',
     });
 
+    // Create a coder agent to track this build
+    let agentId: string | null = null;
+    try {
+      const agent = await invoke<AgentStatus>('create_agent', {
+        agent_type: 'coder',
+        task: `Building feature: ${feature.name}`,
+        feature_id: feature.id,
+        feature_name: feature.name,
+      });
+      agentId = agent.id;
+
+      // Update agent to running status
+      await invoke('update_agent', {
+        id: agentId,
+        status: 'running',
+        started_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('Failed to create agent tracking:', e);
+    }
+
     try {
       // Move feature to in_progress
       await invoke('update_feature_status', {
@@ -231,6 +252,20 @@ export function useAutoBuild(
         dependencies: dependencies,
         setup_requirements: setup,
       });
+
+      // Update agent with dependency and setup tracking
+      if (agentId) {
+        try {
+          await invoke('update_agent', {
+            id: agentId,
+            dependencies: dependencies,
+            setup_requirements: setup,
+            generated_files: files.map((f) => f.path),
+          });
+        } catch (e) {
+          console.warn('Failed to update agent with dependencies:', e);
+        }
+      }
 
       // Phase 2: Write files to disk if configured
       if (configRef.current.writeFiles && configRef.current.projectPath && files.length > 0) {
@@ -335,6 +370,19 @@ export function useAutoBuild(
         type: 'success',
       });
 
+      // Mark agent as complete
+      if (agentId) {
+        try {
+          await invoke('update_agent', {
+            id: agentId,
+            status: 'success',
+            completed_at: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.warn('Failed to update agent status to success:', e);
+        }
+      }
+
       // Process next feature if still enabled
       if (enabledRef.current) {
         // Small delay between features
@@ -367,6 +415,19 @@ export function useAutoBuild(
         ...prev,
         error: errorMessage,
       }));
+
+      // Mark agent as failed
+      if (agentId) {
+        try {
+          await invoke('update_agent', {
+            id: agentId,
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+          });
+        } catch (e) {
+          console.warn('Failed to update agent status to failed:', e);
+        }
+      }
 
       // Continue with next feature if enabled
       if (enabledRef.current) {

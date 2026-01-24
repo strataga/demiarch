@@ -529,26 +529,26 @@ export async function generateSingleFeatureCode(
     };
   }
 
-  const systemPrompt = `You are an expert software developer. Generate production-ready code for the given feature.
+  const systemPrompt = `You are an expert software developer that ONLY outputs valid JSON. Generate production-ready code for the given feature.
 
 Project: ${projectName}
 Framework: ${framework}
 
 Generate the necessary files with:
 1. Clean, well-structured code following best practices
-2. Proper TypeScript types
-3. Modern React patterns (hooks, functional components)
-4. Tailwind CSS for styling
+2. Proper TypeScript types (if TypeScript project)
+3. Modern React patterns (hooks, functional components) if React
+4. Tailwind CSS for styling if applicable
 5. Proper error handling
 
-IMPORTANT: Also identify any dependencies (npm packages, libraries) needed and any setup steps required.
+Also identify any npm dependencies needed and setup steps required.
 
-Respond with ONLY valid JSON in this exact format, no other text:
+YOU MUST RESPOND WITH ONLY A VALID JSON OBJECT - NO MARKDOWN, NO EXPLANATORY TEXT, JUST THE JSON:
 {
   "files": [
     {
       "path": "src/components/FeatureName.tsx",
-      "content": "// Full file content here",
+      "content": "// Full file content here with proper escaping",
       "language": "typescript"
     }
   ],
@@ -558,18 +558,24 @@ Respond with ONLY valid JSON in this exact format, no other text:
       "version": "^1.0.0",
       "type": "npm",
       "dev": false,
-      "reason": "Brief explanation of why this is needed"
+      "reason": "Brief explanation"
     }
   ],
   "setup": [
     {
       "step": "Install dependencies",
       "command": "npm install package-name",
-      "description": "Install the required packages",
+      "description": "Install required packages",
       "type": "install"
     }
   ]
-}`;
+}
+
+CRITICAL:
+- Output ONLY the JSON object, nothing else
+- Ensure all strings in code content are properly escaped for JSON
+- If no dependencies or setup needed, use empty arrays []
+- The JSON must be parseable by JSON.parse()`;
 
   const featureDescription = `Feature: ${feature.name}\nDescription: ${feature.description || 'No description provided'}`;
 
@@ -586,9 +592,10 @@ Respond with ONLY valid JSON in this exact format, no other text:
         model: model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate code for this feature:\n\n${featureDescription}` },
+          { role: 'user', content: `Generate code for this feature:\n\n${featureDescription}\n\nRespond with ONLY valid JSON.` },
         ],
         max_tokens: 8192,
+        response_format: { type: 'json_object' },
       }),
     });
 
@@ -608,26 +615,67 @@ Respond with ONLY valid JSON in this exact format, no other text:
     }
 
     const data = await response.json();
-    let content = data.choices[0]?.message?.content || '{}';
+    const rawContent = data.choices[0]?.message?.content || '{}';
 
-    // Strip markdown code fences if present
-    content = content.trim();
-    if (content.startsWith('```')) {
-      content = content.replace(/^```(?:json)?\s*\n?/, '');
-      content = content.replace(/\n?```\s*$/, '');
+    // Try multiple strategies to extract JSON
+    let content = rawContent.trim();
+    let parsed: { files?: GeneratedFile[]; dependencies?: AIDependency[]; setup?: AISetupRequirement[] } | null = null;
+
+    // Strategy 1: Direct parse (already valid JSON)
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      // Not valid JSON, try other strategies
     }
 
-    try {
-      const parsed = JSON.parse(content);
+    // Strategy 2: Strip markdown code fences
+    if (!parsed) {
+      let stripped = content;
+      if (stripped.startsWith('```')) {
+        stripped = stripped.replace(/^```(?:json)?\s*\n?/, '');
+        stripped = stripped.replace(/\n?```\s*$/, '');
+      }
+      try {
+        parsed = JSON.parse(stripped);
+      } catch {
+        // Still not valid JSON
+      }
+    }
+
+    // Strategy 3: Find JSON object in the content
+    if (!parsed) {
+      const jsonMatch = content.match(/\{[\s\S]*"files"[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          // Couldn't parse the extracted JSON
+        }
+      }
+    }
+
+    // Strategy 4: Extract JSON from code block anywhere in content
+    if (!parsed) {
+      const codeBlockMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+      if (codeBlockMatch) {
+        try {
+          parsed = JSON.parse(codeBlockMatch[1]);
+        } catch {
+          // Couldn't parse code block content
+        }
+      }
+    }
+
+    if (parsed && (parsed.files || parsed.dependencies || parsed.setup)) {
       return {
         files: parsed.files || [],
         dependencies: parsed.dependencies || [],
         setup: parsed.setup || [],
       };
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', parseError, content);
-      return { files: [], dependencies: [], setup: [], error: 'Failed to parse AI response. Please try again.' };
     }
+
+    console.error('Failed to parse AI response. Raw content:', rawContent);
+    return { files: [], dependencies: [], setup: [], error: 'Failed to parse AI response. The AI may have returned invalid JSON. Please try again.' };
   } catch (error) {
     console.error('Code generation failed:', error);
     return {

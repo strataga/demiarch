@@ -15,6 +15,7 @@ const STORAGE_KEYS = {
   projects: 'demiarch_projects',
   features: 'demiarch_features',
   sessions: 'demiarch_sessions',
+  agents: 'demiarch_agents',
 };
 
 // Project interface
@@ -58,6 +59,24 @@ export interface FeatureImplementation {
   files: GeneratedCode[];
   dependencies: Dependency[];
   setup: SetupRequirement[];
+}
+
+// Agent status during code generation
+export interface AgentStatus {
+  id: string;
+  agent_type: 'orchestrator' | 'planner' | 'coder' | 'reviewer' | 'tester';
+  status: 'pending' | 'running' | 'success' | 'failed' | 'cancelled';
+  parent_id: string | null;
+  task: string | null;
+  feature_id: string | null;
+  feature_name: string | null;
+  tokens_used: number;
+  started_at: string | null;
+  completed_at: string | null;
+  // Dependency and setup tracking for coder agents
+  dependencies?: Dependency[];
+  setup_requirements?: SetupRequirement[];
+  generated_files?: string[];
 }
 
 // Feature interface with enhanced fields
@@ -295,7 +314,64 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
   },
 
   get_agents: () => {
-    return [];
+    return getStorage<AgentStatus[]>(STORAGE_KEYS.agents, []);
+  },
+
+  create_agent: (args) => {
+    const agents = getStorage<AgentStatus[]>(STORAGE_KEYS.agents, []);
+    const newAgent: AgentStatus = {
+      id: uuid(),
+      agent_type: (args?.agent_type as AgentStatus['agent_type']) || 'coder',
+      status: 'pending',
+      parent_id: (args?.parent_id as string) || null,
+      task: (args?.task as string) || null,
+      feature_id: (args?.feature_id as string) || null,
+      feature_name: (args?.feature_name as string) || null,
+      tokens_used: 0,
+      started_at: null,
+      completed_at: null,
+      dependencies: [],
+      setup_requirements: [],
+      generated_files: [],
+    };
+    agents.push(newAgent);
+    setStorage(STORAGE_KEYS.agents, agents);
+    return newAgent;
+  },
+
+  update_agent: (args) => {
+    const agents = getStorage<AgentStatus[]>(STORAGE_KEYS.agents, []);
+    const agentIndex = agents.findIndex((a) => a.id === args?.id);
+    if (agentIndex === -1) return null;
+
+    const agent = agents[agentIndex];
+    if (args?.status !== undefined) agent.status = args.status as AgentStatus['status'];
+    if (args?.task !== undefined) agent.task = args.task as string | null;
+    if (args?.tokens_used !== undefined) agent.tokens_used = args.tokens_used as number;
+    if (args?.started_at !== undefined) agent.started_at = args.started_at as string | null;
+    if (args?.completed_at !== undefined) agent.completed_at = args.completed_at as string | null;
+    if (args?.dependencies !== undefined) agent.dependencies = args.dependencies as Dependency[];
+    if (args?.setup_requirements !== undefined) agent.setup_requirements = args.setup_requirements as SetupRequirement[];
+    if (args?.generated_files !== undefined) agent.generated_files = args.generated_files as string[];
+
+    setStorage(STORAGE_KEYS.agents, agents);
+    return agent;
+  },
+
+  delete_agent: (args) => {
+    const agents = getStorage<AgentStatus[]>(STORAGE_KEYS.agents, []);
+    const agentIndex = agents.findIndex((a) => a.id === args?.id);
+    if (agentIndex === -1) return false;
+    agents.splice(agentIndex, 1);
+    setStorage(STORAGE_KEYS.agents, agents);
+    return true;
+  },
+
+  clear_completed_agents: () => {
+    const agents = getStorage<AgentStatus[]>(STORAGE_KEYS.agents, []);
+    const activeAgents = agents.filter((a) => a.status === 'running' || a.status === 'pending');
+    setStorage(STORAGE_KEYS.agents, activeAgents);
+    return activeAgents;
   },
 
   doctor: () => {

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw } from 'lucide-react';
+import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw, FolderOpen, History, Copy, Check } from 'lucide-react';
 import { invoke, Feature } from '../lib/api';
 import { useModalShortcuts } from '../hooks/useKeyboardShortcuts';
+import { openFolder, copyToClipboard, getGitHistory, GitCommit } from '../lib/shell';
 
 interface FeatureDetailModalProps {
   feature: Feature;
@@ -9,6 +10,7 @@ interface FeatureDetailModalProps {
   onUpdated: (feature: Feature) => void;
   onDeleted: (featureId: string) => void;
   onRetry?: (feature: Feature) => void;
+  projectPath?: string;
 }
 
 const PRIORITY_OPTIONS = [
@@ -32,12 +34,17 @@ export default function FeatureDetailModal({
   onUpdated,
   onDeleted,
   onRetry,
+  projectPath,
 }: FeatureDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCommitHistory, setShowCommitHistory] = useState(false);
+  const [commitHistory, setCommitHistory] = useState<GitCommit[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
 
   // Edit form state
   const [name, setName] = useState(feature.name);
@@ -136,6 +143,40 @@ export default function FeatureDetailModal({
   const statusInfo = STATUS_OPTIONS.find((s) => s.value === feature.status) || STATUS_OPTIONS[0];
 
   const isOverdue = feature.due_date && new Date(feature.due_date) < new Date() && feature.status !== 'complete';
+
+  async function handleOpenFolder() {
+    if (!projectPath || !feature.generated_code?.[0]) return;
+
+    // Get the folder from the first generated file
+    const firstFile = feature.generated_code[0].path;
+    const folderPath = firstFile.substring(0, firstFile.lastIndexOf('/'));
+    const fullPath = `${projectPath}/${folderPath}`;
+
+    await openFolder(fullPath);
+  }
+
+  async function handleCopyPath(path: string) {
+    const result = await copyToClipboard(projectPath ? `${projectPath}/${path}` : path);
+    if (result.success) {
+      setCopiedPath(path);
+      setTimeout(() => setCopiedPath(null), 2000);
+    }
+  }
+
+  async function handleViewHistory() {
+    if (!projectPath || !feature.generated_code?.length) return;
+
+    setLoadingHistory(true);
+    setShowCommitHistory(true);
+
+    const files = feature.generated_code.map(f => f.path);
+    const result = await getGitHistory(projectPath, files);
+
+    if (result.success && result.commits) {
+      setCommitHistory(result.commits);
+    }
+    setLoadingHistory(false);
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -437,22 +478,91 @@ export default function FeatureDetailModal({
               {/* Generated Files Section */}
               {feature.generated_code && feature.generated_code.length > 0 && (
                 <div>
-                  <h4 className="text-sm text-gray-400 mb-2 flex items-center gap-1">
-                    <FileCode className="w-4 h-4" />
-                    Generated Files ({feature.generated_code.length})
-                  </h4>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm text-gray-400 flex items-center gap-1">
+                      <FileCode className="w-4 h-4" />
+                      Generated Files ({feature.generated_code.length})
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleOpenFolder}
+                        className="flex items-center gap-1 px-2 py-1 text-xs bg-background-surface text-gray-400 rounded hover:text-white transition-colors"
+                        title="Open folder in file explorer"
+                      >
+                        <FolderOpen className="w-3 h-3" />
+                        Open Folder
+                      </button>
+                      <button
+                        onClick={handleViewHistory}
+                        className="flex items-center gap-1 px-2 py-1 text-xs bg-background-surface text-gray-400 rounded hover:text-white transition-colors"
+                        title="View git commit history"
+                      >
+                        <History className="w-3 h-3" />
+                        History
+                      </button>
+                    </div>
+                  </div>
                   <div className="space-y-1">
                     {feature.generated_code.map((file, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-2 p-2 bg-background-surface rounded text-sm font-mono"
+                        className="flex items-center gap-2 p-2 bg-background-surface rounded text-sm font-mono group"
                       >
                         <FileCode className="w-3 h-3 text-gray-500" />
-                        <span className="text-gray-300">{file.path}</span>
-                        <span className="text-xs text-gray-500 ml-auto">{file.language}</span>
+                        <span className="text-gray-300 flex-1">{file.path}</span>
+                        <button
+                          onClick={() => handleCopyPath(file.path)}
+                          className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-white transition-all"
+                          title="Copy path"
+                        >
+                          {copiedPath === file.path ? (
+                            <Check className="w-3 h-3 text-accent-teal" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                        <span className="text-xs text-gray-500">{file.language}</span>
                       </div>
                     ))}
                   </div>
+
+                  {/* Commit History Panel */}
+                  {showCommitHistory && (
+                    <div className="mt-3 p-3 bg-background-deep rounded-lg border border-background-surface">
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="text-sm font-medium flex items-center gap-1">
+                          <History className="w-3 h-3" />
+                          Commit History
+                        </h5>
+                        <button
+                          onClick={() => setShowCommitHistory(false)}
+                          className="text-gray-500 hover:text-white"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {loadingHistory ? (
+                        <div className="text-sm text-gray-500 py-2">Loading...</div>
+                      ) : commitHistory.length > 0 ? (
+                        <div className="space-y-2">
+                          {commitHistory.map((commit, idx) => (
+                            <div key={idx} className="text-xs border-l-2 border-accent-teal pl-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-accent-teal">{commit.shortHash}</span>
+                                <span className="text-gray-400">{commit.author}</span>
+                              </div>
+                              <p className="text-gray-300 mt-0.5">{commit.message}</p>
+                              <span className="text-gray-500">{new Date(commit.date).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-500 py-2">
+                          No commits found for these files
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
