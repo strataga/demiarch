@@ -3,8 +3,8 @@
 //! These commands bridge the React frontend to demiarch-core functionality.
 //! Each command is exposed to the frontend via Tauri's invoke system.
 
+use demiarch_core::api;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Project summary for listing
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,6 +16,18 @@ pub struct ProjectSummary {
     pub feature_count: usize,
 }
 
+impl From<api::projects::ProjectSummary> for ProjectSummary {
+    fn from(p: api::projects::ProjectSummary) -> Self {
+        Self {
+            id: p.id,
+            name: p.name,
+            framework: p.framework,
+            status: p.status,
+            feature_count: p.feature_count,
+        }
+    }
+}
+
 /// Feature summary for Kanban board
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeatureSummary {
@@ -25,6 +37,19 @@ pub struct FeatureSummary {
     pub status: String,
     pub priority: i32,
     pub phase_id: String,
+}
+
+impl From<api::features::FeatureSummary> for FeatureSummary {
+    fn from(f: api::features::FeatureSummary) -> Self {
+        Self {
+            id: f.id,
+            name: f.title,
+            description: f.description,
+            status: f.status,
+            priority: f.priority,
+            phase_id: f.phase_id.unwrap_or_default(),
+        }
+    }
 }
 
 /// Agent status for visualization
@@ -54,6 +79,17 @@ pub struct SessionSummary {
     pub status: String,
     pub current_project_id: Option<String>,
     pub started_at: String,
+}
+
+impl From<api::sessions::SessionSummary> for SessionSummary {
+    fn from(s: api::sessions::SessionSummary) -> Self {
+        Self {
+            id: s.id,
+            status: s.status,
+            current_project_id: s.current_project_id,
+            started_at: s.created_at,
+        }
+    }
 }
 
 /// Doctor check result
@@ -94,49 +130,34 @@ pub struct Conflict {
 
 #[tauri::command]
 pub async fn get_projects() -> Result<Vec<ProjectSummary>, String> {
-    // TODO: Connect to demiarch-core
-    // For now, return mock data to verify the bridge works
-    Ok(vec![
-        ProjectSummary {
-            id: "f78b82f0".to_string(),
-            name: "analytics-dashboard".to_string(),
-            framework: "nextjs".to_string(),
-            status: "building".to_string(),
-            feature_count: 5,
-        },
-        ProjectSummary {
-            id: "58f7a856".to_string(),
-            name: "task-tracker".to_string(),
-            framework: "nextjs".to_string(),
-            status: "discovery".to_string(),
-            feature_count: 3,
-        },
-    ])
+    let projects = api::projects::list(None)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(projects.into_iter().map(ProjectSummary::from).collect())
 }
 
 #[tauri::command]
 pub async fn get_project(id: String) -> Result<ProjectSummary, String> {
-    // TODO: Connect to demiarch-core
-    Ok(ProjectSummary {
-        id,
-        name: "analytics-dashboard".to_string(),
-        framework: "nextjs".to_string(),
-        status: "building".to_string(),
-        feature_count: 5,
-    })
+    let project = api::projects::get(&id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Project not found: {}", id))?;
+    Ok(ProjectSummary::from(project))
 }
 
 #[tauri::command]
 pub async fn create_project(name: String, framework: String) -> Result<ProjectSummary, String> {
-    // TODO: Connect to demiarch-core
-    let id = Uuid::new_v4().to_string()[..8].to_string();
-    Ok(ProjectSummary {
-        id,
+    let request = api::projects::CreateProjectRequest {
         name,
         framework,
-        status: "discovery".to_string(),
-        feature_count: 0,
-    })
+        repo_url: None,
+        description: None,
+        path: None,
+    };
+    let project = api::projects::create(request)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ProjectSummary::from(project))
 }
 
 // ============================================================
@@ -145,60 +166,33 @@ pub async fn create_project(name: String, framework: String) -> Result<ProjectSu
 
 #[tauri::command]
 pub async fn get_features(project_id: String) -> Result<Vec<FeatureSummary>, String> {
-    // TODO: Connect to demiarch-core
-    let _ = project_id;
-    Ok(vec![
-        FeatureSummary {
-            id: "feat-001".to_string(),
-            name: "User Authentication".to_string(),
-            description: Some("OAuth2 login with Google and GitHub".to_string()),
-            status: "complete".to_string(),
-            priority: 1,
-            phase_id: "phase-1".to_string(),
-        },
-        FeatureSummary {
-            id: "feat-002".to_string(),
-            name: "Dashboard Layout".to_string(),
-            description: Some("Main dashboard with sidebar navigation".to_string()),
-            status: "in_progress".to_string(),
-            priority: 1,
-            phase_id: "phase-1".to_string(),
-        },
-        FeatureSummary {
-            id: "feat-003".to_string(),
-            name: "Analytics Charts".to_string(),
-            description: Some("Interactive charts with Chart.js".to_string()),
-            status: "pending".to_string(),
-            priority: 2,
-            phase_id: "phase-2".to_string(),
-        },
-    ])
+    let features = api::features::list_by_project(&project_id, None)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(features.into_iter().map(FeatureSummary::from).collect())
 }
 
 #[tauri::command]
 pub async fn get_feature(id: String) -> Result<FeatureSummary, String> {
-    // TODO: Connect to demiarch-core
-    Ok(FeatureSummary {
-        id,
-        name: "User Authentication".to_string(),
-        description: Some("OAuth2 login with Google and GitHub".to_string()),
-        status: "complete".to_string(),
-        priority: 1,
-        phase_id: "phase-1".to_string(),
-    })
+    let feature = api::features::get(&id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Feature not found: {}", id))?;
+    Ok(FeatureSummary::from(feature))
 }
 
 #[tauri::command]
 pub async fn update_feature_status(id: String, status: String) -> Result<FeatureSummary, String> {
-    // TODO: Connect to demiarch-core
-    Ok(FeatureSummary {
-        id,
-        name: "Feature".to_string(),
-        description: None,
-        status,
-        priority: 2,
-        phase_id: "phase-1".to_string(),
-    })
+    api::features::update_status(&id, &status)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Return the updated feature
+    let feature = api::features::get(&id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Feature not found: {}", id))?;
+    Ok(FeatureSummary::from(feature))
 }
 
 // ============================================================
@@ -207,13 +201,10 @@ pub async fn update_feature_status(id: String, status: String) -> Result<Feature
 
 #[tauri::command]
 pub async fn get_sessions() -> Result<Vec<SessionSummary>, String> {
-    // TODO: Connect to demiarch-core
-    Ok(vec![SessionSummary {
-        id: "session-001".to_string(),
-        status: "active".to_string(),
-        current_project_id: Some("f78b82f0".to_string()),
-        started_at: "2026-01-22T10:00:00Z".to_string(),
-    }])
+    let sessions = api::sessions::list(None, Some(50))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(sessions.into_iter().map(SessionSummary::from).collect())
 }
 
 // ============================================================
@@ -222,7 +213,9 @@ pub async fn get_sessions() -> Result<Vec<SessionSummary>, String> {
 
 #[tauri::command]
 pub async fn get_costs() -> Result<CostSummary, String> {
-    // TODO: Connect to demiarch-core
+    // Cost tracking requires a CostTracker instance which is typically
+    // managed by the application state. For now, return defaults.
+    // TODO: Add CostTracker to application state
     Ok(CostSummary {
         today_usd: 0.0,
         daily_limit_usd: 10.0,
@@ -237,25 +230,9 @@ pub async fn get_costs() -> Result<CostSummary, String> {
 
 #[tauri::command]
 pub async fn get_agents() -> Result<Vec<AgentStatus>, String> {
-    // TODO: Connect to demiarch-core
-    Ok(vec![
-        AgentStatus {
-            id: "agent-001".to_string(),
-            agent_type: "orchestrator".to_string(),
-            status: "running".to_string(),
-            parent_id: None,
-            task: Some("Coordinating feature generation".to_string()),
-            tokens_used: 150,
-        },
-        AgentStatus {
-            id: "agent-002".to_string(),
-            agent_type: "planner".to_string(),
-            status: "running".to_string(),
-            parent_id: Some("agent-001".to_string()),
-            task: Some("Decomposing tasks".to_string()),
-            tokens_used: 320,
-        },
-    ])
+    // Agent status tracking is not yet implemented in the core API
+    // TODO: Add agent status API
+    Ok(vec![])
 }
 
 // ============================================================
@@ -264,13 +241,32 @@ pub async fn get_agents() -> Result<Vec<AgentStatus>, String> {
 
 #[tauri::command]
 pub async fn doctor() -> Result<DoctorResult, String> {
-    // TODO: Connect to demiarch-core
+    let health = api::health::doctor()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let database_ok = health.checks.iter()
+        .find(|c| c.name == "Database")
+        .map(|c| c.status == api::health::HealthStatus::Ok)
+        .unwrap_or(false);
+
+    let config_ok = health.checks.iter()
+        .find(|c| c.name == "Configuration")
+        .map(|c| c.status != api::health::HealthStatus::Error)
+        .unwrap_or(false);
+
+    // Get project count
+    let project_count = api::projects::list(None)
+        .await
+        .map(|p| p.len())
+        .unwrap_or(0);
+
     Ok(DoctorResult {
-        config_ok: true,
-        api_key_ok: true,
-        database_ok: true,
-        schema_version: 11,
-        project_count: 3,
+        config_ok,
+        api_key_ok: true, // TODO: Check API key
+        database_ok,
+        schema_version: 11, // TODO: Get from migrations
+        project_count,
     })
 }
 
@@ -280,66 +276,10 @@ pub async fn doctor() -> Result<DoctorResult, String> {
 
 #[tauri::command]
 pub async fn get_conflicts(project_id: String) -> Result<Vec<Conflict>, String> {
-    // TODO: Connect to demiarch-core
+    // Conflict resolution is not yet implemented in the core API
+    // TODO: Add conflict resolution API
     let _ = project_id;
-    // Return mock conflicts for UI development
-    Ok(vec![
-        Conflict {
-            id: "conflict-001".to_string(),
-            file_path: "src/components/Dashboard.tsx".to_string(),
-            hunks: vec![
-                ConflictHunk {
-                    id: "hunk-001".to_string(),
-                    start_line: 15,
-                    end_line: 28,
-                    user_content: r#"function Dashboard() {
-  const [data, setData] = useState([]);
-
-  useEffect(() => {
-    // User's custom fetch logic
-    fetch('/api/data')
-      .then(res => res.json())
-      .then(setData);
-  }, []);
-
-  return <div>{data.map(renderItem)}</div>;
-}"#.to_string(),
-                    ai_content: r#"function Dashboard() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => fetchDashboardData(),
-  });
-
-  if (isLoading) return <Skeleton />;
-  if (error) return <ErrorMessage error={error} />;
-
-  return <DashboardGrid data={data} />;
-}"#.to_string(),
-                    resolved: false,
-                    resolution: None,
-                    custom_content: None,
-                },
-                ConflictHunk {
-                    id: "hunk-002".to_string(),
-                    start_line: 45,
-                    end_line: 52,
-                    user_content: r#"const styles = {
-  container: 'flex flex-col gap-4',
-  header: 'text-xl font-bold',
-};"#.to_string(),
-                    ai_content: r#"const styles = {
-  container: 'grid grid-cols-3 gap-6 p-4',
-  header: 'text-2xl font-semibold tracking-tight',
-  subheader: 'text-gray-500 text-sm',
-};"#.to_string(),
-                    resolved: false,
-                    resolution: None,
-                    custom_content: None,
-                },
-            ],
-            created_at: "2026-01-22T14:30:00Z".to_string(),
-        },
-    ])
+    Ok(vec![])
 }
 
 #[tauri::command]
@@ -349,14 +289,16 @@ pub async fn resolve_conflict_hunk(
     resolution: String,
     custom_content: Option<String>,
 ) -> Result<(), String> {
-    // TODO: Connect to demiarch-core
+    // Conflict resolution is not yet implemented in the core API
+    // TODO: Add conflict resolution API
     let _ = (conflict_id, hunk_id, resolution, custom_content);
     Ok(())
 }
 
 #[tauri::command]
 pub async fn apply_conflict_resolutions(conflict_id: String) -> Result<(), String> {
-    // TODO: Connect to demiarch-core
+    // Conflict resolution is not yet implemented in the core API
+    // TODO: Add conflict resolution API
     let _ = conflict_id;
     Ok(())
 }
