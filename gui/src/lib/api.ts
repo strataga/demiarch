@@ -108,11 +108,12 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
   },
 
   doctor: () => {
+    const hasKey = !!localStorage.getItem('openrouter_api_key');
     return {
       config_ok: true,
-      api_key_ok: false,
-      database_ok: false,
-      schema_version: 0,
+      api_key_ok: hasKey,
+      database_ok: true, // localStorage is always available
+      schema_version: 1,
       project_count: getStorage<Array<unknown>>(STORAGE_KEYS.projects, []).length,
     };
   },

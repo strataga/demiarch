@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '../lib/api';
+import { hasApiKey, setApiKey, getModel, setModel, AVAILABLE_MODELS } from '../lib/ai';
 import {
   Settings as SettingsIcon,
   Key,
@@ -7,6 +8,7 @@ import {
   DollarSign,
   CheckCircle2,
   XCircle,
+  Check,
 } from 'lucide-react';
 
 interface DoctorResult {
@@ -20,20 +22,41 @@ interface DoctorResult {
 export default function Settings() {
   const [health, setHealth] = useState<DoctorResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [selectedModel, setSelectedModel] = useState(getModel());
+  const [saved, setSaved] = useState(false);
+
+  async function loadHealth() {
+    try {
+      const data = await invoke<DoctorResult>('doctor');
+      // Override api_key_ok based on localStorage
+      data.api_key_ok = hasApiKey();
+      setHealth(data);
+    } catch (error) {
+      console.error('Failed to load health:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadHealth() {
-      try {
-        const data = await invoke<DoctorResult>('doctor');
-        setHealth(data);
-      } catch (error) {
-        console.error('Failed to load health:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
     loadHealth();
   }, []);
+
+  function handleSaveApiKey() {
+    if (apiKeyInput.trim()) {
+      setApiKey(apiKeyInput.trim());
+      setApiKeyInput('');
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      loadHealth(); // Refresh health status
+    }
+  }
+
+  function handleModelChange(model: string) {
+    setSelectedModel(model);
+    setModel(model);
+  }
 
   if (loading) {
     return (
@@ -91,13 +114,37 @@ export default function Settings() {
             <div className="flex gap-2">
               <input
                 type="password"
-                placeholder="sk-or-..."
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder={hasApiKey() ? '••••••••••••••••' : 'sk-or-...'}
                 className="flex-1 bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent-teal"
               />
-              <button className="px-4 py-2 bg-accent-teal text-background-deep rounded-lg font-medium hover:bg-accent-teal/90 transition-colors">
-                Save
+              <button
+                onClick={handleSaveApiKey}
+                disabled={!apiKeyInput.trim()}
+                className="px-4 py-2 bg-accent-teal text-background-deep rounded-lg font-medium hover:bg-accent-teal/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {saved ? <Check className="w-4 h-4" /> : null}
+                {saved ? 'Saved!' : 'Save'}
               </button>
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Get a free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-accent-teal hover:underline">openrouter.ai/keys</a>
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Model</label>
+            <select
+              value={selectedModel}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent-teal"
+            >
+              {AVAILABLE_MODELS.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
