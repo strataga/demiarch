@@ -52,7 +52,6 @@ export default function Layout() {
         <div className="p-4 border-t border-background-surface">
           <div className="text-xs text-gray-500">
             <p>Version 0.1.0</p>
-            <p className="text-accent-teal">Local-first</p>
           </div>
         </div>
       </aside>
