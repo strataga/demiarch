@@ -148,9 +148,9 @@ function ProjectChatModal({ onClose, onProjectCreated }: ProjectChatModalProps) 
           ? getInitialMessage()
           : `🔑 **First, let's set up your API key.**
 
-Click the **settings icon** (⚙️) in the top right to add your Anthropic API key.
+Click the **settings icon** (⚙️) in the top right to add your OpenRouter API key.
 
-This enables a live AI conversation to help you create a detailed PRD. You can get a key at [console.anthropic.com](https://console.anthropic.com/)`,
+This enables a live AI conversation to help you create a detailed PRD. Get a free key at [openrouter.ai/keys](https://openrouter.ai/keys)`,
         timestamp: new Date(),
       },
     ];
@@ -312,14 +312,14 @@ This enables a live AI conversation to help you create a detailed PRD. You can g
         {showApiKeyInput && (
           <div className="p-4 border-b border-background-surface bg-background-surface/50">
             <p className="text-sm text-gray-400 mb-2">
-              Add your Anthropic API key for smarter AI responses (optional):
+              Add your OpenRouter API key for live AI conversation:
             </p>
             <div className="flex gap-2">
               <input
                 type="password"
                 value={apiKeyInput}
                 onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="sk-ant-..."
+                placeholder="sk-or-..."
                 className="flex-1 px-3 py-2 bg-background-deep border border-background-surface rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-accent-teal text-sm"
               />
               <button
