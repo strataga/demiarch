@@ -27,6 +27,8 @@ tokio = { workspace = true }
 # GUI-specific dependencies
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+sqlx = { workspace = true }
+dirs = "5.0"
 
 # Internal dependency
 demiarch-core = { path = "../demiarch-core" }
