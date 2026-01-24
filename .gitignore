@@ -70,3 +70,6 @@ __pycache__/
 
 # Beads agent execution logs
 .beads/agent-results/
+
+# Playwright MCP tools
+.playwright-mcp/
