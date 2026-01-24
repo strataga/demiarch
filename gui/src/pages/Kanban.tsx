@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { invoke, Feature } from '../lib/api';
+import { invoke, Feature, Project } from '../lib/api';
 import {
   DndContext,
   DragOverlay,
@@ -19,11 +19,13 @@ import {
   verticalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Plus, Calendar, AlertTriangle, Filter, X, Sparkles, LayoutGrid } from 'lucide-react';
+import { GripVertical, Plus, Calendar, AlertTriangle, Filter, X, Sparkles, LayoutGrid, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FeatureCreateModal from '../components/FeatureCreateModal';
 import FeatureDetailModal from '../components/FeatureDetailModal';
+import AutoBuildModal from '../components/AutoBuildModal';
 import SearchInput from '../components/SearchInput';
 import { KanbanBoardSkeleton } from '../components/Skeleton';
 import { useKanbanShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -38,9 +40,11 @@ const COLUMNS = [
 export default function Kanban() {
   const { projectId } = useParams<{ projectId: string }>();
   const [features, setFeatures] = useState<Feature[]>([]);
+  const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeFeature, setActiveFeature] = useState<Feature | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAutoBuildModal, setShowAutoBuildModal] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<number[]>([]);
@@ -66,8 +70,12 @@ export default function Kanban() {
   async function loadFeatures() {
     if (!projectId) return;
     try {
-      const data = await invoke<Feature[]>('get_features', { projectId });
-      setFeatures(data);
+      const [featuresData, projectData] = await Promise.all([
+        invoke<Feature[]>('get_features', { projectId }),
+        invoke<Project>('get_project', { id: projectId }),
+      ]);
+      setFeatures(featuresData);
+      setProject(projectData);
     } catch (error) {
       console.error('Failed to load features:', error);
     } finally {
@@ -205,13 +213,24 @@ export default function Kanban() {
     <div className="p-6 h-full flex flex-col">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Kanban Board</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-accent-teal text-background-deep rounded-lg font-medium hover:bg-accent-teal/90 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Add Feature
-        </button>
+        <div className="flex items-center gap-3">
+          {features.length > 0 && (
+            <button
+              onClick={() => setShowAutoBuildModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-accent-amber text-background-deep rounded-lg font-medium hover:bg-accent-amber/90 transition-colors"
+            >
+              <Zap className="w-5 h-5" />
+              Auto Build
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-accent-teal text-background-deep rounded-lg font-medium hover:bg-accent-teal/90 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            Add Feature
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -359,6 +378,15 @@ export default function Kanban() {
           onDeleted={handleFeatureDeleted}
         />
       )}
+
+      {showAutoBuildModal && project && (
+        <AutoBuildModal
+          features={features}
+          projectName={project.name}
+          framework={project.framework}
+          onClose={() => setShowAutoBuildModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -372,9 +400,16 @@ function KanbanColumn({
   features: Feature[];
   onFeatureClick: (feature: Feature) => void;
 }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: column.id,
+  });
+
   return (
     <div
-      className="flex flex-col bg-background-mid rounded-lg border border-background-surface overflow-hidden"
+      ref={setNodeRef}
+      className={`flex flex-col bg-background-mid rounded-lg border border-background-surface overflow-hidden transition-colors ${
+        isOver ? 'border-accent-teal bg-accent-teal/5' : ''
+      }`}
     >
       {/* Column Header */}
       <div className={`p-3 border-b-2 ${column.color} bg-background-surface`}>

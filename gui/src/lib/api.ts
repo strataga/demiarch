@@ -17,6 +17,18 @@ const STORAGE_KEYS = {
   sessions: 'demiarch_sessions',
 };
 
+// Project interface
+export interface Project {
+  id: string;
+  name: string;
+  framework: string;
+  status: string;
+  feature_count: number;
+  description?: string;
+  prd?: string;
+  created_at: string;
+}
+
 // Feature interface with enhanced fields
 export interface Feature {
   id: string;

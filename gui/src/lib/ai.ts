@@ -468,3 +468,129 @@ export function extractFeaturesFromPRDLocal(prd: string): ExtractedFeature[] {
 
   return features;
 }
+
+/**
+ * Generated code structure
+ */
+export interface GeneratedFile {
+  path: string;
+  content: string;
+  language: string;
+}
+
+export interface GeneratedFeatureCode {
+  featureId: string;
+  featureName: string;
+  files: GeneratedFile[];
+}
+
+/**
+ * Generate implementation code for features using AI
+ */
+export async function generateFeatureCode(
+  features: Array<{ id: string; name: string; description: string | null }>,
+  projectName: string,
+  framework: string
+): Promise<{ code: GeneratedFeatureCode[]; error?: string }> {
+  const apiKey = localStorage.getItem('openrouter_api_key');
+  const model = localStorage.getItem('openrouter_model') || DEFAULT_MODEL;
+
+  if (!apiKey) {
+    return {
+      code: [],
+      error: 'API key required for code generation. Add your OpenRouter API key in Settings.',
+    };
+  }
+
+  const systemPrompt = `You are an expert software developer. Generate production-ready code for the given features.
+
+Project: ${projectName}
+Framework: ${framework}
+
+For each feature, generate the necessary files with:
+1. Clean, well-structured code following best practices
+2. Proper TypeScript types
+3. Modern React patterns (hooks, functional components)
+4. Tailwind CSS for styling
+5. Proper error handling
+
+Respond with ONLY valid JSON in this exact format, no other text:
+{
+  "features": [
+    {
+      "featureId": "feature-id-here",
+      "featureName": "Feature Name",
+      "files": [
+        {
+          "path": "src/components/FeatureName.tsx",
+          "content": "// Full file content here",
+          "language": "typescript"
+        }
+      ]
+    }
+  ]
+}`;
+
+  const featureDescriptions = features
+    .map((f) => `- ID: ${f.id}\n  Name: ${f.name}\n  Description: ${f.description || 'No description'}`)
+    .join('\n\n');
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'Demiarch Auto Build',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Generate code for these features:\n\n${featureDescriptions}` },
+        ],
+        max_tokens: 8192,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API error:', response.status, errorData);
+
+      if (response.status === 401) {
+        return { code: [], error: 'Invalid API key. Please check your OpenRouter API key.' };
+      }
+
+      if (response.status === 402) {
+        return { code: [], error: 'Insufficient credits. Please add credits to your OpenRouter account.' };
+      }
+
+      return { code: [], error: `API error: ${response.status}` };
+    }
+
+    const data = await response.json();
+    let content = data.choices[0]?.message?.content || '{}';
+
+    // Strip markdown code fences if present
+    content = content.trim();
+    if (content.startsWith('```')) {
+      content = content.replace(/^```(?:json)?\s*\n?/, '');
+      content = content.replace(/\n?```\s*$/, '');
+    }
+
+    try {
+      const parsed = JSON.parse(content);
+      return { code: parsed.features || [] };
+    } catch (parseError) {
+      console.error('Failed to parse AI response:', parseError, content);
+      return { code: [], error: 'Failed to parse AI response. Please try again.' };
+    }
+  } catch (error) {
+    console.error('Code generation failed:', error);
+    return {
+      code: [],
+      error: error instanceof Error ? error.message : 'Failed to connect to AI service.',
+    };
+  }
+}
