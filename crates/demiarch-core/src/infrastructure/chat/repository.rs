@@ -260,3 +260,335 @@ impl<'a> MessageRepository<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::Database;
+
+    async fn create_test_db() -> Database {
+        Database::in_memory()
+            .await
+            .expect("Failed to create test database")
+    }
+
+    async fn create_test_project(db: &Database) -> String {
+        let project_id = uuid::Uuid::new_v4().to_string();
+        sqlx::query("INSERT INTO projects (id, name, framework) VALUES (?, ?, ?)")
+            .bind(&project_id)
+            .bind("Test Project")
+            .bind("rust")
+            .execute(db.pool())
+            .await
+            .expect("Failed to insert test project");
+        project_id
+    }
+
+    // ========== ConversationRepository Tests ==========
+
+    #[tokio::test]
+    async fn test_conversation_create_and_get() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let repo = ConversationRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id).with_title("Test Conversation");
+
+        repo.create(&conversation).await.expect("Failed to create");
+
+        let retrieved = repo
+            .get(&conversation.id)
+            .await
+            .expect("Failed to get")
+            .expect("Conversation not found");
+
+        assert_eq!(retrieved.id, conversation.id);
+        assert_eq!(retrieved.project_id, project_id);
+        assert_eq!(retrieved.title, Some("Test Conversation".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_conversation_list_by_project() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let repo = ConversationRepository::new(&db);
+
+        // Create multiple conversations
+        for i in 0..3 {
+            let conv = Conversation::new(&project_id).with_title(format!("Conv {}", i));
+            repo.create(&conv).await.expect("Failed to create");
+        }
+
+        let conversations = repo
+            .list_by_project(&project_id)
+            .await
+            .expect("Failed to list");
+
+        assert_eq!(conversations.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_conversation_update_title() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let repo = ConversationRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        repo.create(&conversation).await.expect("Failed to create");
+
+        repo.update_title(&conversation.id, Some("Updated Title"))
+            .await
+            .expect("Failed to update title");
+
+        let retrieved = repo.get(&conversation.id).await.unwrap().unwrap();
+        assert_eq!(retrieved.title, Some("Updated Title".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_conversation_delete() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let repo = ConversationRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        repo.create(&conversation).await.expect("Failed to create");
+
+        assert!(repo.exists(&conversation.id).await.unwrap());
+
+        repo.delete(&conversation.id).await.expect("Failed to delete");
+
+        assert!(!repo.exists(&conversation.id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_conversation_touch_updates_timestamp() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let repo = ConversationRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        repo.create(&conversation).await.expect("Failed to create");
+
+        let original = repo.get(&conversation.id).await.unwrap().unwrap();
+
+        // Wait briefly to ensure timestamp changes
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        repo.touch(&conversation.id).await.expect("Failed to touch");
+
+        let updated = repo.get(&conversation.id).await.unwrap().unwrap();
+        assert!(updated.updated_at > original.updated_at);
+    }
+
+    // ========== MessageRepository Tests ==========
+
+    #[tokio::test]
+    async fn test_message_create_and_get() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let conv_repo = ConversationRepository::new(&db);
+        let msg_repo = MessageRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        conv_repo.create(&conversation).await.unwrap();
+
+        let message = ChatMessage::user(&conversation.id, "Hello!");
+        msg_repo.create(&message).await.expect("Failed to create");
+
+        let retrieved = msg_repo
+            .get(&message.id)
+            .await
+            .expect("Failed to get")
+            .expect("Message not found");
+
+        assert_eq!(retrieved.id, message.id);
+        assert_eq!(retrieved.content, "Hello!");
+        assert_eq!(retrieved.role, MessageRole::User);
+    }
+
+    #[tokio::test]
+    async fn test_message_list_by_conversation() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let conv_repo = ConversationRepository::new(&db);
+        let msg_repo = MessageRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        conv_repo.create(&conversation).await.unwrap();
+
+        // Create messages in order
+        for i in 0..5 {
+            let msg = ChatMessage::user(&conversation.id, format!("Message {}", i));
+            msg_repo.create(&msg).await.unwrap();
+        }
+
+        let messages = msg_repo
+            .list_by_conversation(&conversation.id)
+            .await
+            .expect("Failed to list");
+
+        assert_eq!(messages.len(), 5);
+        // Messages should be in chronological order (ASC)
+        assert_eq!(messages[0].content, "Message 0");
+        assert_eq!(messages[4].content, "Message 4");
+    }
+
+    #[tokio::test]
+    async fn test_message_list_recent() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let conv_repo = ConversationRepository::new(&db);
+        let msg_repo = MessageRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        conv_repo.create(&conversation).await.unwrap();
+
+        // Create 10 messages
+        for i in 0..10 {
+            let msg = ChatMessage::user(&conversation.id, format!("Message {}", i));
+            msg_repo.create(&msg).await.unwrap();
+        }
+
+        // Get only the last 3 messages
+        let recent = msg_repo
+            .list_recent(&conversation.id, 3)
+            .await
+            .expect("Failed to get recent");
+
+        assert_eq!(recent.len(), 3);
+        // Should be the last 3 messages in chronological order
+        assert_eq!(recent[0].content, "Message 7");
+        assert_eq!(recent[1].content, "Message 8");
+        assert_eq!(recent[2].content, "Message 9");
+    }
+
+    #[tokio::test]
+    async fn test_message_pagination() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let conv_repo = ConversationRepository::new(&db);
+        let msg_repo = MessageRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        conv_repo.create(&conversation).await.unwrap();
+
+        // Create 10 messages
+        for i in 0..10 {
+            let msg = ChatMessage::user(&conversation.id, format!("Message {}", i));
+            msg_repo.create(&msg).await.unwrap();
+        }
+
+        // Get first page
+        let page1 = msg_repo
+            .list_by_conversation_paginated(&conversation.id, 3, 0)
+            .await
+            .expect("Failed to get page 1");
+        assert_eq!(page1.len(), 3);
+        assert_eq!(page1[0].content, "Message 0");
+
+        // Get second page
+        let page2 = msg_repo
+            .list_by_conversation_paginated(&conversation.id, 3, 3)
+            .await
+            .expect("Failed to get page 2");
+        assert_eq!(page2.len(), 3);
+        assert_eq!(page2[0].content, "Message 3");
+    }
+
+    #[tokio::test]
+    async fn test_message_count() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let conv_repo = ConversationRepository::new(&db);
+        let msg_repo = MessageRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        conv_repo.create(&conversation).await.unwrap();
+
+        assert_eq!(
+            msg_repo.count_by_conversation(&conversation.id).await.unwrap(),
+            0
+        );
+
+        for i in 0..5 {
+            let msg = ChatMessage::user(&conversation.id, format!("Message {}", i));
+            msg_repo.create(&msg).await.unwrap();
+        }
+
+        assert_eq!(
+            msg_repo.count_by_conversation(&conversation.id).await.unwrap(),
+            5
+        );
+    }
+
+    #[tokio::test]
+    async fn test_message_delete() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let conv_repo = ConversationRepository::new(&db);
+        let msg_repo = MessageRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        conv_repo.create(&conversation).await.unwrap();
+
+        let message = ChatMessage::user(&conversation.id, "To delete");
+        msg_repo.create(&message).await.unwrap();
+
+        assert!(msg_repo.get(&message.id).await.unwrap().is_some());
+
+        msg_repo.delete(&message.id).await.expect("Failed to delete");
+
+        assert!(msg_repo.get(&message.id).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_message_delete_by_conversation() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let conv_repo = ConversationRepository::new(&db);
+        let msg_repo = MessageRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        conv_repo.create(&conversation).await.unwrap();
+
+        for i in 0..5 {
+            let msg = ChatMessage::user(&conversation.id, format!("Message {}", i));
+            msg_repo.create(&msg).await.unwrap();
+        }
+
+        assert_eq!(
+            msg_repo.count_by_conversation(&conversation.id).await.unwrap(),
+            5
+        );
+
+        msg_repo
+            .delete_by_conversation(&conversation.id)
+            .await
+            .expect("Failed to delete");
+
+        assert_eq!(
+            msg_repo.count_by_conversation(&conversation.id).await.unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_message_with_model_and_tokens() {
+        let db = create_test_db().await;
+        let project_id = create_test_project(&db).await;
+        let conv_repo = ConversationRepository::new(&db);
+        let msg_repo = MessageRepository::new(&db);
+
+        let conversation = Conversation::new(&project_id);
+        conv_repo.create(&conversation).await.unwrap();
+
+        let message = ChatMessage::assistant(&conversation.id, "Response")
+            .with_model("gpt-4")
+            .with_tokens(100);
+        msg_repo.create(&message).await.unwrap();
+
+        let retrieved = msg_repo.get(&message.id).await.unwrap().unwrap();
+        assert_eq!(retrieved.model, Some("gpt-4".to_string()));
+        assert_eq!(retrieved.tokens_used, Some(100));
+    }
+}
