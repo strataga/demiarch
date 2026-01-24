@@ -17,6 +17,7 @@ import {
   Eye,
   Code,
   Copy,
+  Sparkles,
 } from 'lucide-react';
 import { registry } from '../lib/json-render/registry';
 import {
@@ -166,13 +167,44 @@ export default function FeaturePreviewTab({
     setTimeout(() => setCopied(false), 2000);
   }, [currentPreview]);
 
+  const handleAutoFillPrompt = useCallback(() => {
+    const parts: string[] = [];
+
+    if (feature.name) {
+      parts.push(`Create a UI for "${feature.name}"`);
+    }
+
+    if (feature.description) {
+      parts.push(feature.description);
+    }
+
+    if (parts.length === 0) {
+      setError('Feature needs a name or description to auto-generate prompt');
+      return;
+    }
+
+    const autoPrompt = parts.join('. ');
+    setPrompt(autoPrompt);
+    setError(null);
+  }, [feature.name, feature.description]);
+
   return (
     <div className="space-y-4">
       {/* Prompt Input */}
       <div className="space-y-2">
-        <label className="block text-sm text-gray-400">
-          Describe the UI you want to generate:
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="block text-sm text-gray-400">
+            Describe the UI you want to generate:
+          </label>
+          <button
+            onClick={handleAutoFillPrompt}
+            className="flex items-center gap-1 px-2 py-1 text-xs text-accent-teal hover:text-accent-teal/80 transition-colors"
+            title="Auto-fill from feature name and description"
+          >
+            <Sparkles className="w-3 h-3" />
+            Auto-fill
+          </button>
+        </div>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
