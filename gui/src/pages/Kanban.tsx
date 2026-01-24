@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { invoke, Feature, Project } from '../lib/api';
 import {
@@ -13,22 +13,18 @@ import {
   DragEndEvent,
   DragOverEvent,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { useDroppable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Plus, Calendar, AlertTriangle, Filter, X, Sparkles, LayoutGrid, Zap } from 'lucide-react';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
+import { GripVertical, Plus, Calendar, AlertTriangle, Filter, X, Sparkles, LayoutGrid, Zap, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FeatureCreateModal from '../components/FeatureCreateModal';
 import FeatureDetailModal from '../components/FeatureDetailModal';
 import AutoBuildModal from '../components/AutoBuildModal';
+import Toggle from '../components/Toggle';
+import BuildLogPanel from '../components/BuildLogPanel';
 import SearchInput from '../components/SearchInput';
 import { KanbanBoardSkeleton } from '../components/Skeleton';
 import { useKanbanShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useAutoBuild } from '../hooks/useAutoBuild';
 
 const COLUMNS = [
   { id: 'pending', label: 'To Do', color: 'border-gray-500' },
@@ -43,6 +39,7 @@ export default function Kanban() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeFeature, setActiveFeature] = useState<Feature | null>(null);
+  const [draggedToStatus, setDraggedToStatus] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAutoBuildModal, setShowAutoBuildModal] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
@@ -56,15 +53,32 @@ export default function Kanban() {
     onSearch: () => document.querySelector<HTMLInputElement>('input[placeholder="Search features..."]')?.focus(),
   });
 
+  // Auto Build hook callback
+  const handleAutoBuildFeatureUpdated = useCallback((updated: Feature) => {
+    setFeatures((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+  }, []);
+
+  // Auto Build orchestrator
+  const autoBuild = useAutoBuild(
+    projectId || '',
+    project?.name || '',
+    project?.framework || 'react',
+    features,
+    handleAutoBuildFeatureUpdated
+  );
+
+  // Get current building feature for display
+  const currentBuildingFeature = autoBuild.state.currentFeatureId
+    ? features.find((f) => f.id === autoBuild.state.currentFeatureId)
+    : null;
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 3,
       },
     }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor)
   );
 
   async function loadFeatures() {
@@ -147,6 +161,7 @@ export default function Kanban() {
 
   function handleDragStart(event: DragStartEvent) {
     const { active } = event;
+    console.log('[DND] Drag started:', active.id);
     const feature = features.find((f) => f.id === active.id);
     setActiveFeature(feature || null);
   }
@@ -155,25 +170,35 @@ export default function Kanban() {
     const { active, over } = event;
     if (!over) return;
 
-    const activeFeature = features.find((f) => f.id === active.id);
-    if (!activeFeature) return;
+    const activeId = active.id as string;
+
+    let newStatus: string | null = null;
 
     // Check if we're dragging over a column
     const overColumn = COLUMNS.find((c) => c.id === over.id);
-    if (overColumn && activeFeature.status !== overColumn.id) {
-      setFeatures((prev) =>
-        prev.map((f) =>
-          f.id === activeFeature.id ? { ...f, status: overColumn.id } : f
-        )
-      );
+    if (overColumn) {
+      newStatus = overColumn.id;
     }
 
-    // Check if we're dragging over another feature
-    const overFeature = features.find((f) => f.id === over.id);
-    if (overFeature && activeFeature.status !== overFeature.status) {
+    // Check if we're dragging over another feature (get its column)
+    if (!newStatus) {
+      // Use functional update to get the current status of the over feature
+      const overFeature = features.find((f) => f.id === over.id);
+      if (overFeature) {
+        newStatus = overFeature.status;
+      }
+    }
+
+    // Get the current status of the dragged feature (use tracked status if available)
+    const currentStatus = draggedToStatus || features.find((f) => f.id === activeId)?.status;
+
+    // Update the feature's status if it changed
+    if (newStatus && currentStatus !== newStatus) {
+      console.log('[DND] Status changing:', currentStatus, '->', newStatus);
+      setDraggedToStatus(newStatus);
       setFeatures((prev) =>
         prev.map((f) =>
-          f.id === activeFeature.id ? { ...f, status: overFeature.status } : f
+          f.id === activeId ? { ...f, status: newStatus! } : f
         )
       );
     }
@@ -181,20 +206,24 @@ export default function Kanban() {
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active } = event;
+    console.log('[DND] Drag ended:', active.id, 'newStatus:', draggedToStatus);
     setActiveFeature(null);
 
-    // Update the feature status in the backend
-    const feature = features.find((f) => f.id === active.id);
-    if (feature) {
+    // Use the tracked status from draggedToStatus, not the stale closure state
+    if (draggedToStatus) {
       try {
         await invoke('update_feature_status', {
-          id: feature.id,
-          status: feature.status,
+          id: active.id,
+          status: draggedToStatus,
         });
+        console.log('[DND] Status saved successfully');
       } catch (error) {
         console.error('Failed to update feature status:', error);
       }
     }
+
+    // Reset the tracked status
+    setDraggedToStatus(null);
   }
 
   if (loading) {
@@ -214,14 +243,33 @@ export default function Kanban() {
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Kanban Board</h1>
         <div className="flex items-center gap-3">
+          {/* Auto Build Toggle */}
           {features.length > 0 && (
-            <button
-              onClick={() => setShowAutoBuildModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-accent-amber text-background-deep rounded-lg font-medium hover:bg-accent-amber/90 transition-colors"
-            >
-              <Zap className="w-5 h-5" />
-              Auto Build
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-400">Auto Build</span>
+                <Toggle
+                  checked={autoBuild.state.enabled}
+                  onChange={autoBuild.toggle}
+                  disabled={autoBuild.state.processing && !autoBuild.state.enabled}
+                />
+              </div>
+              {autoBuild.state.processing && currentBuildingFeature && (
+                <span className="text-sm text-accent-amber flex items-center gap-1.5">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Building: {currentBuildingFeature.name}
+                </span>
+              )}
+              {/* Manual Build button (opens modal) */}
+              <button
+                onClick={() => setShowAutoBuildModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-background-surface text-gray-300 hover:text-white rounded-lg transition-colors"
+                title="Manual build selection"
+              >
+                <Zap className="w-4 h-4" />
+                Manual
+              </button>
+            </div>
           )}
           <button
             onClick={() => setShowCreateModal(true)}
@@ -361,6 +409,13 @@ export default function Kanban() {
       </DndContext>
       )}
 
+      {/* Build Log Panel */}
+      <BuildLogPanel
+        logs={autoBuild.state.logs}
+        onClear={autoBuild.clearLogs}
+        isProcessing={autoBuild.state.processing}
+      />
+
       {/* Modals */}
       {showCreateModal && projectId && (
         <FeatureCreateModal
@@ -420,45 +475,50 @@ function KanbanColumn({
       </div>
 
       {/* Cards Container */}
-      <SortableContext
-        items={features.map((f) => f.id)}
-        strategy={verticalListSortingStrategy}
-        id={column.id}
-      >
-        <div className="flex-1 p-2 space-y-2 overflow-y-auto min-h-[100px]">
-          {features.map((feature) => (
-            <SortableFeatureCard key={feature.id} feature={feature} onClick={() => onFeatureClick(feature)} />
-          ))}
-          {features.length === 0 && (
-            <div className="text-center text-gray-500 text-sm py-4">
-              Drop items here
-            </div>
-          )}
-        </div>
-      </SortableContext>
+      <div className="flex-1 p-2 space-y-2 overflow-y-auto min-h-[100px]">
+        {features.map((feature) => (
+          <DraggableFeatureCard key={feature.id} feature={feature} onClick={() => onFeatureClick(feature)} />
+        ))}
+        {features.length === 0 && (
+          <div className="text-center text-gray-500 text-sm py-4">
+            Drop items here
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function SortableFeatureCard({ feature, onClick }: { feature: Feature; onClick: () => void }) {
+function DraggableFeatureCard({ feature, onClick }: { feature: Feature; onClick: () => void }) {
   const {
     attributes,
     listeners,
     setNodeRef,
-    transform,
-    transition,
     isDragging,
-  } = useSortable({ id: feature.id });
+  } = useDraggable({ id: feature.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+  const style: React.CSSProperties = {
+    opacity: isDragging ? 0.3 : 1,
+    touchAction: 'none', // Prevent scroll interference on touch devices
+    cursor: isDragging ? 'grabbing' : 'grab',
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <FeatureCard feature={feature} onClick={onClick} />
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={(e) => {
+        // Only trigger click if not dragging
+        // The drag system uses onPointerDown, so onClick fires after drag ends
+        if (!isDragging) {
+          e.stopPropagation();
+          onClick();
+        }
+      }}
+    >
+      <FeatureCard feature={feature} />
     </div>
   );
 }
@@ -466,11 +526,9 @@ function SortableFeatureCard({ feature, onClick }: { feature: Feature; onClick: 
 function FeatureCard({
   feature,
   isDragging = false,
-  onClick,
 }: {
   feature: Feature;
   isDragging?: boolean;
-  onClick?: () => void;
 }) {
   const priorityColors: Record<number, string> = {
     0: 'border-l-red-500',
@@ -484,8 +542,7 @@ function FeatureCard({
 
   return (
     <div
-      onClick={onClick}
-      className={`bg-background-deep rounded-lg border border-background-surface p-3 cursor-grab border-l-4 ${
+      className={`bg-background-deep rounded-lg border border-background-surface p-3 border-l-4 ${
         priorityColors[feature.priority] || priorityColors[3]
       } hover:border-accent-teal/50 transition-colors group ${
         isDragging ? 'shadow-lg shadow-accent-teal/20 ring-2 ring-accent-teal' : ''

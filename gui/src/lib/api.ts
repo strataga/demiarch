@@ -29,6 +29,13 @@ export interface Project {
   created_at: string;
 }
 
+// Generated code file structure
+export interface GeneratedCode {
+  path: string;
+  content: string;
+  language: string;
+}
+
 // Feature interface with enhanced fields
 export interface Feature {
   id: string;
@@ -42,6 +49,7 @@ export interface Feature {
   tags: string[];
   created_at: string;
   updated_at: string;
+  generated_code?: GeneratedCode[];
 }
 
 // Generate a UUID
@@ -180,6 +188,7 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
     if (args?.priority !== undefined) feature.priority = args.priority as number;
     if (args?.due_date !== undefined) feature.due_date = args.due_date as string | null;
     if (args?.tags !== undefined) feature.tags = args.tags as string[];
+    if (args?.generated_code !== undefined) feature.generated_code = args.generated_code as GeneratedCode[];
     feature.updated_at = new Date().toISOString();
 
     setStorage(STORAGE_KEYS.features, features);
