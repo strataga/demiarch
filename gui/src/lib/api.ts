@@ -29,11 +29,35 @@ export interface Project {
   created_at: string;
 }
 
+// Dependency/library requirement
+export interface Dependency {
+  name: string;
+  version?: string;
+  type: 'npm' | 'pip' | 'gem' | 'cargo' | 'other';
+  dev?: boolean;
+  reason: string;
+}
+
+// Setup requirement
+export interface SetupRequirement {
+  step: string;
+  command?: string;
+  description: string;
+  type: 'install' | 'config' | 'env' | 'migration' | 'other';
+}
+
 // Generated code file structure
 export interface GeneratedCode {
   path: string;
   content: string;
   language: string;
+}
+
+// Feature implementation result with dependencies
+export interface FeatureImplementation {
+  files: GeneratedCode[];
+  dependencies: Dependency[];
+  setup: SetupRequirement[];
 }
 
 // Feature interface with enhanced fields
@@ -50,6 +74,8 @@ export interface Feature {
   created_at: string;
   updated_at: string;
   generated_code?: GeneratedCode[];
+  dependencies?: Dependency[];
+  setup_requirements?: SetupRequirement[];
 }
 
 // Generate a UUID
@@ -189,6 +215,8 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
     if (args?.due_date !== undefined) feature.due_date = args.due_date as string | null;
     if (args?.tags !== undefined) feature.tags = args.tags as string[];
     if (args?.generated_code !== undefined) feature.generated_code = args.generated_code as GeneratedCode[];
+    if (args?.dependencies !== undefined) feature.dependencies = args.dependencies as Dependency[];
+    if (args?.setup_requirements !== undefined) feature.setup_requirements = args.setup_requirements as SetupRequirement[];
     feature.updated_at = new Date().toISOString();
 
     setStorage(STORAGE_KEYS.features, features);

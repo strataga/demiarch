@@ -484,6 +484,31 @@ export interface GeneratedFeatureCode {
   files: GeneratedFile[];
 }
 
+// Dependency interface for AI response
+export interface AIDependency {
+  name: string;
+  version?: string;
+  type: 'npm' | 'pip' | 'gem' | 'cargo' | 'other';
+  dev?: boolean;
+  reason: string;
+}
+
+// Setup requirement interface for AI response
+export interface AISetupRequirement {
+  step: string;
+  command?: string;
+  description: string;
+  type: 'install' | 'config' | 'env' | 'migration' | 'other';
+}
+
+// Full feature implementation result
+export interface FeatureImplementationResult {
+  files: GeneratedFile[];
+  dependencies: AIDependency[];
+  setup: AISetupRequirement[];
+  error?: string;
+}
+
 /**
  * Generate implementation code for a single feature using AI
  */
@@ -491,13 +516,15 @@ export async function generateSingleFeatureCode(
   feature: { id: string; name: string; description: string | null },
   projectName: string,
   framework: string
-): Promise<{ files: GeneratedFile[]; error?: string }> {
+): Promise<FeatureImplementationResult> {
   const apiKey = localStorage.getItem('openrouter_api_key');
   const model = localStorage.getItem('openrouter_model') || DEFAULT_MODEL;
 
   if (!apiKey) {
     return {
       files: [],
+      dependencies: [],
+      setup: [],
       error: 'API key required for code generation. Add your OpenRouter API key in Settings.',
     };
   }
@@ -514,6 +541,8 @@ Generate the necessary files with:
 4. Tailwind CSS for styling
 5. Proper error handling
 
+IMPORTANT: Also identify any dependencies (npm packages, libraries) needed and any setup steps required.
+
 Respond with ONLY valid JSON in this exact format, no other text:
 {
   "files": [
@@ -521,6 +550,23 @@ Respond with ONLY valid JSON in this exact format, no other text:
       "path": "src/components/FeatureName.tsx",
       "content": "// Full file content here",
       "language": "typescript"
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "package-name",
+      "version": "^1.0.0",
+      "type": "npm",
+      "dev": false,
+      "reason": "Brief explanation of why this is needed"
+    }
+  ],
+  "setup": [
+    {
+      "step": "Install dependencies",
+      "command": "npm install package-name",
+      "description": "Install the required packages",
+      "type": "install"
     }
   ]
 }`;
@@ -551,14 +597,14 @@ Respond with ONLY valid JSON in this exact format, no other text:
       console.error('API error:', response.status, errorData);
 
       if (response.status === 401) {
-        return { files: [], error: 'Invalid API key. Please check your OpenRouter API key.' };
+        return { files: [], dependencies: [], setup: [], error: 'Invalid API key. Please check your OpenRouter API key.' };
       }
 
       if (response.status === 402) {
-        return { files: [], error: 'Insufficient credits. Please add credits to your OpenRouter account.' };
+        return { files: [], dependencies: [], setup: [], error: 'Insufficient credits. Please add credits to your OpenRouter account.' };
       }
 
-      return { files: [], error: `API error: ${response.status}` };
+      return { files: [], dependencies: [], setup: [], error: `API error: ${response.status}` };
     }
 
     const data = await response.json();
@@ -573,15 +619,21 @@ Respond with ONLY valid JSON in this exact format, no other text:
 
     try {
       const parsed = JSON.parse(content);
-      return { files: parsed.files || [] };
+      return {
+        files: parsed.files || [],
+        dependencies: parsed.dependencies || [],
+        setup: parsed.setup || [],
+      };
     } catch (parseError) {
       console.error('Failed to parse AI response:', parseError, content);
-      return { files: [], error: 'Failed to parse AI response. Please try again.' };
+      return { files: [], dependencies: [], setup: [], error: 'Failed to parse AI response. Please try again.' };
     }
   } catch (error) {
     console.error('Code generation failed:', error);
     return {
       files: [],
+      dependencies: [],
+      setup: [],
       error: error instanceof Error ? error.message : 'Failed to connect to AI service.',
     };
   }

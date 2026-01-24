@@ -191,6 +191,9 @@ export function useAutoBuild(
 
       // Log generated files
       const files = result.files || [];
+      const dependencies = result.dependencies || [];
+      const setup = result.setup || [];
+
       for (const file of files) {
         addLog({
           featureId: feature.id,
@@ -201,10 +204,32 @@ export function useAutoBuild(
         });
       }
 
-      // Store generated code on feature (update feature with generated code)
+      // Log dependencies if any
+      if (dependencies.length > 0) {
+        addLog({
+          featureId: feature.id,
+          featureName: feature.name,
+          message: `Dependencies: ${dependencies.map((d) => d.name).join(', ')}`,
+          type: 'info',
+        });
+      }
+
+      // Log setup requirements if any
+      if (setup.length > 0) {
+        addLog({
+          featureId: feature.id,
+          featureName: feature.name,
+          message: `Setup steps: ${setup.length} required`,
+          type: 'info',
+        });
+      }
+
+      // Store generated code, dependencies, and setup on feature
       await invoke('update_feature', {
         id: feature.id,
         generated_code: files,
+        dependencies: dependencies,
+        setup_requirements: setup,
       });
 
       // Phase 2: Write files to disk if configured

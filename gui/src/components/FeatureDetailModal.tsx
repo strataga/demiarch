@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle } from 'lucide-react';
+import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal } from 'lucide-react';
 import { invoke, Feature } from '../lib/api';
 import { useModalShortcuts } from '../hooks/useKeyboardShortcuts';
 
@@ -137,7 +137,7 @@ export default function FeatureDetailModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background-mid border border-background-surface rounded-lg w-full max-w-lg">
+      <div className="bg-background-mid border border-background-surface rounded-lg w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-background-surface">
           <div className="flex items-center gap-3">
@@ -167,7 +167,7 @@ export default function FeatureDetailModal({
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 overflow-y-auto">
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm">
               {error}
@@ -359,6 +359,96 @@ export default function FeatureDetailModal({
                       >
                         {tag}
                       </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Dependencies Section */}
+              {feature.dependencies && feature.dependencies.length > 0 && (
+                <div>
+                  <h4 className="text-sm text-gray-400 mb-2 flex items-center gap-1">
+                    <Package className="w-4 h-4" />
+                    Dependencies ({feature.dependencies.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {feature.dependencies.map((dep, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-2 p-2 bg-background-surface rounded text-sm"
+                      >
+                        <span className="font-mono text-accent-amber">
+                          {dep.name}
+                          {dep.version && <span className="text-gray-500">@{dep.version}</span>}
+                        </span>
+                        {dep.dev && (
+                          <span className="px-1 py-0.5 bg-gray-700 text-gray-400 text-xs rounded">
+                            dev
+                          </span>
+                        )}
+                        <span className="text-gray-400 text-xs ml-auto">{dep.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Setup Requirements Section */}
+              {feature.setup_requirements && feature.setup_requirements.length > 0 && (
+                <div>
+                  <h4 className="text-sm text-gray-400 mb-2 flex items-center gap-1">
+                    <Settings className="w-4 h-4" />
+                    Setup Required ({feature.setup_requirements.length} steps)
+                  </h4>
+                  <div className="space-y-2">
+                    {feature.setup_requirements.map((setup, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2 bg-background-surface rounded text-sm"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium">{idx + 1}. {setup.step}</span>
+                          <span className={`px-1 py-0.5 text-xs rounded ${
+                            setup.type === 'install' ? 'bg-accent-teal/20 text-accent-teal' :
+                            setup.type === 'config' ? 'bg-accent-amber/20 text-accent-amber' :
+                            setup.type === 'env' ? 'bg-accent-magenta/20 text-accent-magenta' :
+                            'bg-gray-700 text-gray-400'
+                          }`}>
+                            {setup.type}
+                          </span>
+                        </div>
+                        <p className="text-gray-400 text-xs">{setup.description}</p>
+                        {setup.command && (
+                          <div className="mt-1 flex items-center gap-1">
+                            <Terminal className="w-3 h-3 text-gray-500" />
+                            <code className="font-mono text-xs text-gray-400 bg-background-deep px-2 py-1 rounded">
+                              {setup.command}
+                            </code>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Generated Files Section */}
+              {feature.generated_code && feature.generated_code.length > 0 && (
+                <div>
+                  <h4 className="text-sm text-gray-400 mb-2 flex items-center gap-1">
+                    <FileCode className="w-4 h-4" />
+                    Generated Files ({feature.generated_code.length})
+                  </h4>
+                  <div className="space-y-1">
+                    {feature.generated_code.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 p-2 bg-background-surface rounded text-sm font-mono"
+                      >
+                        <FileCode className="w-3 h-3 text-gray-500" />
+                        <span className="text-gray-300">{file.path}</span>
+                        <span className="text-xs text-gray-500 ml-auto">{file.language}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
