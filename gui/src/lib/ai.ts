@@ -375,7 +375,16 @@ Respond with ONLY valid JSON in this exact format, no other text:
     }
 
     const data = await response.json();
-    const content = data.choices[0]?.message?.content || '{}';
+    let content = data.choices[0]?.message?.content || '{}';
+
+    // Strip markdown code fences if present
+    content = content.trim();
+    if (content.startsWith('```')) {
+      // Remove opening fence (```json or ```)
+      content = content.replace(/^```(?:json)?\s*\n?/, '');
+      // Remove closing fence
+      content = content.replace(/\n?```\s*$/, '');
+    }
 
     try {
       const parsed = JSON.parse(content);

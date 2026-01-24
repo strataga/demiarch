@@ -106,7 +106,8 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
 
   get_features: (args) => {
     const features = getStorage<Array<{ project_id: string }>>(STORAGE_KEYS.features, []);
-    return features.filter((f) => f.project_id === args?.project_id);
+    const projectId = args?.project_id || args?.projectId;
+    return features.filter((f) => f.project_id === projectId);
   },
 
   get_feature: (args) => {
@@ -132,7 +133,7 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
       name: (args?.name as string) || 'Untitled Feature',
       description: (args?.description as string) || null,
       status: (args?.status as string) || 'pending',
-      priority: (args?.priority as number) || 3,
+      priority: (args?.priority as number) ?? 3,
       project_id: args?.project_id as string,
       phase_id: (args?.phase_id as string) || 'mvp',
       due_date: (args?.due_date as string) || null,
@@ -206,7 +207,7 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
         name: f.name || 'Untitled Feature',
         description: f.description || null,
         status: f.status || 'pending',
-        priority: f.priority || 3,
+        priority: f.priority ?? 3,
         project_id: projectId,
         phase_id: f.phase_id || 'mvp',
         due_date: f.due_date || null,
