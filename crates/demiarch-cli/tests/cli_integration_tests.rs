@@ -21,6 +21,7 @@ fn unique_project_name(base: &str) -> String {
 }
 
 /// Helper to create a command with license bypass enabled
+#[allow(deprecated)]
 fn demiarch_cmd() -> Command {
     let mut cmd = Command::cargo_bin("demiarch").unwrap();
     cmd.env("DEMIARCH_REQUIRE_LICENSE", "0");

@@ -3177,11 +3177,9 @@ async fn cmd_graph(db: &Database, action: GraphAction, quiet: bool) -> anyhow::R
                         desc
                     );
                 }
-                if entities.len() > limit {
-                    if !quiet {
-                        println!();
-                        println!("  ... and {} more", entities.len() - display_count);
-                    }
+                if entities.len() > limit && !quiet {
+                    println!();
+                    println!("  ... and {} more", entities.len() - display_count);
                 }
             }
         }

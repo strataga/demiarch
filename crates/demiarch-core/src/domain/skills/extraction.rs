@@ -458,10 +458,10 @@ mod tests {
     fn test_extract_from_events() {
         let events = create_test_events();
         let extractor = DebugSkillExtractor::new().with_min_occurrences(1);
-        let skills = extractor.extract(Arc::new(events));
+        let _skills = extractor.extract(Arc::new(events));
 
         // Should extract relationship pattern at minimum
-        assert!(!skills.is_empty() || true); // May be empty depending on thresholds
+        // Note: May be empty depending on thresholds, just verify no panic
     }
 
     #[test]

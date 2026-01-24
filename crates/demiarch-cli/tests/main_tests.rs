@@ -6,5 +6,4 @@
 fn test_cli_structs_compile() {
     // This test ensures the CLI module compiles correctly
     // Actual CLI testing is done in cli_integration_tests.rs
-    assert!(true);
 }
