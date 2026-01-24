@@ -65,7 +65,7 @@ export function useAutoBuild(
     ...initialConfig,
   });
   const [state, setState] = useState<AutoBuildState>({
-    enabled: false,
+    enabled: true, // Auto-build enabled by default
     processing: false,
     currentFeatureId: null,
     completedCount: 0,
@@ -73,6 +73,7 @@ export function useAutoBuild(
     logs: [],
     error: null,
   });
+  const hasStartedRef = useRef(false);
 
   // Refs to track latest state in async operations
   const enabledRef = useRef(false);
@@ -98,6 +99,7 @@ export function useAutoBuild(
   useEffect(() => {
     featuresRef.current = features;
   }, [features]);
+
 
   const addLog = useCallback((log: Omit<BuildLog, 'id' | 'timestamp'>) => {
     setState((prev) => ({
@@ -436,6 +438,18 @@ export function useAutoBuild(
       }
     }
   }, [projectName, framework, onFeatureUpdated, addLog]);
+
+  // Auto-start processing on mount if enabled and there are pending features
+  useEffect(() => {
+    if (hasStartedRef.current) return;
+
+    const pendingFeatures = features.filter((f) => f.status === 'pending');
+    if (state.enabled && pendingFeatures.length > 0 && !state.processing) {
+      hasStartedRef.current = true;
+      setState((prev) => ({ ...prev, processing: true }));
+      setTimeout(() => processNextFeature(), 100);
+    }
+  }, [features, state.enabled, state.processing, processNextFeature]);
 
   const toggle = useCallback(() => {
     setState((prev) => {
