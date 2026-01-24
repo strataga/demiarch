@@ -348,6 +348,7 @@ impl DebugSkillExtractor {
 
 /// Context for tracking an error
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct ErrorContext {
     entity_id: String,
     error_description: String,
@@ -356,6 +357,7 @@ struct ErrorContext {
 
 /// A potential solution to an error
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Solution {
     description: String,
     confidence: f32,
