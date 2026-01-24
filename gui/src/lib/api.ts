@@ -62,8 +62,11 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
       id: uuid(),
       name: args?.name || 'Untitled Project',
       framework: args?.framework || 'other',
-      status: 'discovery',
+      status: args?.prd ? 'planning' : 'discovery',
       feature_count: 0,
+      prd: args?.prd || null,
+      description: args?.description || '',
+      created_at: new Date().toISOString(),
     };
     projects.push(newProject);
     setStorage(STORAGE_KEYS.projects, projects);

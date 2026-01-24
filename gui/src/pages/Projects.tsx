@@ -239,6 +239,8 @@ This enables a live AI conversation to help you create a detailed PRD. Get a fre
       const created = await invoke<ProjectSummary>('create_project', {
         name: projectName,
         framework: 'custom',
+        prd: conversationState.prd,
+        description: firstUserMsg?.content || '',
       });
       onProjectCreated(created);
     } catch (err) {
