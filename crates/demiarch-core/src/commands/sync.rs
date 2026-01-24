@@ -12,8 +12,8 @@
 use sqlx::SqlitePool;
 use std::path::Path;
 
-use crate::Result;
 use crate::storage::jsonl;
+use crate::Result;
 
 // Re-export types for convenience
 pub use jsonl::{ExportResult, ImportResult, SyncStatus};

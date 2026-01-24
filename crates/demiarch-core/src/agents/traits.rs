@@ -5,8 +5,8 @@ use std::pin::Pin;
 
 use serde::{Deserialize, Serialize};
 
-use super::AgentType;
 use super::context::AgentContext;
+use super::AgentType;
 use crate::error::Result;
 use crate::llm::Message;
 

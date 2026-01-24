@@ -8,12 +8,12 @@ use std::pin::Pin;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use super::AgentType;
 use super::code_extraction::{extract_code_blocks, language_to_test_extension};
 use super::context::AgentContext;
 use super::message_builder::build_messages_from_input;
 use super::status::StatusTracker;
 use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
+use super::AgentType;
 use crate::error::Result;
 
 /// Type of test generated
@@ -170,7 +170,11 @@ impl TesterAgent {
         let mut result = AgentResult::success(&response.content).with_tokens(response.tokens_used);
 
         for (i, block) in test_blocks.iter().enumerate() {
-            let filename = format!("test-{}.{}", i + 1, language_to_test_extension(&block.language));
+            let filename = format!(
+                "test-{}.{}",
+                i + 1,
+                language_to_test_extension(&block.language)
+            );
             result = result.with_artifact(AgentArtifact::test(&filename, &block.code));
         }
 
@@ -278,19 +282,17 @@ Focus on meaningful tests that catch real bugs."#
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::code_extraction::{extract_code_blocks, language_to_test_extension};
+    use super::*;
 
     #[test]
     fn test_tester_creation() {
         let tester = TesterAgent::new();
         assert_eq!(tester.agent_type(), AgentType::Tester);
         assert_eq!(tester.status(), AgentStatus::Ready);
-        assert!(
-            tester
-                .capabilities()
-                .contains(&AgentCapability::TestGeneration)
-        );
+        assert!(tester
+            .capabilities()
+            .contains(&AgentCapability::TestGeneration));
     }
 
     #[test]

@@ -376,10 +376,7 @@ mod tests {
         }
 
         async fn delete_by_name(&self, name: &str) -> Result<(), KeyError> {
-            let mut keys = self
-                .keys
-                .lock()
-                .expect("mock key repository lock poisoned");
+            let mut keys = self.keys.lock().expect("mock key repository lock poisoned");
             keys.retain(|_, v| v.name != name);
             Ok(())
         }

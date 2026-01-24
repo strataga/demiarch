@@ -54,7 +54,11 @@ pub struct PlanTask {
 
 impl PlanTask {
     /// Create a new task
-    pub fn new(id: impl Into<String>, agent_type: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        agent_type: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         Self {
             id: id.into(),
             agent_type: agent_type.into(),
@@ -101,7 +105,10 @@ impl PlanTask {
     /// Check if this task is ready to execute (all dependencies met)
     pub fn is_ready(&self, completed_tasks: &[String]) -> bool {
         self.status == TaskStatus::Pending
-            && self.depends_on.iter().all(|dep| completed_tasks.contains(dep))
+            && self
+                .depends_on
+                .iter()
+                .all(|dep| completed_tasks.contains(dep))
     }
 
     /// Mark as in progress
@@ -178,17 +185,26 @@ impl ExecutionPlan {
 
     /// Get coding tasks
     pub fn coding_tasks(&self) -> Vec<&PlanTask> {
-        self.tasks.iter().filter(|t| t.is_for_agent("coder")).collect()
+        self.tasks
+            .iter()
+            .filter(|t| t.is_for_agent("coder"))
+            .collect()
     }
 
     /// Get review tasks
     pub fn review_tasks(&self) -> Vec<&PlanTask> {
-        self.tasks.iter().filter(|t| t.is_for_agent("reviewer")).collect()
+        self.tasks
+            .iter()
+            .filter(|t| t.is_for_agent("reviewer"))
+            .collect()
     }
 
     /// Get test tasks
     pub fn test_tasks(&self) -> Vec<&PlanTask> {
-        self.tasks.iter().filter(|t| t.is_for_agent("tester")).collect()
+        self.tasks
+            .iter()
+            .filter(|t| t.is_for_agent("tester"))
+            .collect()
     }
 
     /// Get tasks ready for execution
@@ -200,7 +216,10 @@ impl ExecutionPlan {
             .map(|t| t.id.clone())
             .collect();
 
-        self.tasks.iter().filter(|t| t.is_ready(&completed)).collect()
+        self.tasks
+            .iter()
+            .filter(|t| t.is_ready(&completed))
+            .collect()
     }
 
     /// Get all pending tasks
@@ -213,9 +232,9 @@ impl ExecutionPlan {
 
     /// Check if plan is complete (all tasks done)
     pub fn is_complete(&self) -> bool {
-        self.tasks.iter().all(|t| {
-            t.status == TaskStatus::Completed || t.status == TaskStatus::Skipped
-        })
+        self.tasks
+            .iter()
+            .all(|t| t.status == TaskStatus::Completed || t.status == TaskStatus::Skipped)
     }
 
     /// Check if plan has failed (any task failed)
@@ -259,8 +278,7 @@ mod tests {
 
     #[test]
     fn test_plan_task_is_ready() {
-        let task = PlanTask::review("review-1", "Review")
-            .with_dependency("task-1");
+        let task = PlanTask::review("review-1", "Review").with_dependency("task-1");
 
         assert!(!task.is_ready(&[]));
         assert!(task.is_ready(&["task-1".to_string()]));
@@ -297,8 +315,7 @@ mod tests {
 
     #[test]
     fn test_execution_plan_completion() {
-        let mut plan = ExecutionPlan::new("Feature")
-            .with_task(PlanTask::coding("task-1", "Code"));
+        let mut plan = ExecutionPlan::new("Feature").with_task(PlanTask::coding("task-1", "Code"));
 
         assert!(!plan.is_complete());
         plan.get_task_mut("task-1").unwrap().complete();

@@ -40,8 +40,13 @@ pub use code_extraction::{
 pub use coder::CoderAgent;
 pub use context::{AgentContext, AgentId, AgentPath};
 pub use events::{
-    AgentEvent, AgentEventData, AgentEventReader, AgentEventType, AgentEventWriter, clear_events,
-    read_current_session_events, read_recent_events,
+    clear_events, read_current_session_events, read_recent_events, AgentEvent, AgentEventData,
+    AgentEventReader, AgentEventType, AgentEventWriter,
+};
+pub use message_builder::{
+    build_agent_messages, build_enriched_agent_messages, build_enriched_messages_from_input,
+    build_messages_from_input, build_messages_with_enrichment, EnrichedMessageBuilder,
+    EnrichedMessageConfig,
 };
 pub use orchestrator::OrchestratorAgent;
 pub use planner::PlannerAgent;
@@ -49,11 +54,6 @@ pub use reviewer::ReviewerAgent;
 pub use tester::TesterAgent;
 pub use tool::{AgentTool, AgentToolResult};
 pub use traits::{Agent, AgentCapability, AgentResult, AgentStatus};
-pub use message_builder::{
-    build_agent_messages, build_enriched_agent_messages, build_enriched_messages_from_input,
-    build_messages_from_input, build_messages_with_enrichment, EnrichedMessageBuilder,
-    EnrichedMessageConfig,
-};
 
 use serde::{Deserialize, Serialize};
 

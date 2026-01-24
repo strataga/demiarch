@@ -120,7 +120,8 @@ impl CodeGenerator {
             Err(e) => {
                 // Emit failed events for both agents
                 self.event_writer.emit_failed(&coder_id, &e.to_string());
-                self.event_writer.emit_failed(&orchestrator_id, &e.to_string());
+                self.event_writer
+                    .emit_failed(&orchestrator_id, &e.to_string());
                 return Err(e);
             }
         };
@@ -135,7 +136,8 @@ impl CodeGenerator {
             Ok(f) => f,
             Err(e) => {
                 self.event_writer.emit_failed(&coder_id, &e.to_string());
-                self.event_writer.emit_failed(&orchestrator_id, &e.to_string());
+                self.event_writer
+                    .emit_failed(&orchestrator_id, &e.to_string());
                 return Err(e);
             }
         };
@@ -162,7 +164,8 @@ impl CodeGenerator {
         if !dry_run {
             if let Err(e) = self.write_files(&result.files) {
                 self.event_writer.emit_failed(&coder_id, &e.to_string());
-                self.event_writer.emit_failed(&orchestrator_id, &e.to_string());
+                self.event_writer
+                    .emit_failed(&orchestrator_id, &e.to_string());
                 return Err(e);
             }
         } else {

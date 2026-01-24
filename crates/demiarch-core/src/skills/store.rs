@@ -1050,18 +1050,14 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(
-            store
-                .has_valid_embedding(&id, model, "correct_hash")
-                .await
-                .unwrap()
-        );
-        assert!(
-            !store
-                .has_valid_embedding(&id, model, "wrong_hash")
-                .await
-                .unwrap()
-        );
+        assert!(store
+            .has_valid_embedding(&id, model, "correct_hash")
+            .await
+            .unwrap());
+        assert!(!store
+            .has_valid_embedding(&id, model, "wrong_hash")
+            .await
+            .unwrap());
     }
 
     #[tokio::test]

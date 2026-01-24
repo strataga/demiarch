@@ -1,6 +1,6 @@
 //! Configuration management with file persistence
 
-use anyhow::{Context, anyhow};
+use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;

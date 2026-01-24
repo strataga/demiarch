@@ -74,11 +74,7 @@ impl SecurityEvent {
     /// Create a key stored event
     ///
     /// Note: Never log the actual key value!
-    pub fn key_stored(
-        key_id: Uuid,
-        key_name: &str,
-        algorithm: &str,
-    ) -> Self {
+    pub fn key_stored(key_id: Uuid, key_name: &str, algorithm: &str) -> Self {
         let data = serde_json::json!({
             "key_name": key_name,
             "algorithm": algorithm,
@@ -87,11 +83,7 @@ impl SecurityEvent {
     }
 
     /// Create a key retrieved event
-    pub fn key_retrieved(
-        key_id: Uuid,
-        key_name: &str,
-        requester: Option<&str>,
-    ) -> Self {
+    pub fn key_retrieved(key_id: Uuid, key_name: &str, requester: Option<&str>) -> Self {
         let data = serde_json::json!({
             "key_name": key_name,
             "requester": requester,
@@ -100,11 +92,7 @@ impl SecurityEvent {
     }
 
     /// Create a key rotated event
-    pub fn key_rotated(
-        key_id: Uuid,
-        key_name: &str,
-        reason: &str,
-    ) -> Self {
+    pub fn key_rotated(key_id: Uuid, key_name: &str, reason: &str) -> Self {
         let data = serde_json::json!({
             "key_name": key_name,
             "reason": reason,
@@ -113,11 +101,7 @@ impl SecurityEvent {
     }
 
     /// Create a decryption failed event
-    pub fn decryption_failed(
-        key_id: Uuid,
-        key_name: &str,
-        error_code: &str,
-    ) -> Self {
+    pub fn decryption_failed(key_id: Uuid, key_name: &str, error_code: &str) -> Self {
         let data = serde_json::json!({
             "key_name": key_name,
             "error_code": error_code,

@@ -131,15 +131,10 @@ pub async fn explore_entity(
     };
 
     // Get neighborhood
-    let relationship_types: Option<Vec<RelationshipType>> =
-        relationship_filter.map(|t| vec![t]);
+    let relationship_types: Option<Vec<RelationshipType>> = relationship_filter.map(|t| vec![t]);
 
     let neighbors = repo
-        .get_neighborhood(
-            &root_entity.id,
-            max_depth,
-            relationship_types.as_deref(),
-        )
+        .get_neighborhood(&root_entity.id, max_depth, relationship_types.as_deref())
         .await?;
 
     // Gather relationships between root and neighbors
@@ -289,7 +284,10 @@ pub fn format_explore_tree(result: &ExploreResult, max_depth: u32) -> String {
     // Group neighbors by depth
     let mut by_depth: HashMap<u32, Vec<&EntityWithDistance>> = HashMap::new();
     for neighbor in &result.neighbors {
-        by_depth.entry(neighbor.distance).or_default().push(neighbor);
+        by_depth
+            .entry(neighbor.distance)
+            .or_default()
+            .push(neighbor);
     }
 
     for depth in 1..=max_depth {
@@ -322,7 +320,10 @@ pub fn format_explore_list(result: &ExploreResult) -> String {
     let mut output = String::new();
 
     output.push_str(&format!("Entity: {}\n", result.root_entity.name));
-    output.push_str(&format!("Type: {}\n", result.root_entity.entity_type.as_str()));
+    output.push_str(&format!(
+        "Type: {}\n",
+        result.root_entity.entity_type.as_str()
+    ));
     if let Some(desc) = &result.root_entity.description {
         output.push_str(&format!("Description: {}\n", desc));
     }

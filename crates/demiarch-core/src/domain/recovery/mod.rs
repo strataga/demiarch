@@ -61,18 +61,18 @@ pub use checkpoint::{
     PhaseSnapshot, SnapshotData,
 };
 pub use edit_detection::{
-    EditCheckResult, EditDetectionService, EditDetectionSummary, TrackedFile,
-    TrackedFileRepository, compute_content_hash as compute_file_hash,
+    compute_content_hash as compute_file_hash, EditCheckResult, EditDetectionService,
+    EditDetectionSummary, TrackedFile, TrackedFileRepository,
 };
+pub use event::{RecoveryEvent, RecoveryEventType};
 pub use manager::{
-    CheckpointConfig, CheckpointManager, CheckpointStats, DEFAULT_MAX_PER_PROJECT,
-    DEFAULT_RETENTION_DAYS, compute_content_hash,
+    compute_content_hash, CheckpointConfig, CheckpointManager, CheckpointStats,
+    DEFAULT_MAX_PER_PROJECT, DEFAULT_RETENTION_DAYS,
 };
 pub use repository::CheckpointRepository;
 pub use repository_trait::{CheckpointRepositoryTrait, FeatureRow, MessageRow, PhaseRow};
-pub use restore::{RestoreError, RestoreResult, restore_checkpoint};
+pub use restore::{restore_checkpoint, RestoreError, RestoreResult};
 pub use signing::{
-    CheckpointSigner, CheckpointVerifier, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE, SIGNATURE_SIZE,
-    SigningError,
+    CheckpointSigner, CheckpointVerifier, SigningError, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE,
+    SIGNATURE_SIZE,
 };
-pub use event::{RecoveryEvent, RecoveryEventType};

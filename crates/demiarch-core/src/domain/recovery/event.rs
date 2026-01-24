@@ -83,7 +83,11 @@ impl RecoveryEvent {
             "file_count": file_count,
             "total_size_bytes": total_size_bytes,
         });
-        Self::new(checkpoint_id, RecoveryEventType::CheckpointCreated, Some(data))
+        Self::new(
+            checkpoint_id,
+            RecoveryEventType::CheckpointCreated,
+            Some(data),
+        )
     }
 
     /// Create a checkpoint restored event
@@ -96,15 +100,15 @@ impl RecoveryEvent {
             "session_id": session_id,
             "files_restored": files_restored,
         });
-        Self::new(checkpoint_id, RecoveryEventType::CheckpointRestored, Some(data))
+        Self::new(
+            checkpoint_id,
+            RecoveryEventType::CheckpointRestored,
+            Some(data),
+        )
     }
 
     /// Create an edit detected event
-    pub fn edit_detected(
-        session_id: Uuid,
-        file_path: &str,
-        edit_type: &str,
-    ) -> Self {
+    pub fn edit_detected(session_id: Uuid, file_path: &str, edit_type: &str) -> Self {
         let data = serde_json::json!({
             "file_path": file_path,
             "edit_type": edit_type,
@@ -113,16 +117,16 @@ impl RecoveryEvent {
     }
 
     /// Create a checkpoint expired event
-    pub fn checkpoint_expired(
-        checkpoint_id: Uuid,
-        age_seconds: u64,
-        reason: &str,
-    ) -> Self {
+    pub fn checkpoint_expired(checkpoint_id: Uuid, age_seconds: u64, reason: &str) -> Self {
         let data = serde_json::json!({
             "age_seconds": age_seconds,
             "reason": reason,
         });
-        Self::new(checkpoint_id, RecoveryEventType::CheckpointExpired, Some(data))
+        Self::new(
+            checkpoint_id,
+            RecoveryEventType::CheckpointExpired,
+            Some(data),
+        )
     }
 }
 

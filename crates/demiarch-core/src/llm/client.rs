@@ -16,7 +16,7 @@ use crate::config::LlmConfig;
 use crate::cost::{CostTracker, TokenUsage};
 use crate::error::{Error, Result};
 
-use super::streaming::{StreamEvent, parse_sse_line};
+use super::streaming::{parse_sse_line, StreamEvent};
 use super::types::{ChatRequest, ChatResponse, LlmResponse, Message};
 
 /// OpenRouter API base URL

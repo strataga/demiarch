@@ -45,8 +45,8 @@ pub mod security {
         SecureString,
     };
     pub use crate::infrastructure::security::{
-        CREATE_ENCRYPTED_KEYS_TABLE_SQL, InMemoryKeyRepository, InMemoryMasterKeyRepository,
-        KeyringMasterKeyRepository, SqliteKeyRepository,
+        InMemoryKeyRepository, InMemoryMasterKeyRepository, KeyringMasterKeyRepository,
+        SqliteKeyRepository, CREATE_ENCRYPTED_KEYS_TABLE_SQL,
     };
 }
 

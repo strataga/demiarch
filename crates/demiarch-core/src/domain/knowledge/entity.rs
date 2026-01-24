@@ -93,7 +93,11 @@ impl KnowledgeEntity {
     /// Add an alias
     pub fn add_alias(&mut self, alias: String) {
         let canonical_alias = Self::canonicalize(&alias);
-        if !self.aliases.iter().any(|a| Self::canonicalize(a) == canonical_alias) {
+        if !self
+            .aliases
+            .iter()
+            .any(|a| Self::canonicalize(a) == canonical_alias)
+        {
             self.aliases.push(alias);
             self.updated_at = Utc::now();
         }
@@ -238,10 +242,7 @@ mod tests {
     #[test]
     fn test_canonicalization() {
         assert_eq!(KnowledgeEntity::canonicalize("Tokio"), "tokio");
-        assert_eq!(
-            KnowledgeEntity::canonicalize("async-std"),
-            "asyncstd"
-        );
+        assert_eq!(KnowledgeEntity::canonicalize("async-std"), "asyncstd");
         assert_eq!(
             KnowledgeEntity::canonicalize("Error Handling"),
             "error handling"

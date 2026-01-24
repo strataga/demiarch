@@ -10,7 +10,6 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use super::AgentType;
 use super::coder::CoderAgent;
 use super::context::{AgentContext, SharedAgentState};
 use super::orchestrator::OrchestratorAgent;
@@ -18,6 +17,7 @@ use super::planner::PlannerAgent;
 use super::reviewer::ReviewerAgent;
 use super::tester::TesterAgent;
 use super::traits::{Agent, AgentInput, AgentResult};
+use super::AgentType;
 use crate::error::{Error, Result};
 use crate::llm::LlmClient;
 use crate::skills::{ExtractionContext, LearnedSkill, SkillExtractor};

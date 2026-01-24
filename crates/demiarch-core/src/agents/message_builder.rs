@@ -78,10 +78,7 @@ pub fn build_enriched_agent_messages(
     // Build enriched system prompt if context is available
     let final_system_prompt = if let Some(enriched) = enriched_context {
         if !enriched.formatted_context.is_empty() {
-            format!(
-                "{}\n\n{}",
-                system_prompt, enriched.formatted_context
-            )
+            format!("{}\n\n{}", system_prompt, enriched.formatted_context)
         } else {
             system_prompt.to_string()
         }
@@ -297,7 +294,9 @@ impl<'a, R: KnowledgeGraphRepository> EnrichedMessageBuilder<'a, R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::knowledge::{EntityContext, EnrichedContext, EnrichmentStats, KnowledgeEntity, EntityType};
+    use crate::domain::knowledge::{
+        EnrichedContext, EnrichmentStats, EntityContext, EntityType, KnowledgeEntity,
+    };
 
     #[test]
     fn test_build_agent_messages() {
@@ -317,12 +316,7 @@ mod tests {
 
     #[test]
     fn test_build_agent_messages_empty_context() {
-        let messages = build_agent_messages(
-            "System prompt",
-            &[],
-            &[],
-            "Task",
-        );
+        let messages = build_agent_messages("System prompt", &[], &[], "Task");
 
         assert_eq!(messages.len(), 2);
     }
@@ -338,7 +332,9 @@ mod tests {
                 related_skills: vec!["skill-1".into()],
             }],
             relationships: vec![],
-            formatted_context: "## Related Knowledge\n\n### Libraries\n- **tokio**: Async runtime for Rust\n".into(),
+            formatted_context:
+                "## Related Knowledge\n\n### Libraries\n- **tokio**: Async runtime for Rust\n"
+                    .into(),
             matched_terms: vec!["tokio".into()],
             stats: EnrichmentStats::default(),
         };

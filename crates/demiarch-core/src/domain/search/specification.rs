@@ -16,7 +16,9 @@ pub struct PrivacyAllowedSpec {
 impl PrivacyAllowedSpec {
     /// Create a new privacy specification with allowed project IDs
     pub fn new(allowed_project_ids: Vec<Uuid>) -> Self {
-        Self { allowed_project_ids }
+        Self {
+            allowed_project_ids,
+        }
     }
 
     /// Create a spec that allows all projects

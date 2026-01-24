@@ -204,7 +204,11 @@ mod tests {
     #[test]
     fn test_stored_event_creation() {
         let aggregate_id = Uuid::new_v4();
-        let event = StoredEvent::new(aggregate_id, "test_event", Some(serde_json::json!({"key": "value"})));
+        let event = StoredEvent::new(
+            aggregate_id,
+            "test_event",
+            Some(serde_json::json!({"key": "value"})),
+        );
 
         assert_eq!(event.aggregate_id, aggregate_id);
         assert_eq!(event.event_type, "test_event");

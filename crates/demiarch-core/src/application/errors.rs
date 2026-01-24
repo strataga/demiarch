@@ -14,9 +14,17 @@ pub enum ApplicationError {
     /// Entity not found
     NotFound { entity: String, id: String },
     /// Duplicate entity
-    Duplicate { entity: String, field: String, value: String },
+    Duplicate {
+        entity: String,
+        field: String,
+        value: String,
+    },
     /// Operation not allowed in current state
-    InvalidState { entity: String, current: String, operation: String },
+    InvalidState {
+        entity: String,
+        current: String,
+        operation: String,
+    },
     /// Authorization error
     Unauthorized { resource: String, action: String },
     /// Domain error wrapper
@@ -96,15 +104,19 @@ impl fmt::Display for ApplicationError {
             Self::NotFound { entity, id } => {
                 write!(f, "{} with id '{}' not found", entity, id)
             }
-            Self::Duplicate { entity, field, value } => {
+            Self::Duplicate {
+                entity,
+                field,
+                value,
+            } => {
                 write!(f, "{} with {} '{}' already exists", entity, field, value)
             }
-            Self::InvalidState { entity, current, operation } => {
-                write!(
-                    f,
-                    "Cannot {} {} in '{}' state",
-                    operation, entity, current
-                )
+            Self::InvalidState {
+                entity,
+                current,
+                operation,
+            } => {
+                write!(f, "Cannot {} {} in '{}' state", operation, entity, current)
             }
             Self::Unauthorized { resource, action } => {
                 write!(f, "Not authorized to {} {}", action, resource)

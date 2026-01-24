@@ -80,7 +80,11 @@ impl SearchEvent {
             "project_count": project_count,
             "result_count": result_count,
         });
-        Self::new(search_id, SearchEventType::CrossProjectSearchExecuted, Some(data))
+        Self::new(
+            search_id,
+            SearchEventType::CrossProjectSearchExecuted,
+            Some(data),
+        )
     }
 
     /// Create a search settings changed event
@@ -95,15 +99,15 @@ impl SearchEvent {
             "old_value": old_value,
             "new_value": new_value,
         });
-        Self::new(settings_id, SearchEventType::SearchSettingsChanged, Some(data))
+        Self::new(
+            settings_id,
+            SearchEventType::SearchSettingsChanged,
+            Some(data),
+        )
     }
 
     /// Create a search access denied event
-    pub fn access_denied(
-        user_id: Uuid,
-        resource_id: Uuid,
-        reason: &str,
-    ) -> Self {
+    pub fn access_denied(user_id: Uuid, resource_id: Uuid, reason: &str) -> Self {
         let data = serde_json::json!({
             "resource_id": resource_id,
             "reason": reason,
@@ -140,7 +144,10 @@ mod tests {
         let event = SearchEvent::cross_project_search_executed(search_id, "test query", 5, 42);
 
         assert_eq!(event.aggregate_id, search_id);
-        assert_eq!(event.event_type, SearchEventType::CrossProjectSearchExecuted);
+        assert_eq!(
+            event.event_type,
+            SearchEventType::CrossProjectSearchExecuted
+        );
         assert!(event.data.is_some());
 
         let data = event.data.unwrap();

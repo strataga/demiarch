@@ -130,7 +130,8 @@ mod tests {
     #[test]
     fn test_parse_heuristic() {
         let parser = PlanParser::new();
-        let text_response = "I will implement the user login feature by creating the necessary components.";
+        let text_response =
+            "I will implement the user login feature by creating the necessary components.";
 
         let plan = parser.parse("Login feature", text_response);
         assert!(!plan.tasks.is_empty());

@@ -15,8 +15,8 @@ use crate::error::Result;
 use crate::skills::{LearnedSkill, SkillStore};
 
 use super::entity::KnowledgeEntity;
-use super::repository::KnowledgeGraphRepository;
 use super::relationship::RelationshipType;
+use super::repository::KnowledgeGraphRepository;
 
 /// Configuration for hybrid ranking weights
 #[derive(Debug, Clone)]
@@ -253,7 +253,9 @@ impl<R: KnowledgeGraphRepository> HybridRanker<R> {
         let entity_matches = self.get_entity_matches(query).await?;
 
         // Step 3: Build skill-to-entity relevance map
-        let skill_entity_map = self.build_skill_entity_map(&candidate_skills, &entity_matches).await?;
+        let skill_entity_map = self
+            .build_skill_entity_map(&candidate_skills, &entity_matches)
+            .await?;
 
         // Step 4: Score each candidate
         let mut results = Vec::new();
@@ -266,17 +268,18 @@ impl<R: KnowledgeGraphRepository> HybridRanker<R> {
             let combined_score = score_breakdown.combined(config);
 
             // Apply hop penalty if graph distance is known
-            let (final_score, graph_distance) = if let Some(entities) = skill_entity_map.get(&skill.id) {
-                let min_distance = entities
-                    .iter()
-                    .filter_map(|(_, dist)| *dist)
-                    .min()
-                    .unwrap_or(0);
-                let hop_penalty = config.hop_decay.powi(min_distance as i32);
-                (combined_score * hop_penalty, Some(min_distance))
-            } else {
-                (combined_score, None)
-            };
+            let (final_score, graph_distance) =
+                if let Some(entities) = skill_entity_map.get(&skill.id) {
+                    let min_distance = entities
+                        .iter()
+                        .filter_map(|(_, dist)| *dist)
+                        .min()
+                        .unwrap_or(0);
+                    let hop_penalty = config.hop_decay.powi(min_distance as i32);
+                    (combined_score * hop_penalty, Some(min_distance))
+                } else {
+                    (combined_score, None)
+                };
 
             if final_score >= query.min_score {
                 // Get related entities for this skill
@@ -295,7 +298,11 @@ impl<R: KnowledgeGraphRepository> HybridRanker<R> {
         }
 
         // Step 5: Sort by score and limit
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(query.limit);
 
         debug!(
@@ -429,7 +436,9 @@ impl<R: KnowledgeGraphRepository> HybridRanker<R> {
                 } else {
                     // Check if entity is connected to a match
                     for match_id in entity_matches.keys() {
-                        if let Some(path) = self.repository.find_path(&entity.id, match_id, 2).await? {
+                        if let Some(path) =
+                            self.repository.find_path(&entity.id, match_id, 2).await?
+                        {
                             skill_entities.push((entity.id.clone(), Some((path.len() - 1) as u32)));
                             break;
                         }
@@ -462,12 +471,9 @@ impl<R: KnowledgeGraphRepository> HybridRanker<R> {
 
         // Embedding score: if we have embeddings, compute similarity
         if let (Some(query_embedding), Some(model)) = (&query.embedding, &query.embedding_model) {
-            if let Some(embedding) = self
-                .skill_store
-                .get_embedding(&skill.id, model)
-                .await?
-            {
-                breakdown.embedding_score = cosine_similarity(query_embedding, &embedding.embedding);
+            if let Some(embedding) = self.skill_store.get_embedding(&skill.id, model).await? {
+                breakdown.embedding_score =
+                    cosine_similarity(query_embedding, &embedding.embedding);
             }
         }
 
@@ -565,8 +571,16 @@ mod tests {
     #[test]
     fn test_hybrid_ranking_config() {
         let config = HybridRankingConfig::default();
-        assert!((config.text_weight + config.embedding_weight + config.graph_weight
-            + config.usage_weight + config.confidence_weight - 1.0).abs() < 0.01);
+        assert!(
+            (config.text_weight
+                + config.embedding_weight
+                + config.graph_weight
+                + config.usage_weight
+                + config.confidence_weight
+                - 1.0)
+                .abs()
+                < 0.01
+        );
     }
 
     #[test]

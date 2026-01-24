@@ -99,8 +99,7 @@ async fn check_database() -> HealthCheck {
 
 /// Check config file
 async fn check_config() -> HealthCheck {
-    let config_path = dirs::config_dir()
-        .map(|p| p.join("demiarch").join("config.toml"));
+    let config_path = dirs::config_dir().map(|p| p.join("demiarch").join("config.toml"));
 
     match config_path {
         Some(path) if path.exists() => HealthCheck {
@@ -123,8 +122,7 @@ async fn check_config() -> HealthCheck {
 
 /// Check data directory
 async fn check_data_directory() -> HealthCheck {
-    let data_path = dirs::data_dir()
-        .map(|p| p.join("demiarch"));
+    let data_path = dirs::data_dir().map(|p| p.join("demiarch"));
 
     match data_path {
         Some(path) => {
@@ -150,7 +148,10 @@ async fn check_data_directory() -> HealthCheck {
                 HealthCheck {
                     name: "Data Directory".to_string(),
                     status: HealthStatus::Warning,
-                    message: Some(format!("Does not exist at {} (will be created)", path.display())),
+                    message: Some(format!(
+                        "Does not exist at {} (will be created)",
+                        path.display()
+                    )),
                 }
             }
         }
@@ -179,7 +180,6 @@ pub fn get_system_info() -> SystemInfo {
             .map(|p| p.join("demiarch").join("demiarch.db").display().to_string()),
         config_path: dirs::config_dir()
             .map(|p| p.join("demiarch").join("config.toml").display().to_string()),
-        data_path: dirs::data_dir()
-            .map(|p| p.join("demiarch").display().to_string()),
+        data_path: dirs::data_dir().map(|p| p.join("demiarch").display().to_string()),
     }
 }

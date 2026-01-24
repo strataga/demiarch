@@ -452,10 +452,7 @@ mod tests {
     fn test_image_style_from_str() {
         assert_eq!(ImageStyle::parse("vivid"), Some(ImageStyle::Vivid));
         assert_eq!(ImageStyle::parse("natural"), Some(ImageStyle::Natural));
-        assert_eq!(
-            ImageStyle::parse("photo"),
-            Some(ImageStyle::Photorealistic)
-        );
+        assert_eq!(ImageStyle::parse("photo"), Some(ImageStyle::Photorealistic));
         assert_eq!(ImageStyle::parse("art"), Some(ImageStyle::Artistic));
         assert_eq!(ImageStyle::parse("invalid"), None);
     }
@@ -499,10 +496,12 @@ mod tests {
 
     #[test]
     fn test_transform_request_strength_clamping() {
-        let request = TransformRequest::new(PathBuf::from("test.png"), "transform").with_strength(2.0);
+        let request =
+            TransformRequest::new(PathBuf::from("test.png"), "transform").with_strength(2.0);
         assert_eq!(request.strength, 1.0);
 
-        let request = TransformRequest::new(PathBuf::from("test.png"), "transform").with_strength(-0.5);
+        let request =
+            TransformRequest::new(PathBuf::from("test.png"), "transform").with_strength(-0.5);
         assert_eq!(request.strength, 0.0);
     }
 }

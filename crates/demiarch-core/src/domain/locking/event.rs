@@ -72,11 +72,7 @@ impl LockEvent {
     }
 
     /// Create a lock acquired event
-    pub fn lock_acquired(
-        resource_id: Uuid,
-        holder_id: &str,
-        resource_type: &str,
-    ) -> Self {
+    pub fn lock_acquired(resource_id: Uuid, holder_id: &str, resource_type: &str) -> Self {
         let data = serde_json::json!({
             "holder_id": holder_id,
             "resource_type": resource_type,
@@ -85,11 +81,7 @@ impl LockEvent {
     }
 
     /// Create a lock released event
-    pub fn lock_released(
-        resource_id: Uuid,
-        holder_id: &str,
-        duration_ms: u64,
-    ) -> Self {
+    pub fn lock_released(resource_id: Uuid, holder_id: &str, duration_ms: u64) -> Self {
         let data = serde_json::json!({
             "holder_id": holder_id,
             "duration_ms": duration_ms,
@@ -98,11 +90,7 @@ impl LockEvent {
     }
 
     /// Create a lock contention event
-    pub fn lock_contention(
-        resource_id: Uuid,
-        current_holder: &str,
-        blocked_holder: &str,
-    ) -> Self {
+    pub fn lock_contention(resource_id: Uuid, current_holder: &str, blocked_holder: &str) -> Self {
         let data = serde_json::json!({
             "current_holder": current_holder,
             "blocked_holder": blocked_holder,
@@ -111,11 +99,7 @@ impl LockEvent {
     }
 
     /// Create a stale lock detected event
-    pub fn stale_lock_detected(
-        resource_id: Uuid,
-        stale_holder: &str,
-        age_seconds: u64,
-    ) -> Self {
+    pub fn stale_lock_detected(resource_id: Uuid, stale_holder: &str, age_seconds: u64) -> Self {
         let data = serde_json::json!({
             "stale_holder": stale_holder,
             "age_seconds": age_seconds,

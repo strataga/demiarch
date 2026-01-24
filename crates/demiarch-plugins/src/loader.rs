@@ -1,8 +1,8 @@
 //! Plugin loading and discovery
 
 use crate::{
+    license::{verify_license, License},
     PluginError, PluginManifest, PluginResult,
-    license::{License, verify_license},
 };
 use std::{
     fs,

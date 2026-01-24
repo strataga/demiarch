@@ -2,8 +2,8 @@
 //!
 //! Provides CRUD operations for demiarch projects.
 
-use crate::Result;
 use crate::storage::Database;
+use crate::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -349,7 +349,10 @@ pub async fn create_with_path(
 }
 
 /// Find a project by checking if the given directory matches any project path
-pub async fn find_by_directory(db: &Database, directory: &std::path::Path) -> Result<Option<Project>> {
+pub async fn find_by_directory(
+    db: &Database,
+    directory: &std::path::Path,
+) -> Result<Option<Project>> {
     let repo = ProjectRepository::new(db);
     let projects = repo.list(None).await?;
 
@@ -745,7 +748,10 @@ mod tests {
             .await
             .expect("Failed to search");
 
-        assert!(found.is_none(), "Should not find project in unrelated directory");
+        assert!(
+            found.is_none(),
+            "Should not find project in unrelated directory"
+        );
     }
 
     #[tokio::test]
@@ -779,8 +785,8 @@ mod tests {
             .expect("Failed to create database");
         let repo = ProjectRepository::new(&db);
 
-        let project = Project::new("test-project", "rust", "")
-            .with_path("/home/user/projects/test");
+        let project =
+            Project::new("test-project", "rust", "").with_path("/home/user/projects/test");
         repo.create(&project).await.unwrap();
 
         let retrieved = repo
@@ -801,9 +807,6 @@ mod tests {
 
         assert_eq!(project.name, "my-app");
         assert_eq!(project.path, Some("/home/user/projects/my-app".to_string()));
-        assert_eq!(
-            project.description,
-            Some("A test application".to_string())
-        );
+        assert_eq!(project.description, Some("A test application".to_string()));
     }
 }

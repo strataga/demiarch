@@ -84,12 +84,11 @@ impl SkillsEntity {
             truncate(&sol, 200)
         );
 
-        Self::new(name, description, SkillType::ErrorSolution, sol)
-            .with_context(SkillContext {
-                error_pattern: Some(error),
-                description: Some(context_description.into()),
-                ..Default::default()
-            })
+        Self::new(name, description, SkillType::ErrorSolution, sol).with_context(SkillContext {
+            error_pattern: Some(error),
+            description: Some(context_description.into()),
+            ..Default::default()
+        })
     }
 
     /// Create a skill from a repeated technique
@@ -191,8 +190,13 @@ impl SkillsEntity {
         self.name.to_lowercase().contains(&query_lower)
             || self.description.to_lowercase().contains(&query_lower)
             || self.pattern.to_lowercase().contains(&query_lower)
-            || self.tags.iter().any(|t| t.to_lowercase().contains(&query_lower))
-            || self.context.error_pattern
+            || self
+                .tags
+                .iter()
+                .any(|t| t.to_lowercase().contains(&query_lower))
+            || self
+                .context
+                .error_pattern
                 .as_ref()
                 .map(|e| e.to_lowercase().contains(&query_lower))
                 .unwrap_or(false)
@@ -361,23 +365,13 @@ mod tests {
 
     #[test]
     fn test_merge_observations() {
-        let mut skill1 = SkillsEntity::new(
-            "Skill",
-            "Description",
-            SkillType::Technique,
-            "Pattern",
-        )
-        .with_tags(vec!["tag1".into()]);
+        let mut skill1 = SkillsEntity::new("Skill", "Description", SkillType::Technique, "Pattern")
+            .with_tags(vec!["tag1".into()]);
         skill1.success_rate = 0.8;
         skill1.observation_count = 5;
 
-        let mut skill2 = SkillsEntity::new(
-            "Skill",
-            "Description",
-            SkillType::Technique,
-            "Pattern",
-        )
-        .with_tags(vec!["tag2".into()]);
+        let mut skill2 = SkillsEntity::new("Skill", "Description", SkillType::Technique, "Pattern")
+            .with_tags(vec!["tag2".into()]);
         skill2.success_rate = 0.6;
         skill2.observation_count = 3;
 
@@ -391,12 +385,7 @@ mod tests {
 
     #[test]
     fn test_reliability() {
-        let mut skill = SkillsEntity::new(
-            "Skill",
-            "Description",
-            SkillType::Technique,
-            "Pattern",
-        );
+        let mut skill = SkillsEntity::new("Skill", "Description", SkillType::Technique, "Pattern");
 
         skill.success_rate = 0.8;
         skill.observation_count = 5;

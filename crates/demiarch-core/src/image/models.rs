@@ -152,7 +152,11 @@ impl ImageModel {
 
 /// Get fallback model IDs in order of preference
 pub fn fallback_model_ids() -> &'static [&'static str] {
-    &["nano-banana-pro", "openai/dall-e-3", "stabilityai/stable-diffusion-xl"]
+    &[
+        "nano-banana-pro",
+        "openai/dall-e-3",
+        "stabilityai/stable-diffusion-xl",
+    ]
 }
 
 #[cfg(test)]
@@ -177,8 +181,7 @@ mod tests {
 
     #[test]
     fn test_capability_filter() {
-        let inpainting_models: Vec<_> =
-            ImageModel::with_capability(|c| c.inpainting).collect();
+        let inpainting_models: Vec<_> = ImageModel::with_capability(|c| c.inpainting).collect();
         assert!(!inpainting_models.is_empty());
         for model in inpainting_models {
             assert!(model.supports_inpainting());

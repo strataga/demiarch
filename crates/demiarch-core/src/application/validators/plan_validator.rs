@@ -49,7 +49,10 @@ impl PlanValidator {
     /// - Must be 50 characters or less
     pub fn validate_task_id(task_id: &str) -> AppResult<()> {
         if task_id.is_empty() {
-            return Err(ApplicationError::validation("task_id", "Task ID cannot be empty"));
+            return Err(ApplicationError::validation(
+                "task_id",
+                "Task ID cannot be empty",
+            ));
         }
 
         if task_id.len() > 50 {
@@ -171,7 +174,9 @@ mod tests {
 
     #[test]
     fn test_validate_description_valid() {
-        assert!(PlanValidator::validate_description("Implement user authentication feature").is_ok());
+        assert!(
+            PlanValidator::validate_description("Implement user authentication feature").is_ok()
+        );
     }
 
     #[test]
@@ -226,12 +231,12 @@ mod tests {
         assert!(PlanValidator::validate_no_self_dependency(
             "task-1",
             &["task-2".to_string(), "task-3".to_string()]
-        ).is_ok());
+        )
+        .is_ok());
 
-        assert!(PlanValidator::validate_no_self_dependency(
-            "task-1",
-            &["task-1".to_string()]
-        ).is_err());
+        assert!(
+            PlanValidator::validate_no_self_dependency("task-1", &["task-1".to_string()]).is_err()
+        );
     }
 
     #[test]

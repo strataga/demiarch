@@ -40,8 +40,8 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use crate::Result;
 use crate::error::Error;
+use crate::Result;
 
 /// Default sync directory name within project
 pub const SYNC_DIR: &str = ".demiarch/sync";

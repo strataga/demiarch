@@ -355,7 +355,9 @@ mod tests {
 
         assert!(repo.exists(&conversation.id).await.unwrap());
 
-        repo.delete(&conversation.id).await.expect("Failed to delete");
+        repo.delete(&conversation.id)
+            .await
+            .expect("Failed to delete");
 
         assert!(!repo.exists(&conversation.id).await.unwrap());
     }
@@ -506,7 +508,10 @@ mod tests {
         conv_repo.create(&conversation).await.unwrap();
 
         assert_eq!(
-            msg_repo.count_by_conversation(&conversation.id).await.unwrap(),
+            msg_repo
+                .count_by_conversation(&conversation.id)
+                .await
+                .unwrap(),
             0
         );
 
@@ -516,7 +521,10 @@ mod tests {
         }
 
         assert_eq!(
-            msg_repo.count_by_conversation(&conversation.id).await.unwrap(),
+            msg_repo
+                .count_by_conversation(&conversation.id)
+                .await
+                .unwrap(),
             5
         );
     }
@@ -536,7 +544,10 @@ mod tests {
 
         assert!(msg_repo.get(&message.id).await.unwrap().is_some());
 
-        msg_repo.delete(&message.id).await.expect("Failed to delete");
+        msg_repo
+            .delete(&message.id)
+            .await
+            .expect("Failed to delete");
 
         assert!(msg_repo.get(&message.id).await.unwrap().is_none());
     }
@@ -557,7 +568,10 @@ mod tests {
         }
 
         assert_eq!(
-            msg_repo.count_by_conversation(&conversation.id).await.unwrap(),
+            msg_repo
+                .count_by_conversation(&conversation.id)
+                .await
+                .unwrap(),
             5
         );
 
@@ -567,7 +581,10 @@ mod tests {
             .expect("Failed to delete");
 
         assert_eq!(
-            msg_repo.count_by_conversation(&conversation.id).await.unwrap(),
+            msg_repo
+                .count_by_conversation(&conversation.id)
+                .await
+                .unwrap(),
             0
         );
     }

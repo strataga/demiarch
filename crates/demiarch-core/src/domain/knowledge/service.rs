@@ -109,8 +109,14 @@ impl<R: KnowledgeGraphRepository> KnowledgeGraphService<R> {
 
         let result = CognifyResult {
             skill_id: skill.id.clone(),
-            entities_created: entities.iter().filter(|e| e.source_skill_ids.len() == 1).count(),
-            entities_merged: entities.iter().filter(|e| e.source_skill_ids.len() > 1).count(),
+            entities_created: entities
+                .iter()
+                .filter(|e| e.source_skill_ids.len() == 1)
+                .count(),
+            entities_merged: entities
+                .iter()
+                .filter(|e| e.source_skill_ids.len() > 1)
+                .count(),
             relationships_created: relationships.len(),
         };
 
@@ -145,7 +151,10 @@ impl<R: KnowledgeGraphRepository> KnowledgeGraphService<R> {
     async fn merge_entities(
         &self,
         entities: Vec<KnowledgeEntity>,
-    ) -> Result<(Vec<KnowledgeEntity>, std::collections::HashMap<String, String>)> {
+    ) -> Result<(
+        Vec<KnowledgeEntity>,
+        std::collections::HashMap<String, String>,
+    )> {
         let mut merged_entities = Vec::new();
         let mut id_mapping = std::collections::HashMap::new();
 
@@ -221,9 +230,10 @@ impl<R: KnowledgeGraphRepository> KnowledgeGraphService<R> {
                 remapped.push(updated);
             } else {
                 // Create new relationship with remapped IDs
-                let new_rel = KnowledgeRelationship::new(&source_id, &target_id, rel.relationship_type)
-                    .with_weight(rel.weight)
-                    .with_evidence(rel.evidence);
+                let new_rel =
+                    KnowledgeRelationship::new(&source_id, &target_id, rel.relationship_type)
+                        .with_weight(rel.weight)
+                        .with_evidence(rel.evidence);
                 remapped.push(new_rel);
             }
         }
@@ -275,7 +285,9 @@ impl<R: KnowledgeGraphRepository> KnowledgeGraphService<R> {
         target_id: &str,
         max_depth: u32,
     ) -> Result<Option<Vec<super::repository::PathStep>>> {
-        self.repository.find_path(source_id, target_id, max_depth).await
+        self.repository
+            .find_path(source_id, target_id, max_depth)
+            .await
     }
 
     // ========== Entity Operations ==========
@@ -296,7 +308,10 @@ impl<R: KnowledgeGraphRepository> KnowledgeGraphService<R> {
     }
 
     /// List entities by type
-    pub async fn list_entities_by_type(&self, entity_type: EntityType) -> Result<Vec<KnowledgeEntity>> {
+    pub async fn list_entities_by_type(
+        &self,
+        entity_type: EntityType,
+    ) -> Result<Vec<KnowledgeEntity>> {
         self.repository.list_entities_by_type(entity_type).await
     }
 
@@ -322,7 +337,9 @@ impl<R: KnowledgeGraphRepository> KnowledgeGraphService<R> {
         &self,
         entity_id: &str,
     ) -> Result<Vec<KnowledgeRelationship>> {
-        self.repository.list_relationships_for_entity(entity_id).await
+        self.repository
+            .list_relationships_for_entity(entity_id)
+            .await
     }
 
     /// Infer a relationship between two entities
@@ -535,7 +552,8 @@ mod tests {
         service.save_entity(&e1).await.unwrap();
         service.save_entity(&e2).await.unwrap();
 
-        let evidence = RelationshipEvidence::from_skill_cooccurrence("skill-1", "Both used together");
+        let evidence =
+            RelationshipEvidence::from_skill_cooccurrence("skill-1", "Both used together");
 
         let rel = service
             .infer_relationship(&e1.id, &e2.id, RelationshipType::Uses, evidence)

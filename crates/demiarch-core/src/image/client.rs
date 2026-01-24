@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use reqwest::Client as HttpClient;
 use serde::Deserialize;
 use serde_json::json;
@@ -83,9 +83,7 @@ impl ImageClientBuilder {
 
     /// Build the ImageClient
     pub fn build(self) -> Result<ImageClient> {
-        let api_key = self
-            .api_key
-            .ok_or_else(|| Error::ImageApiKeyMissing)?;
+        let api_key = self.api_key.ok_or_else(|| Error::ImageApiKeyMissing)?;
 
         let timeout = Duration::from_secs(self.timeout_secs.unwrap_or(120));
 
@@ -97,7 +95,9 @@ impl ImageClientBuilder {
         Ok(ImageClient {
             http_client,
             api_key,
-            base_url: self.base_url.unwrap_or_else(|| OPENROUTER_BASE_URL.to_string()),
+            base_url: self
+                .base_url
+                .unwrap_or_else(|| OPENROUTER_BASE_URL.to_string()),
         })
     }
 }
@@ -105,9 +105,7 @@ impl ImageClientBuilder {
 impl ImageClient {
     /// Create a new ImageClient with the given API key
     pub fn new(api_key: impl Into<String>) -> Result<Self> {
-        ImageClientBuilder::new()
-            .api_key(api_key)
-            .build()
+        ImageClientBuilder::new().api_key(api_key).build()
     }
 
     /// Create a new builder
@@ -122,7 +120,9 @@ impl ImageClient {
         let start = Instant::now();
 
         let prompt = request.build_prompt();
-        let response = self.execute_with_retry(request.model.clone(), prompt).await?;
+        let response = self
+            .execute_with_retry(request.model.clone(), prompt)
+            .await?;
 
         let generation_time = start.elapsed().as_millis() as u64;
 
@@ -221,7 +221,11 @@ impl ImageClient {
     }
 
     /// Execute request with retry logic
-    async fn execute_with_retry(&self, model: String, prompt: String) -> Result<ParsedImageResponse> {
+    async fn execute_with_retry(
+        &self,
+        model: String,
+        prompt: String,
+    ) -> Result<ParsedImageResponse> {
         let mut attempts = 0;
         let mut last_error = None;
 
@@ -248,7 +252,8 @@ impl ImageClient {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| Error::ImageGenerationError("Max retries exceeded".to_string())))
+        Err(last_error
+            .unwrap_or_else(|| Error::ImageGenerationError("Max retries exceeded".to_string())))
     }
 
     /// Send a text-to-image request
@@ -439,7 +444,10 @@ impl ImageClient {
 
         match status.as_u16() {
             401 => Err(Error::ImageApiKeyMissing),
-            400 => Err(Error::ImageGenerationError(format!("Bad request: {}", body))),
+            400 => Err(Error::ImageGenerationError(format!(
+                "Bad request: {}",
+                body
+            ))),
             402 => Err(Error::ImageGenerationError(
                 "Payment required: Insufficient credits".to_string(),
             )),
@@ -591,9 +599,7 @@ mod tests {
 
     #[test]
     fn test_builder_with_api_key() {
-        let result = ImageClientBuilder::new()
-            .api_key("test-key")
-            .build();
+        let result = ImageClientBuilder::new().api_key("test-key").build();
         assert!(result.is_ok());
     }
 
@@ -605,13 +611,19 @@ mod tests {
 
         // JPEG
         let jpeg_bytes = [0xFF, 0xD8, 0xFF, 0xE0];
-        assert!(matches!(detect_image_format(&jpeg_bytes), ImageFormat::Jpeg));
+        assert!(matches!(
+            detect_image_format(&jpeg_bytes),
+            ImageFormat::Jpeg
+        ));
 
         // WebP
         let mut webp_bytes = vec![0u8; 12];
         webp_bytes[0..4].copy_from_slice(b"RIFF");
         webp_bytes[8..12].copy_from_slice(b"WEBP");
-        assert!(matches!(detect_image_format(&webp_bytes), ImageFormat::WebP));
+        assert!(matches!(
+            detect_image_format(&webp_bytes),
+            ImageFormat::WebP
+        ));
     }
 
     #[test]

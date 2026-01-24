@@ -144,7 +144,9 @@ pub enum Error {
     InvalidGraphOperation(String),
 
     // Image errors (E1400-E1499)
-    #[error("E1400: Image generation requires an API key. Set OPENROUTER_API_KEY or DEMIARCH_API_KEY.")]
+    #[error(
+        "E1400: Image generation requires an API key. Set OPENROUTER_API_KEY or DEMIARCH_API_KEY."
+    )]
     ImageApiKeyMissing,
 
     #[error("E1401: Image generation failed: {0}")]
@@ -234,9 +236,9 @@ impl Error {
             Self::PluginNotFound(name) => Some(format!("demiarch plugin install {}", name)),
             Self::SkillNotFound(_) => Some("demiarch skills list".to_string()),
             Self::ContextRetrievalFailed(_) => Some("demiarch context rebuild".to_string()),
-            Self::ImageApiKeyMissing => Some(
-                "Set OPENROUTER_API_KEY or DEMIARCH_API_KEY environment variable".to_string(),
-            ),
+            Self::ImageApiKeyMissing => {
+                Some("Set OPENROUTER_API_KEY or DEMIARCH_API_KEY environment variable".to_string())
+            }
             Self::ImageModelNotAvailable(_) => Some("demiarch image models".to_string()),
             _ => None,
         }

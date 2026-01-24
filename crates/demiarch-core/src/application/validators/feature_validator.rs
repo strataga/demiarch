@@ -17,7 +17,10 @@ impl FeatureValidator {
         let name = name.trim();
 
         if name.is_empty() {
-            return Err(ApplicationError::validation("name", "Feature name cannot be empty"));
+            return Err(ApplicationError::validation(
+                "name",
+                "Feature name cannot be empty",
+            ));
         }
 
         if name.len() > 200 {

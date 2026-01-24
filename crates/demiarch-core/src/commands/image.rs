@@ -7,12 +7,12 @@ use std::path::PathBuf;
 use tracing::info;
 
 use crate::error::{Error, Result};
-use crate::image::{
-    ImageClient, ImageFormat, ImageRequest, ImageSize, ImageStyle,
-    InpaintRequest, TransformRequest, UpscaleRequest, IMAGE_MODELS,
-    generate_image, inpaint_image, transform_image, upscale_image,
-};
 use crate::image::operations::{check_api_key_available, generate_output_path};
+use crate::image::{
+    generate_image, inpaint_image, transform_image, upscale_image, ImageClient, ImageFormat,
+    ImageRequest, ImageSize, ImageStyle, InpaintRequest, TransformRequest, UpscaleRequest,
+    IMAGE_MODELS,
+};
 
 /// Generate an image from a text prompt
 pub async fn generate(
@@ -36,20 +36,22 @@ pub async fn generate(
     }
 
     if let Some(s) = size {
-        let image_size = ImageSize::parse(&s)
-            .ok_or_else(|| Error::InvalidInput(format!(
+        let image_size = ImageSize::parse(&s).ok_or_else(|| {
+            Error::InvalidInput(format!(
                 "Invalid size '{}'. Use: square, portrait, landscape, or WxH (e.g., 1024x768)",
                 s
-            )))?;
+            ))
+        })?;
         request = request.with_size(image_size);
     }
 
     if let Some(s) = style {
-        let image_style = ImageStyle::parse(&s)
-            .ok_or_else(|| Error::InvalidInput(format!(
+        let image_style = ImageStyle::parse(&s).ok_or_else(|| {
+            Error::InvalidInput(format!(
                 "Invalid style '{}'. Use: vivid, natural, photorealistic, or artistic",
                 s
-            )))?;
+            ))
+        })?;
         request = request.with_style(image_style);
     }
 
@@ -62,9 +64,8 @@ pub async fn generate(
     }
 
     // Determine output path
-    let output_path = output.unwrap_or_else(|| {
-        generate_output_path(&PathBuf::from("."), ImageFormat::Png)
-    });
+    let output_path =
+        output.unwrap_or_else(|| generate_output_path(&PathBuf::from("."), ImageFormat::Png));
 
     // Generate image
     let response = generate_image(&client, &request, Some(&output_path)).await?;
@@ -114,7 +115,11 @@ pub async fn transform(
     let output_path = output.unwrap_or_else(|| {
         let stem = input.file_stem().unwrap_or_default().to_string_lossy();
         let ext = input.extension().unwrap_or_default().to_string_lossy();
-        let ext = if ext.is_empty() { "png".to_string() } else { ext.to_string() };
+        let ext = if ext.is_empty() {
+            "png".to_string()
+        } else {
+            ext.to_string()
+        };
         input.with_file_name(format!("{}_transformed.{}", stem, ext))
     });
 
@@ -167,7 +172,11 @@ pub async fn upscale(
     let output_path = output.unwrap_or_else(|| {
         let stem = input.file_stem().unwrap_or_default().to_string_lossy();
         let ext = input.extension().unwrap_or_default().to_string_lossy();
-        let ext = if ext.is_empty() { "png".to_string() } else { ext.to_string() };
+        let ext = if ext.is_empty() {
+            "png".to_string()
+        } else {
+            ext.to_string()
+        };
         input.with_file_name(format!("{}_{}x.{}", stem, scale, ext))
     });
 
@@ -182,7 +191,8 @@ pub async fn upscale(
             .map_err(|e| Error::ImageReadError(format!("{}: {}", input.display(), e)))?;
 
         let response = local_upscale_only(&input_data, scale)?;
-        response.save_to_file(&output_path)
+        response
+            .save_to_file(&output_path)
             .map_err(|e| Error::ImageSaveError(format!("{}: {}", output_path.display(), e)))?;
         response
     };
@@ -236,7 +246,11 @@ pub async fn inpaint(
     let output_path = output.unwrap_or_else(|| {
         let stem = input.file_stem().unwrap_or_default().to_string_lossy();
         let ext = input.extension().unwrap_or_default().to_string_lossy();
-        let ext = if ext.is_empty() { "png".to_string() } else { ext.to_string() };
+        let ext = if ext.is_empty() {
+            "png".to_string()
+        } else {
+            ext.to_string()
+        };
         input.with_file_name(format!("{}_inpainted.{}", stem, ext))
     });
 
@@ -312,8 +326,8 @@ impl ModelInfo {
 
 /// Local upscaling without API
 fn local_upscale_only(input_data: &[u8], scale: u32) -> Result<crate::image::ImageResponse> {
-    use std::time::Instant;
     use std::io::Cursor;
+    use std::time::Instant;
 
     let start = Instant::now();
 
@@ -324,11 +338,7 @@ fn local_upscale_only(input_data: &[u8], scale: u32) -> Result<crate::image::Ima
     let new_width = width * scale;
     let new_height = height * scale;
 
-    let resized = img.resize_exact(
-        new_width,
-        new_height,
-        image::imageops::FilterType::Lanczos3,
-    );
+    let resized = img.resize_exact(new_width, new_height, image::imageops::FilterType::Lanczos3);
 
     // Encode to PNG using write_to
     let mut output = Cursor::new(Vec::new());

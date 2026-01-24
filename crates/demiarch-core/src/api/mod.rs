@@ -4,11 +4,11 @@
 //! demiarch-core functionality. This module handles database connections
 //! and translates domain types to DTOs suitable for serialization.
 
-pub mod projects;
-pub mod features;
-pub mod sessions;
 pub mod costs;
+pub mod features;
 pub mod health;
+pub mod projects;
+pub mod sessions;
 
 use crate::storage::{Database, DatabaseConfig};
 use crate::Result;

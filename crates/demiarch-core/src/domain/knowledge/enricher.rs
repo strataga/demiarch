@@ -179,11 +179,13 @@ impl<R: KnowledgeGraphRepository> ContextEnricher<R> {
             for entity in search_results {
                 if entity.confidence >= self.config.min_confidence {
                     matched_terms.push(term.clone());
-                    all_entities.entry(entity.id.clone()).or_insert(EntityWithDistance {
-                        entity,
-                        distance: 0,
-                        path: Vec::new(),
-                    });
+                    all_entities
+                        .entry(entity.id.clone())
+                        .or_insert(EntityWithDistance {
+                            entity,
+                            distance: 0,
+                            path: Vec::new(),
+                        });
                 }
             }
         }
@@ -206,7 +208,9 @@ impl<R: KnowledgeGraphRepository> ContextEnricher<R> {
 
             for neighbor in neighbors {
                 if neighbor.entity.confidence >= self.config.min_confidence {
-                    all_entities.entry(neighbor.entity.id.clone()).or_insert(neighbor);
+                    all_entities
+                        .entry(neighbor.entity.id.clone())
+                        .or_insert(neighbor);
                 }
             }
         }
@@ -235,7 +239,11 @@ impl<R: KnowledgeGraphRepository> ContextEnricher<R> {
             entities: selected_entities,
             relationships,
             formatted_context,
-            matched_terms: matched_terms.into_iter().collect::<HashSet<_>>().into_iter().collect(),
+            matched_terms: matched_terms
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect(),
             stats,
         })
     }
@@ -245,7 +253,10 @@ impl<R: KnowledgeGraphRepository> ContextEnricher<R> {
     /// Use this when you already know which entities are relevant
     /// (e.g., from a skill lookup).
     pub async fn enrich_from_entities(&self, entity_ids: &[String]) -> Result<EnrichedContext> {
-        info!(entity_count = entity_ids.len(), "Enriching context from entities");
+        info!(
+            entity_count = entity_ids.len(),
+            "Enriching context from entities"
+        );
 
         let mut all_entities: HashMap<String, EntityWithDistance> = HashMap::new();
 
@@ -254,7 +265,11 @@ impl<R: KnowledgeGraphRepository> ContextEnricher<R> {
             if let Some(entity) = self.repository.get_entity(entity_id).await? {
                 all_entities.insert(
                     entity.id.clone(),
-                    EntityWithDistance { entity, distance: 0, path: Vec::new() },
+                    EntityWithDistance {
+                        entity,
+                        distance: 0,
+                        path: Vec::new(),
+                    },
                 );
             }
         }
@@ -272,7 +287,9 @@ impl<R: KnowledgeGraphRepository> ContextEnricher<R> {
 
             for neighbor in neighbors {
                 if neighbor.entity.confidence >= self.config.min_confidence {
-                    all_entities.entry(neighbor.entity.id.clone()).or_insert(neighbor);
+                    all_entities
+                        .entry(neighbor.entity.id.clone())
+                        .or_insert(neighbor);
                 }
             }
         }
@@ -319,19 +336,118 @@ impl<R: KnowledgeGraphRepository> ContextEnricher<R> {
         // Simple term extraction: split on whitespace and punctuation,
         // filter short words and common stop words
         let stop_words: HashSet<&str> = [
-            "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-            "have", "has", "had", "do", "does", "did", "will", "would", "could",
-            "should", "may", "might", "must", "shall", "can", "need", "dare",
-            "to", "of", "in", "for", "on", "with", "at", "by", "from", "up",
-            "about", "into", "through", "during", "before", "after", "above",
-            "below", "between", "under", "again", "further", "then", "once",
-            "here", "there", "when", "where", "why", "how", "all", "each",
-            "few", "more", "most", "other", "some", "such", "no", "nor", "not",
-            "only", "own", "same", "so", "than", "too", "very", "just", "now",
-            "and", "but", "if", "or", "because", "as", "until", "while", "this",
-            "that", "these", "those", "what", "which", "who", "whom", "i", "me",
-            "my", "we", "our", "you", "your", "it", "its", "they", "them",
-            "code", "write", "create", "make", "implement", "add", "use", "using",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "must",
+            "shall",
+            "can",
+            "need",
+            "dare",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "up",
+            "about",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "above",
+            "below",
+            "between",
+            "under",
+            "again",
+            "further",
+            "then",
+            "once",
+            "here",
+            "there",
+            "when",
+            "where",
+            "why",
+            "how",
+            "all",
+            "each",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "no",
+            "nor",
+            "not",
+            "only",
+            "own",
+            "same",
+            "so",
+            "than",
+            "too",
+            "very",
+            "just",
+            "now",
+            "and",
+            "but",
+            "if",
+            "or",
+            "because",
+            "as",
+            "until",
+            "while",
+            "this",
+            "that",
+            "these",
+            "those",
+            "what",
+            "which",
+            "who",
+            "whom",
+            "i",
+            "me",
+            "my",
+            "we",
+            "our",
+            "you",
+            "your",
+            "it",
+            "its",
+            "they",
+            "them",
+            "code",
+            "write",
+            "create",
+            "make",
+            "implement",
+            "add",
+            "use",
+            "using",
         ]
         .into_iter()
         .collect();
@@ -475,7 +591,10 @@ impl<R: KnowledgeGraphRepository> ContextEnricher<R> {
         // Deduplicate relationships
         let mut seen = HashSet::new();
         relationships.retain(|r| {
-            let key = format!("{}-{}-{:?}", r.source_name, r.target_name, r.relationship_type);
+            let key = format!(
+                "{}-{}-{:?}",
+                r.source_name, r.target_name, r.relationship_type
+            );
             seen.insert(key)
         });
 
@@ -587,10 +706,7 @@ fn format_relationship_description(rel: &KnowledgeRelationship) -> String {
     if let Some(evidence) = rel.evidence.first() {
         evidence.description.clone()
     } else {
-        format!(
-            "{:?} relationship",
-            rel.relationship_type
-        )
+        format!("{:?} relationship", rel.relationship_type)
     }
 }
 
@@ -639,8 +755,14 @@ mod tests {
     #[test]
     fn test_format_relationship_type() {
         assert_eq!(format_relationship_type(RelationshipType::Uses), "uses");
-        assert_eq!(format_relationship_type(RelationshipType::DependsOn), "depends on");
-        assert_eq!(format_relationship_type(RelationshipType::SimilarTo), "is similar to");
+        assert_eq!(
+            format_relationship_type(RelationshipType::DependsOn),
+            "depends on"
+        );
+        assert_eq!(
+            format_relationship_type(RelationshipType::SimilarTo),
+            "is similar to"
+        );
     }
 
     #[test]

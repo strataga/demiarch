@@ -56,7 +56,7 @@ mod types;
 
 pub use bandit::ThompsonSamplingBandit;
 pub use router::{ModelRouter, ModelRouterBuilder, RouterConfig};
-pub use store::{CREATE_ROUTING_STATS_TABLE_SQL, RoutingStore, RoutingStoreSummary};
+pub use store::{RoutingStore, RoutingStoreSummary, CREATE_ROUTING_STATS_TABLE_SQL};
 pub use types::{
     ModelCandidate, ModelRegistry, ModelStats, RoutingDecision, RoutingPreference, RoutingReason,
     RoutingReward, TaskComplexity, TaskContext,

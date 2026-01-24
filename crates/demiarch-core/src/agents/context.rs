@@ -9,19 +9,19 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use super::AgentType;
 use super::events::AgentEventWriter;
 use super::traits::{AgentResult, AgentStatus};
+use super::AgentType;
 use crate::context::{
-    ContextBudget, ContextWindow, DisclosureLevel, TokenAllocation, estimate_messages_tokens,
+    estimate_messages_tokens, ContextBudget, ContextWindow, DisclosureLevel, TokenAllocation,
 };
 use crate::cost::CostTracker;
 use crate::llm::{LlmClient, Message};

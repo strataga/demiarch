@@ -3,8 +3,8 @@
 //! Provides encrypted key storage with AES-256-GCM encryption at rest.
 
 use aes_gcm::{
-    Aes256Gcm, Nonce,
     aead::{Aead, KeyInit, OsRng},
+    Aes256Gcm, Nonce,
 };
 use chrono::{DateTime, Utc};
 use rand_chacha::rand_core::RngCore;
@@ -76,7 +76,7 @@ impl MasterKey {
 
     /// Create a master key from base64-encoded string
     pub fn from_base64(b64: &str) -> Result<Self, KeyError> {
-        use base64::{Engine, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine};
         let bytes = STANDARD
             .decode(b64)
             .map_err(|e| KeyError::InvalidFormat(e.to_string()))?;
@@ -90,7 +90,7 @@ impl MasterKey {
 
     /// Export key as base64 string
     pub fn to_base64(&self) -> String {
-        use base64::{Engine, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine};
         STANDARD.encode(self.bytes)
     }
 
@@ -144,7 +144,7 @@ impl EncryptedKey {
         master_key: &MasterKey,
         description: Option<String>,
     ) -> Result<Self, KeyError> {
-        use base64::{Engine, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine};
 
         // Generate random nonce
         let mut nonce_bytes = [0u8; NONCE_SIZE];
@@ -177,7 +177,7 @@ impl EncryptedKey {
     ///
     /// Returns a SecureString that is zeroized on drop
     pub fn decrypt(&self, master_key: &MasterKey) -> Result<SecureString, KeyError> {
-        use base64::{Engine, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine};
 
         // Decode ciphertext and nonce
         let ciphertext = STANDARD
@@ -216,7 +216,7 @@ impl EncryptedKey {
 
     /// Update the encrypted value
     pub fn update(&mut self, plaintext: &str, master_key: &MasterKey) -> Result<(), KeyError> {
-        use base64::{Engine, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine};
 
         // Generate new nonce for each encryption
         let mut nonce_bytes = [0u8; NONCE_SIZE];

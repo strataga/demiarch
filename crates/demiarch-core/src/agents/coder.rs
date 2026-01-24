@@ -7,7 +7,6 @@ use std::pin::Pin;
 
 use tracing::{debug, info};
 
-use super::AgentType;
 use super::code_extraction::{
     extract_code_blocks, extract_files_from_response, language_to_extension,
 };
@@ -15,6 +14,7 @@ use super::context::AgentContext;
 use super::message_builder::build_messages_from_input;
 use super::status::StatusTracker;
 use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
+use super::AgentType;
 use crate::error::Result;
 
 /// Coder agent - generates code implementations
@@ -105,8 +105,11 @@ impl CoderAgent {
             // Fallback: extract code blocks and generate generic filenames
             let code_blocks = extract_code_blocks(&response.content);
             for (i, block) in code_blocks.iter().enumerate() {
-                let filename =
-                    format!("generated-{}.{}", i + 1, language_to_extension(&block.language));
+                let filename = format!(
+                    "generated-{}.{}",
+                    i + 1,
+                    language_to_extension(&block.language)
+                );
                 result = result.with_artifact(AgentArtifact::code(&filename, &block.code));
             }
             file_count = code_blocks.len();
@@ -193,11 +196,9 @@ mod tests {
         let coder = CoderAgent::new();
         assert_eq!(coder.agent_type(), AgentType::Coder);
         assert_eq!(coder.status(), AgentStatus::Ready);
-        assert!(
-            coder
-                .capabilities()
-                .contains(&AgentCapability::CodeGeneration)
-        );
+        assert!(coder
+            .capabilities()
+            .contains(&AgentCapability::CodeGeneration));
     }
 
     #[test]

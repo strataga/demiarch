@@ -130,9 +130,7 @@ pub struct Conflict {
 
 #[tauri::command]
 pub async fn get_projects() -> Result<Vec<ProjectSummary>, String> {
-    let projects = api::projects::list(None)
-        .await
-        .map_err(|e| e.to_string())?;
+    let projects = api::projects::list(None).await.map_err(|e| e.to_string())?;
     Ok(projects.into_iter().map(ProjectSummary::from).collect())
 }
 
@@ -251,16 +249,18 @@ pub async fn get_agents() -> Result<Vec<AgentStatus>, String> {
 
 #[tauri::command]
 pub async fn doctor() -> Result<DoctorResult, String> {
-    let health = api::health::doctor()
-        .await
-        .map_err(|e| e.to_string())?;
+    let health = api::health::doctor().await.map_err(|e| e.to_string())?;
 
-    let database_ok = health.checks.iter()
+    let database_ok = health
+        .checks
+        .iter()
         .find(|c| c.name == "Database")
         .map(|c| c.status == api::health::HealthStatus::Ok)
         .unwrap_or(false);
 
-    let config_ok = health.checks.iter()
+    let config_ok = health
+        .checks
+        .iter()
         .find(|c| c.name == "Configuration")
         .map(|c| c.status != api::health::HealthStatus::Error)
         .unwrap_or(false);

@@ -60,9 +60,7 @@ impl Default for KeywordDecompositionStrategy {
 
 impl DecompositionStrategy for KeywordDecompositionStrategy {
     fn should_decompose(&self, input: &str) -> bool {
-        self.needs_implementation(input)
-            || self.needs_testing(input)
-            || self.needs_review(input)
+        self.needs_implementation(input) || self.needs_testing(input) || self.needs_review(input)
     }
 
     fn create_plan(&self, description: &str) -> ExecutionPlan {
@@ -79,11 +77,8 @@ impl DecompositionStrategy for KeywordDecompositionStrategy {
         }
 
         // Add review task if coding was added or review explicitly requested
-        let coding_task_ids: Vec<String> = plan
-            .coding_tasks()
-            .iter()
-            .map(|t| t.id.clone())
-            .collect();
+        let coding_task_ids: Vec<String> =
+            plan.coding_tasks().iter().map(|t| t.id.clone()).collect();
 
         if !coding_task_ids.is_empty() && plan.requires_review {
             task_id += 1;

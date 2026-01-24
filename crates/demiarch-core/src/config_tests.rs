@@ -5,18 +5,14 @@ use crate::config::{Config, CostConfig, RoutingConfig};
 #[test]
 fn test_llm_config_fallback_models() {
     let config = Config::default();
-    assert!(
-        config
-            .llm
-            .fallback_models
-            .contains(&"anthropic/claude-3-5-haiku-latest".to_string())
-    );
-    assert!(
-        config
-            .llm
-            .fallback_models
-            .contains(&"openai/gpt-4o".to_string())
-    );
+    assert!(config
+        .llm
+        .fallback_models
+        .contains(&"anthropic/claude-3-5-haiku-latest".to_string()));
+    assert!(config
+        .llm
+        .fallback_models
+        .contains(&"openai/gpt-4o".to_string()));
     assert_eq!(config.llm.fallback_models.len(), 2);
 }
 

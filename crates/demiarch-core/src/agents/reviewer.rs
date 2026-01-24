@@ -8,11 +8,11 @@ use std::pin::Pin;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use super::AgentType;
 use super::context::AgentContext;
 use super::message_builder::build_messages_from_input;
 use super::status::StatusTracker;
 use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
+use super::AgentType;
 use crate::error::Result;
 
 /// Severity of a review issue
@@ -348,11 +348,9 @@ mod tests {
         let reviewer = ReviewerAgent::new();
         assert_eq!(reviewer.agent_type(), AgentType::Reviewer);
         assert_eq!(reviewer.status(), AgentStatus::Ready);
-        assert!(
-            reviewer
-                .capabilities()
-                .contains(&AgentCapability::CodeReview)
-        );
+        assert!(reviewer
+            .capabilities()
+            .contains(&AgentCapability::CodeReview));
     }
 
     #[test]

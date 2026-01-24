@@ -56,8 +56,8 @@
 //! println!("Related concepts: {}", context.formatted_context);
 //! ```
 
-mod entity;
 mod enricher;
+mod entity;
 mod event;
 mod extractor;
 mod relationship;
@@ -65,11 +65,11 @@ mod repository;
 mod search;
 mod service;
 
-pub use entity::{EntityType, KnowledgeEntity};
 pub use enricher::{
     ContextEnricher, EnrichedContext, EnrichmentConfig, EnrichmentStats, EntityContext,
     RelationshipContext,
 };
+pub use entity::{EntityType, KnowledgeEntity};
 pub use event::KnowledgeEvent;
 pub use extractor::{EntityExtractor, ExtractionResult};
 pub use relationship::{

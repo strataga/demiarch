@@ -52,7 +52,9 @@ impl PhaseValidator {
         let current_idx = Self::VALID_PHASES
             .iter()
             .position(|&p| p == current_lower)
-            .ok_or_else(|| ApplicationError::validation("current_phase", "Invalid current phase"))?;
+            .ok_or_else(|| {
+                ApplicationError::validation("current_phase", "Invalid current phase")
+            })?;
 
         let target_idx = Self::VALID_PHASES
             .iter()

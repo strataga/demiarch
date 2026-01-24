@@ -4,8 +4,8 @@
 
 use crate::storage::migrations;
 use anyhow::{Context, Result};
-use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
+use sqlx::SqlitePool;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -101,8 +101,9 @@ impl Database {
         if config.path.to_string_lossy() != ":memory:" {
             if let Some(parent) = config.path.parent() {
                 if !parent.exists() {
-                    std::fs::create_dir_all(parent)
-                        .with_context(|| format!("Failed to create database directory: {:?}", parent))?;
+                    std::fs::create_dir_all(parent).with_context(|| {
+                        format!("Failed to create database directory: {:?}", parent)
+                    })?;
                 }
             }
         }

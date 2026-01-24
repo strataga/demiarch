@@ -8,14 +8,16 @@ use std::pin::Pin;
 
 use tracing::{debug, info};
 
-use super::AgentType;
 use super::coder::CoderAgent;
 use super::context::AgentContext;
 use super::message_builder::build_messages_from_input;
 use super::reviewer::ReviewerAgent;
 use super::status::StatusTracker;
 use super::tester::TesterAgent;
-use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus, ArtifactType};
+use super::traits::{
+    Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus, ArtifactType,
+};
+use super::AgentType;
 use crate::domain::feature_decomposition::{ExecutionPlan, PlanTask, TaskStatus};
 use crate::error::Result;
 use crate::llm::Message;
@@ -148,9 +150,9 @@ impl PlannerAgent {
                         return Ok(cancelled_result);
                     }
 
-                    let review_result =
-                        self.execute_reviewer_task(task, &context, code_context.as_deref())
-                            .await?;
+                    let review_result = self
+                        .execute_reviewer_task(task, &context, code_context.as_deref())
+                        .await?;
                     context.add_child_result(review_result.clone()).await;
                     result = result.with_child_result(review_result);
                 }
@@ -166,9 +168,9 @@ impl PlannerAgent {
                         return Ok(cancelled_result);
                     }
 
-                    let test_result =
-                        self.execute_tester_task(task, &context, code_context.as_deref())
-                            .await?;
+                    let test_result = self
+                        .execute_tester_task(task, &context, code_context.as_deref())
+                        .await?;
                     context.add_child_result(test_result.clone()).await;
                     result = result.with_child_result(test_result);
                 }
@@ -215,23 +217,19 @@ impl PlannerAgent {
 
         // Include code context if available
         let task_with_context = if let Some(code) = code_context {
-            format!(
-                "{}\n\n## Code to Review\n\n{}",
-                task.description, code
-            )
+            format!("{}\n\n## Code to Review\n\n{}", task.description, code)
         } else {
             task.description.clone()
         };
 
-        let reviewer_input = AgentInput::new(task_with_context).with_context(
-            if code_context.is_some() {
+        let reviewer_input =
+            AgentInput::new(task_with_context).with_context(if code_context.is_some() {
                 vec![Message::user(
                     "Please review the code above for issues, best practices, and suggestions.",
                 )]
             } else {
                 vec![]
-            },
-        );
+            });
 
         reviewer.execute(reviewer_input, reviewer_context).await
     }
@@ -248,23 +246,17 @@ impl PlannerAgent {
 
         // Include code context if available
         let task_with_context = if let Some(code) = code_context {
-            format!(
-                "{}\n\n## Code to Test\n\n{}",
-                task.description, code
-            )
+            format!("{}\n\n## Code to Test\n\n{}", task.description, code)
         } else {
             task.description.clone()
         };
 
-        let tester_input = AgentInput::new(task_with_context).with_context(
-            if code_context.is_some() {
-                vec![Message::user(
-                    "Please write tests for the code above.",
-                )]
+        let tester_input =
+            AgentInput::new(task_with_context).with_context(if code_context.is_some() {
+                vec![Message::user("Please write tests for the code above.")]
             } else {
                 vec![]
-            },
-        );
+            });
 
         tester.execute(tester_input, tester_context).await
     }

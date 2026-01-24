@@ -488,7 +488,8 @@ impl SearchRepositoryTrait for SearchRepository {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<SearchResult>> {
-        self.search_features(query, project_ids, limit, offset).await
+        self.search_features(query, project_ids, limit, offset)
+            .await
     }
 
     async fn search_documents(
@@ -498,7 +499,8 @@ impl SearchRepositoryTrait for SearchRepository {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<SearchResult>> {
-        self.search_documents(query, project_ids, limit, offset).await
+        self.search_documents(query, project_ids, limit, offset)
+            .await
     }
 
     async fn search_messages(
@@ -508,7 +510,8 @@ impl SearchRepositoryTrait for SearchRepository {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<SearchResult>> {
-        self.search_messages(query, project_ids, limit, offset).await
+        self.search_messages(query, project_ids, limit, offset)
+            .await
     }
 
     async fn search_skills(

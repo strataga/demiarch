@@ -2,11 +2,11 @@
 //!
 //! This module provides AI-powered phase planning and feature extraction.
 
-use crate::Result;
 use crate::commands::feature::{Feature, FeatureRepository, FeatureStatus};
 use crate::commands::phase::{Phase, PhaseRepository};
 use crate::llm::{LlmClient, Message};
 use crate::storage::Database;
+use crate::Result;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

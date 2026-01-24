@@ -2,10 +2,12 @@
 
 use clap::{Parser, Subcommand};
 use demiarch_core::agents::{extract_files_from_response, AgentTool, AgentToolResult};
-use demiarch_core::commands::{chat, checkpoint, document, feature, generate, graph, image, project};
-use demiarch_core::domain::knowledge::{EntityType, RelationshipType};
+use demiarch_core::commands::{
+    chat, checkpoint, document, feature, generate, graph, image, project,
+};
 use demiarch_core::config::Config;
 use demiarch_core::cost::CostTracker;
+use demiarch_core::domain::knowledge::{EntityType, RelationshipType};
 use demiarch_core::domain::locking::{LockConfig, LockManager};
 use demiarch_core::domain::session::{
     SessionManager, SessionStatus, ShutdownConfig, ShutdownHandler,
@@ -712,8 +714,8 @@ fn validate_license_key_on_startup() -> anyhow::Result<()> {
     })?;
 
     // Validate key format (must be base64, decode to 32 bytes)
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+    use base64::Engine;
 
     let key_bytes = BASE64_STANDARD
         .decode(&key_b64)
@@ -876,7 +878,11 @@ async fn cmd_new(
     };
 
     if !quiet {
-        println!("Creating project '{}' at {}...", name, project_path.display());
+        println!(
+            "Creating project '{}' at {}...",
+            name,
+            project_path.display()
+        );
     }
 
     // Check if directory already exists
@@ -1238,10 +1244,8 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
                                 .join("\n");
 
                             // Get project path for writing generated files
-                            let project_path = active_project
-                                .path
-                                .as_ref()
-                                .map(std::path::PathBuf::from);
+                            let project_path =
+                                active_project.path.as_ref().map(std::path::PathBuf::from);
 
                             if !quiet {
                                 println!("\nGenerating code based on conversation...");
@@ -1250,12 +1254,7 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
                                 }
                             }
 
-                            match run_with_agents_in_project(
-                                &task,
-                                project_path.as_deref(),
-                            )
-                            .await
-                            {
+                            match run_with_agents_in_project(&task, project_path.as_deref()).await {
                                 Ok(result) => {
                                     if result.success {
                                         println!("Generation complete!");
@@ -1268,7 +1267,10 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
                                             // The agent output contains the generated code
                                             let files = extract_files_from_response(&result.output);
                                             if !files.is_empty() {
-                                                println!("  Writing {} file(s) to project:", files.len());
+                                                println!(
+                                                    "  Writing {} file(s) to project:",
+                                                    files.len()
+                                                );
                                                 for file in &files {
                                                     let file_path = path.join(&file.path);
                                                     if let Some(parent) = file_path.parent() {
@@ -1363,7 +1365,9 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
 
                         // Check if the response suggests code generation
                         if should_offer_generation(&response) && !quiet {
-                            println!("\nHint: Type /generate to create the code, or continue chatting.");
+                            println!(
+                                "\nHint: Type /generate to create the code, or continue chatting."
+                            );
                         }
                     }
                     Err(e) => {
@@ -1508,7 +1512,9 @@ async fn cmd_features(db: &Database, action: FeatureAction, quiet: bool) -> anyh
     let project_repo = project::ProjectRepository::new(db);
     let projects = project_repo.list(None).await?;
     let active_project = projects.first().ok_or_else(|| {
-        anyhow::anyhow!("No projects found. Create one with: demiarch new <name> --framework <framework>")
+        anyhow::anyhow!(
+            "No projects found. Create one with: demiarch new <name> --framework <framework>"
+        )
     })?;
     let project_id = &active_project.id;
 
@@ -1570,7 +1576,11 @@ async fn cmd_features(db: &Database, action: FeatureAction, quiet: bool) -> anyh
             let f = feature::create_with_db(db, project_id, &title, None, phase.as_deref()).await?;
             if !quiet {
                 println!("Feature created: {} ({})", f.title, &f.id[..8]);
-                println!("  Project: {} ({})", active_project.name, &active_project.id[..8]);
+                println!(
+                    "  Project: {} ({})",
+                    active_project.name,
+                    &active_project.id[..8]
+                );
                 println!(
                     "\nNext: Run `demiarch generate \"{}\"` to generate code.",
                     f.title
@@ -3224,9 +3234,10 @@ async fn cmd_image(action: ImageAction, quiet: bool) -> anyhow::Result<()> {
                 println!();
             }
 
-            let output_path = image::generate(prompt, output, Some(size), style, model, negative, seed)
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let output_path =
+                image::generate(prompt, output, Some(size), style, model, negative, seed)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !quiet {
                 println!("Image saved to: {}", output_path.display());

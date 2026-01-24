@@ -168,7 +168,11 @@ pub fn extract_files_from_response(content: &str) -> Vec<ExtractedFile> {
             if let Some(prev_path) = current_path.take() {
                 let content = current_content.trim().to_string();
                 if !content.is_empty() {
-                    files.push(ExtractedFile::new(prev_path, content, current_language.take()));
+                    files.push(ExtractedFile::new(
+                        prev_path,
+                        content,
+                        current_language.take(),
+                    ));
                 }
             }
             current_path = Some(path);
@@ -261,12 +265,64 @@ pub fn looks_like_path(s: &str) -> bool {
         // Has extension
         let ext = s.rsplit('.').next().unwrap_or("");
         let common_exts = [
-            "rs", "py", "js", "ts", "tsx", "jsx", "go", "java", "c", "cpp", "h", "hpp",
-            "rb", "php", "swift", "kt", "scala", "clj", "ex", "exs", "erl", "hs", "ml",
-            "fs", "cs", "vb", "lua", "r", "jl", "nim", "zig", "v", "html", "css", "scss",
-            "sass", "less", "vue", "svelte", "json", "yaml", "yml", "toml", "xml", "md",
-            "txt", "sql", "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd", "dockerfile",
-            "makefile", "gitignore", "env",
+            "rs",
+            "py",
+            "js",
+            "ts",
+            "tsx",
+            "jsx",
+            "go",
+            "java",
+            "c",
+            "cpp",
+            "h",
+            "hpp",
+            "rb",
+            "php",
+            "swift",
+            "kt",
+            "scala",
+            "clj",
+            "ex",
+            "exs",
+            "erl",
+            "hs",
+            "ml",
+            "fs",
+            "cs",
+            "vb",
+            "lua",
+            "r",
+            "jl",
+            "nim",
+            "zig",
+            "v",
+            "html",
+            "css",
+            "scss",
+            "sass",
+            "less",
+            "vue",
+            "svelte",
+            "json",
+            "yaml",
+            "yml",
+            "toml",
+            "xml",
+            "md",
+            "txt",
+            "sql",
+            "sh",
+            "bash",
+            "zsh",
+            "fish",
+            "ps1",
+            "bat",
+            "cmd",
+            "dockerfile",
+            "makefile",
+            "gitignore",
+            "env",
         ];
         return common_exts.iter().any(|&e| ext.eq_ignore_ascii_case(e));
     }

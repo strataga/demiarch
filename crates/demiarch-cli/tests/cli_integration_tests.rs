@@ -264,13 +264,24 @@ fn test_new_command_with_custom_path() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("[ok] Project created successfully!"));
+        .stdout(predicate::str::contains(
+            "[ok] Project created successfully!",
+        ));
 
     // Verify project was created in custom location
     let project_path = custom_location.path().join(&project_name);
-    assert!(project_path.exists(), "Project directory should exist at custom path");
-    assert!(project_path.join(".git").exists(), "Git should be initialized");
-    assert!(project_path.join("src").exists(), "src directory should exist");
+    assert!(
+        project_path.exists(),
+        "Project directory should exist at custom path"
+    );
+    assert!(
+        project_path.join(".git").exists(),
+        "Git should be initialized"
+    );
+    assert!(
+        project_path.join("src").exists(),
+        "src directory should exist"
+    );
 }
 
 #[test]
@@ -285,7 +296,9 @@ fn test_init_command_in_existing_directory() {
         .args(["init", "--framework", "rust"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("[ok] Project initialized successfully!"))
+        .stdout(predicate::str::contains(
+            "[ok] Project initialized successfully!",
+        ))
         .stdout(predicate::str::contains("Framework: rust"));
 
     // .gitignore should be created

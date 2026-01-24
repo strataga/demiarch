@@ -2,7 +2,9 @@
 //!
 //! Provides high-level operations for session management from GUI.
 
-use crate::domain::session::{Session, SessionInfo, SessionPhase, SessionRepository, SessionStatus};
+use crate::domain::session::{
+    Session, SessionInfo, SessionPhase, SessionRepository, SessionStatus,
+};
 use crate::Result;
 use serde::{Deserialize, Serialize};
 

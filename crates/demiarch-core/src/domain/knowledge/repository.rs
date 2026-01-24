@@ -25,7 +25,10 @@ pub trait KnowledgeGraphRepository: Send + Sync {
     async fn get_entity(&self, id: &str) -> Result<Option<KnowledgeEntity>>;
 
     /// Get an entity by canonical name
-    async fn get_entity_by_canonical_name(&self, canonical_name: &str) -> Result<Option<KnowledgeEntity>>;
+    async fn get_entity_by_canonical_name(
+        &self,
+        canonical_name: &str,
+    ) -> Result<Option<KnowledgeEntity>>;
 
     /// List all entities
     async fn list_entities(&self) -> Result<Vec<KnowledgeEntity>>;
@@ -56,13 +59,22 @@ pub trait KnowledgeGraphRepository: Send + Sync {
     ) -> Result<Option<KnowledgeRelationship>>;
 
     /// List all relationships for an entity (as source or target)
-    async fn list_relationships_for_entity(&self, entity_id: &str) -> Result<Vec<KnowledgeRelationship>>;
+    async fn list_relationships_for_entity(
+        &self,
+        entity_id: &str,
+    ) -> Result<Vec<KnowledgeRelationship>>;
 
     /// List outgoing relationships from an entity
-    async fn list_outgoing_relationships(&self, entity_id: &str) -> Result<Vec<KnowledgeRelationship>>;
+    async fn list_outgoing_relationships(
+        &self,
+        entity_id: &str,
+    ) -> Result<Vec<KnowledgeRelationship>>;
 
     /// List incoming relationships to an entity
-    async fn list_incoming_relationships(&self, entity_id: &str) -> Result<Vec<KnowledgeRelationship>>;
+    async fn list_incoming_relationships(
+        &self,
+        entity_id: &str,
+    ) -> Result<Vec<KnowledgeRelationship>>;
 
     /// Delete a relationship by ID
     async fn delete_relationship(&self, id: &str) -> Result<bool>;
@@ -133,11 +145,7 @@ pub trait KnowledgeGraphRepository: Send + Sync {
     ) -> Result<()>;
 
     /// Get the embedding for an entity
-    async fn get_entity_embedding(
-        &self,
-        entity_id: &str,
-        model: &str,
-    ) -> Result<Option<Vec<f32>>>;
+    async fn get_entity_embedding(&self, entity_id: &str, model: &str) -> Result<Option<Vec<f32>>>;
 
     /// Semantic search on entities using embeddings
     async fn semantic_search_entities(

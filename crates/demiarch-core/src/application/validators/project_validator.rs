@@ -19,7 +19,10 @@ impl ProjectValidator {
         let name = name.trim();
 
         if name.is_empty() {
-            return Err(ApplicationError::validation("name", "Project name cannot be empty"));
+            return Err(ApplicationError::validation(
+                "name",
+                "Project name cannot be empty",
+            ));
         }
 
         if name.len() > 100 {
@@ -37,7 +40,10 @@ impl ProjectValidator {
             ));
         }
 
-        if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        if !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
             return Err(ApplicationError::validation(
                 "name",
                 "Project name can only contain letters, numbers, hyphens, and underscores",
@@ -73,24 +79,8 @@ impl ProjectValidator {
         }
 
         let allowed_frameworks = [
-            "rust",
-            "python",
-            "nodejs",
-            "react",
-            "vue",
-            "angular",
-            "django",
-            "flask",
-            "fastapi",
-            "rails",
-            "spring",
-            "express",
-            "nextjs",
-            "svelte",
-            "go",
-            "actix",
-            "axum",
-            "rocket",
+            "rust", "python", "nodejs", "react", "vue", "angular", "django", "flask", "fastapi",
+            "rails", "spring", "express", "nextjs", "svelte", "go", "actix", "axum", "rocket",
             "other",
         ];
 
@@ -116,7 +106,10 @@ impl ProjectValidator {
     /// - Must be a valid path format
     pub fn validate_path(path: &str) -> AppResult<()> {
         if path.trim().is_empty() {
-            return Err(ApplicationError::validation("path", "Project path cannot be empty"));
+            return Err(ApplicationError::validation(
+                "path",
+                "Project path cannot be empty",
+            ));
         }
 
         // Check for invalid path characters (basic validation)
@@ -221,13 +214,12 @@ mod tests {
             "A description",
             "rust",
             "/path/to/project"
-        ).is_ok());
+        )
+        .is_ok());
 
-        assert!(ProjectValidator::validate_create(
-            "",
-            "A description",
-            "rust",
-            "/path/to/project"
-        ).is_err());
+        assert!(
+            ProjectValidator::validate_create("", "A description", "rust", "/path/to/project")
+                .is_err()
+        );
     }
 }

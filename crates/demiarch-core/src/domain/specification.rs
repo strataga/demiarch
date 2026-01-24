@@ -214,8 +214,16 @@ mod tests {
     fn test_single_specification() {
         let age_spec = AgeSpec { min_age: 18 };
 
-        let adult = User { age: 25, is_active: true, role: "user".to_string() };
-        let minor = User { age: 15, is_active: true, role: "user".to_string() };
+        let adult = User {
+            age: 25,
+            is_active: true,
+            role: "user".to_string(),
+        };
+        let minor = User {
+            age: 15,
+            is_active: true,
+            role: "user".to_string(),
+        };
 
         assert!(age_spec.is_satisfied_by(&adult));
         assert!(!age_spec.is_satisfied_by(&minor));
@@ -228,9 +236,21 @@ mod tests {
 
         let combined = age_spec.and(active_spec);
 
-        let active_adult = User { age: 25, is_active: true, role: "user".to_string() };
-        let inactive_adult = User { age: 25, is_active: false, role: "user".to_string() };
-        let active_minor = User { age: 15, is_active: true, role: "user".to_string() };
+        let active_adult = User {
+            age: 25,
+            is_active: true,
+            role: "user".to_string(),
+        };
+        let inactive_adult = User {
+            age: 25,
+            is_active: false,
+            role: "user".to_string(),
+        };
+        let active_minor = User {
+            age: 15,
+            is_active: true,
+            role: "user".to_string(),
+        };
 
         assert!(combined.is_satisfied_by(&active_adult));
         assert!(!combined.is_satisfied_by(&inactive_adult));
@@ -239,14 +259,28 @@ mod tests {
 
     #[test]
     fn test_or_specification() {
-        let admin_spec = RoleSpec { role: "admin".to_string() };
+        let admin_spec = RoleSpec {
+            role: "admin".to_string(),
+        };
         let age_spec = AgeSpec { min_age: 21 };
 
         let combined = admin_spec.or(age_spec);
 
-        let young_admin = User { age: 18, is_active: true, role: "admin".to_string() };
-        let old_user = User { age: 25, is_active: true, role: "user".to_string() };
-        let young_user = User { age: 18, is_active: true, role: "user".to_string() };
+        let young_admin = User {
+            age: 18,
+            is_active: true,
+            role: "admin".to_string(),
+        };
+        let old_user = User {
+            age: 25,
+            is_active: true,
+            role: "user".to_string(),
+        };
+        let young_user = User {
+            age: 18,
+            is_active: true,
+            role: "user".to_string(),
+        };
 
         assert!(combined.is_satisfied_by(&young_admin)); // admin
         assert!(combined.is_satisfied_by(&old_user)); // 21+
@@ -258,8 +292,16 @@ mod tests {
         let active_spec = ActiveSpec;
         let inactive_spec = active_spec.not();
 
-        let active_user = User { age: 25, is_active: true, role: "user".to_string() };
-        let inactive_user = User { age: 25, is_active: false, role: "user".to_string() };
+        let active_user = User {
+            age: 25,
+            is_active: true,
+            role: "user".to_string(),
+        };
+        let inactive_user = User {
+            age: 25,
+            is_active: false,
+            role: "user".to_string(),
+        };
 
         assert!(!inactive_spec.is_satisfied_by(&active_user));
         assert!(inactive_spec.is_satisfied_by(&inactive_user));
@@ -269,12 +311,26 @@ mod tests {
     fn test_complex_composition() {
         // (age >= 18 AND active) OR role == admin
         let age_and_active = AgeSpec { min_age: 18 }.and(ActiveSpec);
-        let admin = RoleSpec { role: "admin".to_string() };
+        let admin = RoleSpec {
+            role: "admin".to_string(),
+        };
         let combined = age_and_active.or(admin);
 
-        let active_adult = User { age: 25, is_active: true, role: "user".to_string() };
-        let inactive_admin = User { age: 15, is_active: false, role: "admin".to_string() };
-        let inactive_minor = User { age: 15, is_active: false, role: "user".to_string() };
+        let active_adult = User {
+            age: 25,
+            is_active: true,
+            role: "user".to_string(),
+        };
+        let inactive_admin = User {
+            age: 15,
+            is_active: false,
+            role: "admin".to_string(),
+        };
+        let inactive_minor = User {
+            age: 15,
+            is_active: false,
+            role: "user".to_string(),
+        };
 
         assert!(combined.is_satisfied_by(&active_adult));
         assert!(combined.is_satisfied_by(&inactive_admin));
@@ -285,8 +341,16 @@ mod tests {
     fn test_predicate_spec() {
         let adult_spec = spec(|u: &User| u.age >= 18);
 
-        let adult = User { age: 25, is_active: true, role: "user".to_string() };
-        let minor = User { age: 15, is_active: true, role: "user".to_string() };
+        let adult = User {
+            age: 25,
+            is_active: true,
+            role: "user".to_string(),
+        };
+        let minor = User {
+            age: 15,
+            is_active: true,
+            role: "user".to_string(),
+        };
 
         assert!(adult_spec.is_satisfied_by(&adult));
         assert!(!adult_spec.is_satisfied_by(&minor));
@@ -294,7 +358,11 @@ mod tests {
 
     #[test]
     fn test_true_false_specs() {
-        let user = User { age: 25, is_active: true, role: "user".to_string() };
+        let user = User {
+            age: 25,
+            is_active: true,
+            role: "user".to_string(),
+        };
 
         assert!(TrueSpec::<User>::new().is_satisfied_by(&user));
         assert!(!FalseSpec::<User>::new().is_satisfied_by(&user));

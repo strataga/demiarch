@@ -83,7 +83,9 @@ impl KnowledgeRelationship {
     pub fn is_bidirectional(&self) -> bool {
         matches!(
             self.relationship_type,
-            RelationshipType::SimilarTo | RelationshipType::RelatedTo | RelationshipType::ConflictsWith
+            RelationshipType::SimilarTo
+                | RelationshipType::RelatedTo
+                | RelationshipType::ConflictsWith
         )
     }
 
@@ -256,7 +258,10 @@ pub struct RelationshipEvidence {
 
 impl RelationshipEvidence {
     /// Create new evidence from co-occurrence in a skill
-    pub fn from_skill_cooccurrence(skill_id: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn from_skill_cooccurrence(
+        skill_id: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         Self {
             source: EvidenceSource::SkillCooccurrence {
                 skill_id: skill_id.into(),

@@ -8,9 +8,9 @@ use sqlx::{FromRow, SqlitePool};
 use tracing::{debug, info};
 
 use crate::domain::knowledge::{
-    EntitySearchResult, EntityType, EntityWithDistance, KnowledgeEntity,
-    KnowledgeGraphRepository, KnowledgeGraphStats, KnowledgeRelationship, PathRelationship,
-    PathStep, RelationshipType, TraversalDirection,
+    EntitySearchResult, EntityType, EntityWithDistance, KnowledgeEntity, KnowledgeGraphRepository,
+    KnowledgeGraphStats, KnowledgeRelationship, PathRelationship, PathStep, RelationshipType,
+    TraversalDirection,
 };
 use crate::error::{Error, Result};
 
@@ -73,33 +73,33 @@ impl KnowledgeGraphRepository for SqliteKnowledgeGraphRepository {
     }
 
     async fn get_entity(&self, id: &str) -> Result<Option<KnowledgeEntity>> {
-        let row: Option<EntityRow> = sqlx::query_as(
-            "SELECT * FROM knowledge_entities WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<EntityRow> =
+            sqlx::query_as("SELECT * FROM knowledge_entities WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
 
         row.map(|r| r.into_entity()).transpose()
     }
 
-    async fn get_entity_by_canonical_name(&self, canonical_name: &str) -> Result<Option<KnowledgeEntity>> {
-        let row: Option<EntityRow> = sqlx::query_as(
-            "SELECT * FROM knowledge_entities WHERE canonical_name = ?",
-        )
-        .bind(canonical_name)
-        .fetch_optional(&self.pool)
-        .await?;
+    async fn get_entity_by_canonical_name(
+        &self,
+        canonical_name: &str,
+    ) -> Result<Option<KnowledgeEntity>> {
+        let row: Option<EntityRow> =
+            sqlx::query_as("SELECT * FROM knowledge_entities WHERE canonical_name = ?")
+                .bind(canonical_name)
+                .fetch_optional(&self.pool)
+                .await?;
 
         row.map(|r| r.into_entity()).transpose()
     }
 
     async fn list_entities(&self) -> Result<Vec<KnowledgeEntity>> {
-        let rows: Vec<EntityRow> = sqlx::query_as(
-            "SELECT * FROM knowledge_entities ORDER BY confidence DESC, name",
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<EntityRow> =
+            sqlx::query_as("SELECT * FROM knowledge_entities ORDER BY confidence DESC, name")
+                .fetch_all(&self.pool)
+                .await?;
 
         rows.into_iter().map(|r| r.into_entity()).collect()
     }
@@ -174,12 +174,11 @@ impl KnowledgeGraphRepository for SqliteKnowledgeGraphRepository {
     }
 
     async fn get_relationship(&self, id: &str) -> Result<Option<KnowledgeRelationship>> {
-        let row: Option<RelationshipRow> = sqlx::query_as(
-            "SELECT * FROM knowledge_relationships WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<RelationshipRow> =
+            sqlx::query_as("SELECT * FROM knowledge_relationships WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
 
         row.map(|r| r.into_relationship()).transpose()
     }
@@ -205,7 +204,10 @@ impl KnowledgeGraphRepository for SqliteKnowledgeGraphRepository {
         row.map(|r| r.into_relationship()).transpose()
     }
 
-    async fn list_relationships_for_entity(&self, entity_id: &str) -> Result<Vec<KnowledgeRelationship>> {
+    async fn list_relationships_for_entity(
+        &self,
+        entity_id: &str,
+    ) -> Result<Vec<KnowledgeRelationship>> {
         let rows: Vec<RelationshipRow> = sqlx::query_as(
             r#"
             SELECT * FROM knowledge_relationships
@@ -221,7 +223,10 @@ impl KnowledgeGraphRepository for SqliteKnowledgeGraphRepository {
         rows.into_iter().map(|r| r.into_relationship()).collect()
     }
 
-    async fn list_outgoing_relationships(&self, entity_id: &str) -> Result<Vec<KnowledgeRelationship>> {
+    async fn list_outgoing_relationships(
+        &self,
+        entity_id: &str,
+    ) -> Result<Vec<KnowledgeRelationship>> {
         let rows: Vec<RelationshipRow> = sqlx::query_as(
             "SELECT * FROM knowledge_relationships WHERE source_entity_id = ? ORDER BY weight DESC",
         )
@@ -232,7 +237,10 @@ impl KnowledgeGraphRepository for SqliteKnowledgeGraphRepository {
         rows.into_iter().map(|r| r.into_relationship()).collect()
     }
 
-    async fn list_incoming_relationships(&self, entity_id: &str) -> Result<Vec<KnowledgeRelationship>> {
+    async fn list_incoming_relationships(
+        &self,
+        entity_id: &str,
+    ) -> Result<Vec<KnowledgeRelationship>> {
         let rows: Vec<RelationshipRow> = sqlx::query_as(
             "SELECT * FROM knowledge_relationships WHERE target_entity_id = ? ORDER BY weight DESC",
         )
@@ -594,13 +602,12 @@ impl KnowledgeGraphRepository for SqliteKnowledgeGraphRepository {
     }
 
     async fn unlink_skill_from_entity(&self, skill_id: &str, entity_id: &str) -> Result<bool> {
-        let result = sqlx::query(
-            "DELETE FROM skill_entity_links WHERE skill_id = ? AND entity_id = ?",
-        )
-        .bind(skill_id)
-        .bind(entity_id)
-        .execute(&self.pool)
-        .await?;
+        let result =
+            sqlx::query("DELETE FROM skill_entity_links WHERE skill_id = ? AND entity_id = ?")
+                .bind(skill_id)
+                .bind(entity_id)
+                .execute(&self.pool)
+                .await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -642,11 +649,7 @@ impl KnowledgeGraphRepository for SqliteKnowledgeGraphRepository {
         Ok(())
     }
 
-    async fn get_entity_embedding(
-        &self,
-        entity_id: &str,
-        model: &str,
-    ) -> Result<Option<Vec<f32>>> {
+    async fn get_entity_embedding(&self, entity_id: &str, model: &str) -> Result<Option<Vec<f32>>> {
         let row: Option<(Vec<u8>,)> = sqlx::query_as(
             "SELECT embedding FROM entity_embeddings WHERE entity_id = ? AND embedding_model = ?",
         )
@@ -718,10 +721,9 @@ impl KnowledgeGraphRepository for SqliteKnowledgeGraphRepository {
     // ========== Statistics ==========
 
     async fn get_stats(&self) -> Result<KnowledgeGraphStats> {
-        let (total_entities,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM knowledge_entities")
-                .fetch_one(&self.pool)
-                .await?;
+        let (total_entities,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM knowledge_entities")
+            .fetch_one(&self.pool)
+            .await?;
 
         let (total_relationships,): (i64,) =
             sqlx::query_as("SELECT COUNT(*) FROM knowledge_relationships")
@@ -866,9 +868,13 @@ struct RelationshipRow {
 
 impl RelationshipRow {
     fn into_relationship(self) -> Result<KnowledgeRelationship> {
-        let relationship_type = RelationshipType::parse(&self.relationship_type).ok_or_else(|| {
-            Error::Other(format!("Invalid relationship type: {}", self.relationship_type))
-        })?;
+        let relationship_type =
+            RelationshipType::parse(&self.relationship_type).ok_or_else(|| {
+                Error::Other(format!(
+                    "Invalid relationship type: {}",
+                    self.relationship_type
+                ))
+            })?;
 
         let evidence = self
             .evidence
@@ -1141,12 +1147,19 @@ mod tests {
         // Different embedding (orthogonal)
         let emb2 = vec![0.0, 1.0, 0.0];
 
-        repo.save_entity_embedding(&e1.id, &emb1, "test").await.unwrap();
-        repo.save_entity_embedding(&e2.id, &emb2, "test").await.unwrap();
+        repo.save_entity_embedding(&e1.id, &emb1, "test")
+            .await
+            .unwrap();
+        repo.save_entity_embedding(&e2.id, &emb2, "test")
+            .await
+            .unwrap();
 
         // Query similar to e1
         let query = vec![0.9, 0.1, 0.0];
-        let results = repo.semantic_search_entities(&query, "test", 10, 0.5).await.unwrap();
+        let results = repo
+            .semantic_search_entities(&query, "test", 10, 0.5)
+            .await
+            .unwrap();
 
         assert!(!results.is_empty());
         assert_eq!(results[0].entity.id, e1.id);
@@ -1238,13 +1251,22 @@ mod tests {
         repo.save_entity(&lib2).await.unwrap();
         repo.save_entity(&concept).await.unwrap();
 
-        let libraries = repo.list_entities_by_type(EntityType::Library).await.unwrap();
+        let libraries = repo
+            .list_entities_by_type(EntityType::Library)
+            .await
+            .unwrap();
         assert_eq!(libraries.len(), 2);
 
-        let concepts = repo.list_entities_by_type(EntityType::Concept).await.unwrap();
+        let concepts = repo
+            .list_entities_by_type(EntityType::Concept)
+            .await
+            .unwrap();
         assert_eq!(concepts.len(), 1);
 
-        let frameworks = repo.list_entities_by_type(EntityType::Framework).await.unwrap();
+        let frameworks = repo
+            .list_entities_by_type(EntityType::Framework)
+            .await
+            .unwrap();
         assert!(frameworks.is_empty());
     }
 
@@ -1548,8 +1570,8 @@ mod tests {
         repo.save_entity(&e1).await.unwrap();
         repo.save_entity(&e2).await.unwrap();
 
-        let mut rel = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses)
-            .with_weight(0.5);
+        let mut rel =
+            KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses).with_weight(0.5);
 
         repo.save_relationship(&rel).await.unwrap();
 
@@ -1615,7 +1637,10 @@ mod tests {
 
         let retrieved = repo.get_relationship(&rel.id).await.unwrap().unwrap();
         assert_eq!(retrieved.evidence.len(), 2);
-        assert!(retrieved.evidence.iter().any(|e| e.description == "Found in documentation"));
+        assert!(retrieved
+            .evidence
+            .iter()
+            .any(|e| e.description == "Found in documentation"));
     }
 
     #[tokio::test]
@@ -1687,8 +1712,17 @@ mod tests {
         assert_eq!(stats.entities_with_embeddings, 1);
         assert!((stats.average_entity_confidence - 0.7).abs() < 0.01); // (0.8 + 0.6) / 2
         assert!((stats.average_relationship_weight - 0.7).abs() < 0.01);
-        assert!(stats.entities_by_type.iter().any(|(t, _)| *t == EntityType::Library));
-        assert!(stats.entities_by_type.iter().any(|(t, _)| *t == EntityType::Concept));
-        assert!(stats.relationships_by_type.iter().any(|(t, _)| *t == RelationshipType::Uses));
+        assert!(stats
+            .entities_by_type
+            .iter()
+            .any(|(t, _)| *t == EntityType::Library));
+        assert!(stats
+            .entities_by_type
+            .iter()
+            .any(|(t, _)| *t == EntityType::Concept));
+        assert!(stats
+            .relationships_by_type
+            .iter()
+            .any(|(t, _)| *t == RelationshipType::Uses));
     }
 }

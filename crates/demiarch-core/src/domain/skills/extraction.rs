@@ -291,7 +291,9 @@ impl DebugSkillExtractor {
         pattern_counts
             .into_iter()
             .filter(|(_, (_, count))| *count >= self.min_occurrences)
-            .map(|(name, (steps, count))| (format!("Technique: {}", truncate(&name, 50)), steps, count))
+            .map(|(name, (steps, count))| {
+                (format!("Technique: {}", truncate(&name, 50)), steps, count)
+            })
             .collect()
     }
 
@@ -328,18 +330,15 @@ impl DebugSkillExtractor {
     }
 
     /// Identify effective solutions by correlating errors with successful resolutions
-    pub fn identify_effective_solutions(
-        &self,
-        events: &[KnowledgeEvent],
-    ) -> Vec<(String, String)> {
+    pub fn identify_effective_solutions(&self, events: &[KnowledgeEvent]) -> Vec<(String, String)> {
         let error_patterns = self.extract_error_patterns(events);
 
         error_patterns
             .into_iter()
             .filter_map(|(error, solutions)| {
-                let best = solutions.iter().max_by(|a, b| {
-                    a.confidence.partial_cmp(&b.confidence).unwrap()
-                })?;
+                let best = solutions
+                    .iter()
+                    .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?;
 
                 if best.confidence >= self.min_confidence {
                     Some((error, best.description.clone()))

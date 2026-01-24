@@ -1,6 +1,5 @@
 //! Commands module tests
 
-use crate::Result;
 use crate::commands::{
     chat::{self, ChatMessage, LegacyChatMessage, MessageRole},
     feature,
@@ -8,6 +7,7 @@ use crate::commands::{
     project,
     sync::{self, SyncStatus},
 };
+use crate::Result;
 
 #[tokio::test]
 async fn test_chat_message_structure() {

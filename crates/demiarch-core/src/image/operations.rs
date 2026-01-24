@@ -9,7 +9,7 @@ use tracing::{debug, info};
 use crate::error::{Error, Result};
 
 use super::client::ImageClient;
-use super::models::{ImageModel, fallback_model_ids};
+use super::models::{fallback_model_ids, ImageModel};
 use super::types::{
     ImageFormat, ImageRequest, ImageResponse, InpaintRequest, TransformRequest, UpscaleRequest,
 };
@@ -80,7 +80,12 @@ pub async fn transform_image(
     }
 
     let response = client
-        .transform(&request.model, &request.prompt, &input_data, request.strength)
+        .transform(
+            &request.model,
+            &request.prompt,
+            &input_data,
+            request.strength,
+        )
         .await?;
 
     info!(
@@ -125,7 +130,9 @@ pub async fn upscale_image(
                     "Upscale this image by {}x, maintaining all details and enhancing quality",
                     request.scale
                 );
-                let response = client.transform(model_id, &prompt, &input_data, 0.1).await?;
+                let response = client
+                    .transform(model_id, &prompt, &input_data, 0.1)
+                    .await?;
 
                 if let Some(path) = output_path {
                     save_image(&response, path)?;
@@ -231,9 +238,7 @@ async fn try_fallback_models(
         }
     }
 
-    Err(last_error.unwrap_or_else(|| {
-        Error::ImageGenerationError("All models failed".to_string())
-    }))
+    Err(last_error.unwrap_or_else(|| Error::ImageGenerationError("All models failed".to_string())))
 }
 
 /// Check if we should try fallback models for this error
@@ -241,7 +246,9 @@ fn should_try_fallback(error: &Error) -> bool {
     match error {
         Error::ImageModelNotAvailable(_) => true,
         Error::ImageGenerationError(msg) => {
-            msg.contains("Rate limited") || msg.contains("overloaded") || msg.contains("unavailable")
+            msg.contains("Rate limited")
+                || msg.contains("overloaded")
+                || msg.contains("unavailable")
         }
         _ => false,
     }
@@ -255,7 +262,8 @@ fn save_image(response: &ImageResponse, path: &Path) -> Result<()> {
             .map_err(|e| Error::ImageSaveError(format!("Failed to create directory: {}", e)))?;
     }
 
-    response.save_to_file(path)
+    response
+        .save_to_file(path)
         .map_err(|e| Error::ImageSaveError(format!("{}: {}", path.display(), e)))
 }
 
@@ -263,8 +271,8 @@ fn save_image(response: &ImageResponse, path: &Path) -> Result<()> {
 ///
 /// This is a fallback when no model-based upscaling is available.
 fn local_upscale(input_data: &[u8], scale: u32) -> Result<ImageResponse> {
-    use std::time::Instant;
     use std::io::Cursor;
+    use std::time::Instant;
 
     let start = Instant::now();
 
@@ -277,11 +285,7 @@ fn local_upscale(input_data: &[u8], scale: u32) -> Result<ImageResponse> {
     let new_height = height * scale;
 
     // Resize using Lanczos3 filter for quality
-    let resized = img.resize_exact(
-        new_width,
-        new_height,
-        image::imageops::FilterType::Lanczos3,
-    );
+    let resized = img.resize_exact(new_width, new_height, image::imageops::FilterType::Lanczos3);
 
     // Encode to PNG using write_to
     let mut output = Cursor::new(Vec::new());

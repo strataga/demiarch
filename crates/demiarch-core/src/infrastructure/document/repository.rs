@@ -415,12 +415,20 @@ mod tests {
             model_used: Some("claude-3-5-sonnet".to_string()),
             created_at: Utc::now(),
         };
-        repo.save_version(&version).await.expect("Failed to save version");
+        repo.save_version(&version)
+            .await
+            .expect("Failed to save version");
 
-        let versions = repo.get_versions(&doc.id).await.expect("Failed to get versions");
+        let versions = repo
+            .get_versions(&doc.id)
+            .await
+            .expect("Failed to get versions");
         assert_eq!(versions.len(), 1);
         assert_eq!(versions[0].version_number, 1);
-        assert_eq!(versions[0].change_summary, Some("Initial version".to_string()));
+        assert_eq!(
+            versions[0].change_summary,
+            Some("Initial version".to_string())
+        );
     }
 
     #[tokio::test]
@@ -429,7 +437,12 @@ mod tests {
         let project_id = create_test_project(&db).await;
         let repo = DocumentRepository::new(&db);
 
-        let doc = Document::new(&project_id, DocumentType::Architecture, "Architecture", "# V1");
+        let doc = Document::new(
+            &project_id,
+            DocumentType::Architecture,
+            "Architecture",
+            "# V1",
+        );
         repo.create(&doc).await.unwrap();
 
         // Save multiple versions
@@ -470,13 +483,21 @@ mod tests {
         ];
 
         for doc_type in &types {
-            let doc = Document::new(&project_id, *doc_type, format!("{:?}", doc_type), "# Content");
+            let doc = Document::new(
+                &project_id,
+                *doc_type,
+                format!("{:?}", doc_type),
+                "# Content",
+            );
             repo.create(&doc).await.unwrap();
         }
 
         // Test each filter
         for doc_type in &types {
-            let docs = repo.list_by_project(&project_id, Some(*doc_type)).await.unwrap();
+            let docs = repo
+                .list_by_project(&project_id, Some(*doc_type))
+                .await
+                .unwrap();
             assert_eq!(docs.len(), 1, "Expected 1 doc for type {:?}", doc_type);
             assert_eq!(docs[0].doc_type, *doc_type);
         }

@@ -45,10 +45,7 @@ impl EntityExtractor {
     ///
     /// Analyzes the skill content to identify knowledge entities and
     /// their relationships, which can be added to the knowledge graph.
-    pub async fn extract_from_skill(
-        &self,
-        skill: &LearnedSkill,
-    ) -> Result<ExtractionResult> {
+    pub async fn extract_from_skill(&self, skill: &LearnedSkill) -> Result<ExtractionResult> {
         info!(skill_id = %skill.id, skill_name = %skill.name, "Extracting entities from skill");
 
         let prompt = self.build_extraction_prompt(skill);
@@ -225,7 +222,8 @@ Return your analysis as JSON:
 
                 let evidence = RelationshipEvidence::from_skill_cooccurrence(
                     &skill.id,
-                    r.description.unwrap_or_else(|| format!("Inferred from skill: {}", skill.name)),
+                    r.description
+                        .unwrap_or_else(|| format!("Inferred from skill: {}", skill.name)),
                 );
 
                 let rel = KnowledgeRelationship::new(source_id, target_id, rel_type)

@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use crate::agents::context::{ChildAgentInfo, SharedAgentState};
-use crate::agents::events::{AgentEvent, AgentEventType, read_current_session_events};
+use crate::agents::events::{read_current_session_events, AgentEvent, AgentEventType};
 use crate::agents::{AgentContext, AgentId, AgentPath, AgentStatus, AgentType};
 
 /// Style configuration for tree rendering
@@ -829,10 +829,22 @@ fn build_tree_from_events_map(agents: &HashMap<String, EventAgentInfo>, id: &str
         let hash = hasher.finish();
         // Use the hash to create a stable UUID (version 4 format but deterministic)
         let bytes = [
-            (hash >> 56) as u8, (hash >> 48) as u8, (hash >> 40) as u8, (hash >> 32) as u8,
-            (hash >> 24) as u8, (hash >> 16) as u8, (hash >> 8) as u8, hash as u8,
-            (hash >> 56) as u8, (hash >> 48) as u8, (hash >> 40) as u8, (hash >> 32) as u8,
-            (hash >> 24) as u8, (hash >> 16) as u8, (hash >> 8) as u8, hash as u8,
+            (hash >> 56) as u8,
+            (hash >> 48) as u8,
+            (hash >> 40) as u8,
+            (hash >> 32) as u8,
+            (hash >> 24) as u8,
+            (hash >> 16) as u8,
+            (hash >> 8) as u8,
+            hash as u8,
+            (hash >> 56) as u8,
+            (hash >> 48) as u8,
+            (hash >> 40) as u8,
+            (hash >> 32) as u8,
+            (hash >> 24) as u8,
+            (hash >> 16) as u8,
+            (hash >> 8) as u8,
+            hash as u8,
         ];
         AgentId::from_uuid(uuid::Uuid::from_bytes(bytes))
     });

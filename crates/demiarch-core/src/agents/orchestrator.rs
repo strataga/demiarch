@@ -8,12 +8,12 @@ use std::pin::Pin;
 
 use tracing::{debug, info};
 
-use super::AgentType;
 use super::context::AgentContext;
 use super::message_builder::build_messages_from_input;
 use super::planner::PlannerAgent;
 use super::status::StatusTracker;
 use super::traits::{Agent, AgentArtifact, AgentCapability, AgentInput, AgentResult, AgentStatus};
+use super::AgentType;
 use crate::error::Result;
 use crate::llm::Message;
 
@@ -186,7 +186,6 @@ impl OrchestratorAgent {
             refined_task: response.to_string(),
         }
     }
-
 }
 
 impl Default for OrchestratorAgent {
@@ -271,11 +270,9 @@ mod tests {
         let orchestrator = OrchestratorAgent::new();
         assert_eq!(orchestrator.agent_type(), AgentType::Orchestrator);
         assert_eq!(orchestrator.status(), AgentStatus::Ready);
-        assert!(
-            orchestrator
-                .capabilities()
-                .contains(&AgentCapability::Orchestration)
-        );
+        assert!(orchestrator
+            .capabilities()
+            .contains(&AgentCapability::Orchestration));
     }
 
     #[test]

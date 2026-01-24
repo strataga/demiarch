@@ -1,8 +1,8 @@
 //! Offline license verification using ed25519 signatures
 
 use crate::{PluginError, PluginManifest, PluginResult};
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use sha2::{Digest, Sha256};
