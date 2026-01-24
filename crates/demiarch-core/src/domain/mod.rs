@@ -10,4 +10,5 @@ pub mod recovery;
 pub mod search;
 pub mod security;
 pub mod session;
+pub mod skills;
 pub mod specification;
