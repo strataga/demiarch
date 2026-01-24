@@ -947,6 +947,31 @@ mod tests {
         SqliteKnowledgeGraphRepository::new(pool)
     }
 
+    async fn create_test_skill(repo: &SqliteKnowledgeGraphRepository, skill_id: &str) {
+        sqlx::query(
+            r#"
+            INSERT INTO learned_skills (
+                id, name, description, category, pattern_type, pattern_template,
+                confidence, times_used, last_used_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(skill_id)
+        .bind("Test Skill")
+        .bind("A test skill for testing")
+        .bind("other")
+        .bind("code_snippet")
+        .bind("test template")
+        .bind("high") // confidence is TEXT: 'low', 'medium', 'high'
+        .bind(0)
+        .bind(Utc::now().to_rfc3339())
+        .bind(Utc::now().to_rfc3339())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&repo.pool)
+        .await
+        .expect("Failed to create test skill");
+    }
+
     #[tokio::test]
     async fn test_save_and_get_entity() {
         let repo = setup_test_db().await;
@@ -1150,5 +1175,520 @@ mod tests {
 
         let c = vec![0.0, 1.0, 0.0];
         assert!(cosine_similarity(&a, &c).abs() < 0.001);
+    }
+
+    #[tokio::test]
+    async fn test_get_entity_by_canonical_name() {
+        let repo = setup_test_db().await;
+
+        let entity = KnowledgeEntity::new("Tokio Runtime", EntityType::Library)
+            .with_description("Async runtime");
+
+        repo.save_entity(&entity).await.unwrap();
+
+        let retrieved = repo
+            .get_entity_by_canonical_name(&entity.canonical_name)
+            .await
+            .unwrap();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().name, "Tokio Runtime");
+
+        // Non-existent canonical name
+        let not_found = repo
+            .get_entity_by_canonical_name("nonexistent")
+            .await
+            .unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_entities() {
+        let repo = setup_test_db().await;
+
+        // Initially empty
+        let entities = repo.list_entities().await.unwrap();
+        assert!(entities.is_empty());
+
+        // Add multiple entities
+        let e1 = KnowledgeEntity::new("A", EntityType::Library).with_confidence(0.5);
+        let e2 = KnowledgeEntity::new("B", EntityType::Concept).with_confidence(0.9);
+        let e3 = KnowledgeEntity::new("C", EntityType::Framework).with_confidence(0.7);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+        repo.save_entity(&e3).await.unwrap();
+
+        let entities = repo.list_entities().await.unwrap();
+        assert_eq!(entities.len(), 3);
+        // Should be ordered by confidence DESC
+        assert_eq!(entities[0].name, "B"); // 0.9
+        assert_eq!(entities[1].name, "C"); // 0.7
+        assert_eq!(entities[2].name, "A"); // 0.5
+    }
+
+    #[tokio::test]
+    async fn test_list_entities_by_type() {
+        let repo = setup_test_db().await;
+
+        let lib1 = KnowledgeEntity::new("lib1", EntityType::Library);
+        let lib2 = KnowledgeEntity::new("lib2", EntityType::Library);
+        let concept = KnowledgeEntity::new("concept1", EntityType::Concept);
+
+        repo.save_entity(&lib1).await.unwrap();
+        repo.save_entity(&lib2).await.unwrap();
+        repo.save_entity(&concept).await.unwrap();
+
+        let libraries = repo.list_entities_by_type(EntityType::Library).await.unwrap();
+        assert_eq!(libraries.len(), 2);
+
+        let concepts = repo.list_entities_by_type(EntityType::Concept).await.unwrap();
+        assert_eq!(concepts.len(), 1);
+
+        let frameworks = repo.list_entities_by_type(EntityType::Framework).await.unwrap();
+        assert!(frameworks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_entity() {
+        let repo = setup_test_db().await;
+
+        let entity = KnowledgeEntity::new("to_delete", EntityType::Concept);
+        repo.save_entity(&entity).await.unwrap();
+
+        // Confirm exists
+        assert!(repo.get_entity(&entity.id).await.unwrap().is_some());
+
+        // Delete
+        let deleted = repo.delete_entity(&entity.id).await.unwrap();
+        assert!(deleted);
+
+        // Confirm gone
+        assert!(repo.get_entity(&entity.id).await.unwrap().is_none());
+
+        // Deleting non-existent returns false
+        let deleted_again = repo.delete_entity(&entity.id).await.unwrap();
+        assert!(!deleted_again);
+    }
+
+    #[tokio::test]
+    async fn test_count_entities() {
+        let repo = setup_test_db().await;
+
+        assert_eq!(repo.count_entities().await.unwrap(), 0);
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        assert_eq!(repo.count_entities().await.unwrap(), 1);
+
+        repo.save_entity(&e2).await.unwrap();
+        assert_eq!(repo.count_entities().await.unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_relationship_between() {
+        let repo = setup_test_db().await;
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+
+        let rel = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses);
+        repo.save_relationship(&rel).await.unwrap();
+
+        // Find existing relationship
+        let found = repo
+            .get_relationship_between(&e1.id, &e2.id, RelationshipType::Uses)
+            .await
+            .unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, rel.id);
+
+        // Wrong type
+        let not_found = repo
+            .get_relationship_between(&e1.id, &e2.id, RelationshipType::Implements)
+            .await
+            .unwrap();
+        assert!(not_found.is_none());
+
+        // Wrong direction
+        let not_found = repo
+            .get_relationship_between(&e2.id, &e1.id, RelationshipType::Uses)
+            .await
+            .unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_relationships_for_entity() {
+        let repo = setup_test_db().await;
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+        let e3 = KnowledgeEntity::new("E3", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+        repo.save_entity(&e3).await.unwrap();
+
+        // E1 -> E2, E3 -> E1
+        let rel1 = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses);
+        let rel2 = KnowledgeRelationship::new(&e3.id, &e1.id, RelationshipType::RelatedTo);
+
+        repo.save_relationship(&rel1).await.unwrap();
+        repo.save_relationship(&rel2).await.unwrap();
+
+        // E1 should have both relationships (outgoing and incoming)
+        let rels = repo.list_relationships_for_entity(&e1.id).await.unwrap();
+        assert_eq!(rels.len(), 2);
+
+        // E2 should have only one relationship
+        let rels = repo.list_relationships_for_entity(&e2.id).await.unwrap();
+        assert_eq!(rels.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_list_outgoing_incoming_relationships() {
+        let repo = setup_test_db().await;
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+        let e3 = KnowledgeEntity::new("E3", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+        repo.save_entity(&e3).await.unwrap();
+
+        // E1 -> E2, E3 -> E1
+        let rel1 = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses);
+        let rel2 = KnowledgeRelationship::new(&e3.id, &e1.id, RelationshipType::RelatedTo);
+
+        repo.save_relationship(&rel1).await.unwrap();
+        repo.save_relationship(&rel2).await.unwrap();
+
+        // E1 outgoing: E1 -> E2
+        let outgoing = repo.list_outgoing_relationships(&e1.id).await.unwrap();
+        assert_eq!(outgoing.len(), 1);
+        assert_eq!(outgoing[0].target_entity_id, e2.id);
+
+        // E1 incoming: E3 -> E1
+        let incoming = repo.list_incoming_relationships(&e1.id).await.unwrap();
+        assert_eq!(incoming.len(), 1);
+        assert_eq!(incoming[0].source_entity_id, e3.id);
+    }
+
+    #[tokio::test]
+    async fn test_delete_relationship() {
+        let repo = setup_test_db().await;
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+
+        let rel = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses);
+        repo.save_relationship(&rel).await.unwrap();
+
+        // Confirm exists
+        assert!(repo.get_relationship(&rel.id).await.unwrap().is_some());
+
+        // Delete
+        let deleted = repo.delete_relationship(&rel.id).await.unwrap();
+        assert!(deleted);
+
+        // Confirm gone
+        assert!(repo.get_relationship(&rel.id).await.unwrap().is_none());
+
+        // Deleting non-existent returns false
+        let deleted_again = repo.delete_relationship(&rel.id).await.unwrap();
+        assert!(!deleted_again);
+    }
+
+    #[tokio::test]
+    async fn test_count_relationships() {
+        let repo = setup_test_db().await;
+
+        assert_eq!(repo.count_relationships().await.unwrap(), 0);
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+        let e3 = KnowledgeEntity::new("E3", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+        repo.save_entity(&e3).await.unwrap();
+
+        let rel1 = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses);
+        let rel2 = KnowledgeRelationship::new(&e2.id, &e3.id, RelationshipType::Uses);
+
+        repo.save_relationship(&rel1).await.unwrap();
+        assert_eq!(repo.count_relationships().await.unwrap(), 1);
+
+        repo.save_relationship(&rel2).await.unwrap();
+        assert_eq!(repo.count_relationships().await.unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_connected_entities() {
+        let repo = setup_test_db().await;
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+        let e3 = KnowledgeEntity::new("E3", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+        repo.save_entity(&e3).await.unwrap();
+
+        // E1 -> E2 (Uses), E3 -> E1 (Uses)
+        let rel1 = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses);
+        let rel2 = KnowledgeRelationship::new(&e3.id, &e1.id, RelationshipType::Uses);
+
+        repo.save_relationship(&rel1).await.unwrap();
+        repo.save_relationship(&rel2).await.unwrap();
+
+        // Outgoing from E1
+        let connected = repo
+            .get_connected_entities(&e1.id, RelationshipType::Uses, TraversalDirection::Outgoing)
+            .await
+            .unwrap();
+        assert_eq!(connected.len(), 1);
+        assert_eq!(connected[0].name, "E2");
+
+        // Incoming to E1
+        let connected = repo
+            .get_connected_entities(&e1.id, RelationshipType::Uses, TraversalDirection::Incoming)
+            .await
+            .unwrap();
+        assert_eq!(connected.len(), 1);
+        assert_eq!(connected[0].name, "E3");
+
+        // Both directions
+        let connected = repo
+            .get_connected_entities(&e1.id, RelationshipType::Uses, TraversalDirection::Both)
+            .await
+            .unwrap();
+        assert_eq!(connected.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_link_and_unlink_skill_to_entity() {
+        let repo = setup_test_db().await;
+
+        let entity = KnowledgeEntity::new("test_entity", EntityType::Concept);
+        repo.save_entity(&entity).await.unwrap();
+
+        // Create skill first (foreign key requirement)
+        create_test_skill(&repo, "skill-123").await;
+
+        // Link skill to entity
+        repo.link_skill_to_entity("skill-123", &entity.id, 0.8)
+            .await
+            .unwrap();
+
+        // Verify link exists
+        let skills = repo.get_skills_for_entity(&entity.id).await.unwrap();
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0], "skill-123");
+
+        // Unlink
+        let unlinked = repo
+            .unlink_skill_from_entity("skill-123", &entity.id)
+            .await
+            .unwrap();
+        assert!(unlinked);
+
+        // Verify unlinked
+        let skills = repo.get_skills_for_entity(&entity.id).await.unwrap();
+        assert!(skills.is_empty());
+
+        // Unlinking non-existent returns false
+        let unlinked_again = repo
+            .unlink_skill_from_entity("skill-123", &entity.id)
+            .await
+            .unwrap();
+        assert!(!unlinked_again);
+    }
+
+    #[tokio::test]
+    async fn test_update_entity_on_conflict() {
+        let repo = setup_test_db().await;
+
+        let mut entity = KnowledgeEntity::new("test", EntityType::Concept)
+            .with_description("Original")
+            .with_confidence(0.5);
+
+        repo.save_entity(&entity).await.unwrap();
+
+        // Update same entity (same ID)
+        entity.description = Some("Updated".to_string());
+        entity.confidence = 0.9;
+
+        repo.save_entity(&entity).await.unwrap();
+
+        let retrieved = repo.get_entity(&entity.id).await.unwrap().unwrap();
+        assert_eq!(retrieved.description, Some("Updated".to_string()));
+        assert_eq!(retrieved.confidence, 0.9);
+
+        // Still only one entity
+        assert_eq!(repo.count_entities().await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_update_relationship_on_conflict() {
+        let repo = setup_test_db().await;
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+
+        let mut rel = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses)
+            .with_weight(0.5);
+
+        repo.save_relationship(&rel).await.unwrap();
+
+        // Update same relationship (same source, target, type)
+        rel.weight = 0.9;
+        repo.save_relationship(&rel).await.unwrap();
+
+        let retrieved = repo
+            .get_relationship_between(&e1.id, &e2.id, RelationshipType::Uses)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.weight, 0.9);
+
+        // Still only one relationship
+        assert_eq!(repo.count_relationships().await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_entity_with_aliases_and_source_skills() {
+        let repo = setup_test_db().await;
+
+        let mut entity = KnowledgeEntity::new("tokio", EntityType::Library);
+        entity.aliases = vec!["tokio-rs".to_string(), "tokio runtime".to_string()];
+        entity.source_skill_ids = vec!["skill-1".to_string(), "skill-2".to_string()];
+
+        repo.save_entity(&entity).await.unwrap();
+
+        let retrieved = repo.get_entity(&entity.id).await.unwrap().unwrap();
+        assert_eq!(retrieved.aliases.len(), 2);
+        assert!(retrieved.aliases.contains(&"tokio-rs".to_string()));
+        assert_eq!(retrieved.source_skill_ids.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_relationship_with_evidence() {
+        let repo = setup_test_db().await;
+
+        let e1 = KnowledgeEntity::new("E1", EntityType::Concept);
+        let e2 = KnowledgeEntity::new("E2", EntityType::Concept);
+
+        repo.save_entity(&e1).await.unwrap();
+        repo.save_entity(&e2).await.unwrap();
+
+        use crate::domain::knowledge::{EvidenceSource, RelationshipEvidence};
+        let mut rel = KnowledgeRelationship::new(&e1.id, &e2.id, RelationshipType::Uses);
+        rel.evidence = vec![
+            RelationshipEvidence {
+                source: EvidenceSource::UserInput,
+                description: "Found in documentation".to_string(),
+                confidence: 0.9,
+                timestamp: Utc::now(),
+            },
+            RelationshipEvidence {
+                source: EvidenceSource::UsagePattern,
+                description: "Used in examples".to_string(),
+                confidence: 0.8,
+                timestamp: Utc::now(),
+            },
+        ];
+
+        repo.save_relationship(&rel).await.unwrap();
+
+        let retrieved = repo.get_relationship(&rel.id).await.unwrap().unwrap();
+        assert_eq!(retrieved.evidence.len(), 2);
+        assert!(retrieved.evidence.iter().any(|e| e.description == "Found in documentation"));
+    }
+
+    #[tokio::test]
+    async fn test_get_neighborhood_with_relationship_filter() {
+        let repo = setup_test_db().await;
+
+        let a = KnowledgeEntity::new("A", EntityType::Concept);
+        let b = KnowledgeEntity::new("B", EntityType::Concept);
+        let c = KnowledgeEntity::new("C", EntityType::Concept);
+
+        repo.save_entity(&a).await.unwrap();
+        repo.save_entity(&b).await.unwrap();
+        repo.save_entity(&c).await.unwrap();
+
+        // A -> B (Uses), A -> C (Implements)
+        let rel1 = KnowledgeRelationship::new(&a.id, &b.id, RelationshipType::Uses);
+        let rel2 = KnowledgeRelationship::new(&a.id, &c.id, RelationshipType::Implements);
+
+        repo.save_relationship(&rel1).await.unwrap();
+        repo.save_relationship(&rel2).await.unwrap();
+
+        // No filter: both B and C reachable
+        let neighbors = repo.get_neighborhood(&a.id, 1, None).await.unwrap();
+        assert_eq!(neighbors.len(), 2);
+
+        // Filter by Uses: only B reachable
+        let neighbors = repo
+            .get_neighborhood(&a.id, 1, Some(&[RelationshipType::Uses]))
+            .await
+            .unwrap();
+        assert_eq!(neighbors.len(), 1);
+        assert_eq!(neighbors[0].entity.name, "B");
+    }
+
+    #[tokio::test]
+    async fn test_stats_comprehensive() {
+        let repo = setup_test_db().await;
+
+        // Create entities of different types
+        let lib = KnowledgeEntity::new("lib", EntityType::Library).with_confidence(0.8);
+        let concept = KnowledgeEntity::new("concept", EntityType::Concept).with_confidence(0.6);
+
+        repo.save_entity(&lib).await.unwrap();
+        repo.save_entity(&concept).await.unwrap();
+
+        // Create relationships
+        let rel = KnowledgeRelationship::new(&lib.id, &concept.id, RelationshipType::Uses)
+            .with_weight(0.7);
+        repo.save_relationship(&rel).await.unwrap();
+
+        // Create skill first (foreign key requirement)
+        create_test_skill(&repo, "skill-1").await;
+
+        // Link skill
+        repo.link_skill_to_entity("skill-1", &lib.id, 0.9)
+            .await
+            .unwrap();
+
+        // Add embedding
+        repo.save_entity_embedding(&lib.id, &[0.1, 0.2, 0.3], "test-model")
+            .await
+            .unwrap();
+
+        let stats = repo.get_stats().await.unwrap();
+
+        assert_eq!(stats.total_entities, 2);
+        assert_eq!(stats.total_relationships, 1);
+        assert_eq!(stats.total_skill_links, 1);
+        assert_eq!(stats.entities_with_embeddings, 1);
+        assert!((stats.average_entity_confidence - 0.7).abs() < 0.01); // (0.8 + 0.6) / 2
+        assert!((stats.average_relationship_weight - 0.7).abs() < 0.01);
+        assert!(stats.entities_by_type.iter().any(|(t, _)| *t == EntityType::Library));
+        assert!(stats.entities_by_type.iter().any(|(t, _)| *t == EntityType::Concept));
+        assert!(stats.relationships_by_type.iter().any(|(t, _)| *t == RelationshipType::Uses));
     }
 }
