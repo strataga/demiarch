@@ -163,6 +163,7 @@ This enables a live AI conversation to help you create a detailed PRD. Get a fre
   });
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -228,8 +229,9 @@ This enables a live AI conversation to help you create a detailed PRD. Get a fre
   }
 
   async function handleCreateProject() {
-    if (!conversationState.prd) return;
+    if (!conversationState.prd || isCreating) return;
 
+    setIsCreating(true);
     const firstUserMsg = messages.find((m) => m.role === 'user');
     const projectName = extractProjectName(firstUserMsg?.content || 'New Project');
 
@@ -241,6 +243,16 @@ This enables a live AI conversation to help you create a detailed PRD. Get a fre
       onProjectCreated(created);
     } catch (err) {
       console.error('Failed to create project:', err);
+      // Show error in chat
+      const errorMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ **Failed to create project.** ${err instanceof Error ? err.message : 'Please try again.'}`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsCreating(false);
     }
   }
 
@@ -420,10 +432,20 @@ This enables a live AI conversation to help you create a detailed PRD. Get a fre
             <div className="mb-3">
               <button
                 onClick={handleCreateProject}
-                className="w-full px-4 py-3 bg-accent-teal text-background-deep rounded-lg font-medium hover:bg-accent-teal/90 transition-colors flex items-center justify-center gap-2"
+                disabled={isCreating}
+                className="w-full px-4 py-3 bg-accent-teal text-background-deep rounded-lg font-medium hover:bg-accent-teal/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Check className="w-5 h-5" />
-                Create Project with this PRD
+                {isCreating ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-background-deep border-t-transparent rounded-full animate-spin" />
+                    Creating Project...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-5 h-5" />
+                    Create Project with this PRD
+                  </>
+                )}
               </button>
             </div>
           )}
