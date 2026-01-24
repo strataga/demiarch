@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/api';
 import {
   DndContext,
   DragOverlay,

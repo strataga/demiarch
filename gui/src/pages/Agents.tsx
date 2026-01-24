@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/api';
 import { Bot, Cpu, Code2, Search, TestTube2 } from 'lucide-react';
 
 interface AgentStatus {

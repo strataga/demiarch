@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/api';
 import {
   GitMerge,
   ChevronLeft,
