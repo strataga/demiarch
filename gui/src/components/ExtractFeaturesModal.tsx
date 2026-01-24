@@ -29,36 +29,30 @@ export default function ExtractFeaturesModal({
   const [features, setFeatures] = useState<ExtractedFeature[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [creating, setCreating] = useState(false);
-  const [useAI, setUseAI] = useState(true);
 
   useEffect(() => {
     extractFeatures();
-  }, [prd, useAI]);
+  }, [prd]);
 
   async function extractFeatures() {
     setLoading(true);
     setError(null);
 
     try {
-      if (useAI) {
-        const result = await extractFeaturesFromPRD(prd);
-        if (result.error) {
-          setError(result.error);
-          // Fall back to local extraction
-          const localFeatures = extractFeaturesFromPRDLocal(prd);
-          setFeatures(localFeatures);
-          if (localFeatures.length > 0) {
-            setSelected(new Set(localFeatures.map((_, i) => i)));
-          }
-        } else {
-          setFeatures(result.features);
-          // Select all by default
-          setSelected(new Set(result.features.map((_, i) => i)));
-        }
-      } else {
+      // Always use AI extraction with fallback to local
+      const result = await extractFeaturesFromPRD(prd);
+      if (result.error) {
+        setError(result.error);
+        // Fall back to local extraction
         const localFeatures = extractFeaturesFromPRDLocal(prd);
         setFeatures(localFeatures);
-        setSelected(new Set(localFeatures.map((_, i) => i)));
+        if (localFeatures.length > 0) {
+          setSelected(new Set(localFeatures.map((_, i) => i)));
+        }
+      } else {
+        setFeatures(result.features);
+        // Select all by default
+        setSelected(new Set(result.features.map((_, i) => i)));
       }
     } catch (err) {
       console.error('Extraction failed:', err);
@@ -146,9 +140,7 @@ export default function ExtractFeaturesModal({
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="w-8 h-8 text-accent-teal animate-spin mb-4" />
-              <p className="text-gray-400">
-                {useAI ? 'AI is analyzing your PRD...' : 'Parsing PRD structure...'}
-              </p>
+              <p className="text-gray-400">AI is analyzing your PRD...</p>
             </div>
           ) : error ? (
             <div className="mb-4">
@@ -258,18 +250,7 @@ export default function ExtractFeaturesModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-background-surface flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useAI}
-                onChange={(e) => setUseAI(e.target.checked)}
-                className="rounded border-gray-500 bg-background-surface text-accent-teal focus:ring-accent-teal"
-              />
-              Use AI extraction
-            </label>
-          </div>
+        <div className="p-4 border-t border-background-surface flex justify-end">
           <div className="flex gap-3">
             <button
               onClick={onClose}
