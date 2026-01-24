@@ -283,3 +283,7 @@ Architecture inspired by:
 - [Claudeception](https://github.com/blader/Claudeception) - Autonomous skill extraction
 - [Claude-mem](https://github.com/thedotmack/claude-mem) - Progressive disclosure & lifecycle hooks
 - [Ralph-TUI](https://github.com/subsy/ralph-tui) - Agent orchestration patterns
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=strataga/demiarch&type=date&legend=top-left)](https://www.star-history.com/#strataga/demiarch&type=date&legend=top-left)
