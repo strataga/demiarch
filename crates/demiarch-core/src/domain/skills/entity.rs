@@ -136,7 +136,7 @@ impl SkillsEntity {
         self.observation_count += 1;
         // Update success rate with exponential moving average
         let weight = 0.1;
-        self.success_rate = self.success_rate * (1.0 - weight);
+        self.success_rate *= 1.0 - weight;
         self.updated_at = Utc::now();
     }
 

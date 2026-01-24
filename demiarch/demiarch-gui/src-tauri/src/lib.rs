@@ -460,10 +460,8 @@ async fn start_agent_watcher(app: tauri::AppHandle) -> Result<(), String> {
                                     // New session started, update filter and emit
                                     last_session_id = Some(event.session_id);
                                     // Emit session change event
-                                    let _ = app.emit(
-                                        "agent-session-change",
-                                        event.session_id.to_string(),
-                                    );
+                                    let _ = app
+                                        .emit("agent-session-change", event.session_id.to_string());
                                     let _ = app.emit("agent-event", &event);
                                 }
                             }
