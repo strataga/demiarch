@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { invoke, Feature } from '../lib/api';
-import { ArrowLeft, FileText, LayoutGrid, Clock, Edit3, Save, X, Sparkles } from 'lucide-react';
+import { ArrowLeft, FileText, LayoutGrid, Clock, Edit3, Save, X, Sparkles, Trash2, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import ExtractFeaturesModal from '../components/ExtractFeaturesModal';
 
@@ -26,6 +26,8 @@ export default function ProjectDetail() {
   const [editedPrd, setEditedPrd] = useState('');
   const [saving, setSaving] = useState(false);
   const [showExtractModal, setShowExtractModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     async function loadProject() {
@@ -85,6 +87,21 @@ export default function ProjectDetail() {
     navigate(`/projects/${projectId}/kanban`);
   }
 
+  async function handleDeleteProject() {
+    if (!project) return;
+    setDeleting(true);
+    try {
+      // Soft delete (hard=false) - keeps data but marks as deleted
+      // Does NOT delete the physical folder on disk
+      await invoke('delete_project', { id: project.id, hard: false });
+      navigate('/projects');
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -131,7 +148,7 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
-        {/* Edit/Save buttons */}
+        {/* Edit/Save/Delete buttons */}
         {!isEditing ? (
           <div className="flex gap-2">
             {project.prd && (
@@ -149,6 +166,13 @@ export default function ProjectDetail() {
             >
               <Edit3 className="w-4 h-4" />
               Edit PRD
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-background-surface text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors"
+              title="Delete project"
+            >
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         ) : (
@@ -244,6 +268,53 @@ What are we building and why?
           onClose={() => setShowExtractModal(false)}
           onFeaturesCreated={handleFeaturesCreated}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background-mid border border-background-surface rounded-lg w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <h2 className="text-lg font-semibold">Delete Project</h2>
+            </div>
+            <p className="text-gray-400 mb-2">
+              Are you sure you want to delete <strong className="text-white">{project.name}</strong>?
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              This will remove the project and all its features from the database.
+              The physical folder on disk will not be deleted.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="px-4 py-2 bg-background-surface text-gray-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {deleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Delete Project
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

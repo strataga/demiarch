@@ -160,6 +160,16 @@ pub async fn create_project(name: String, framework: String) -> Result<ProjectSu
     Ok(ProjectSummary::from(project))
 }
 
+#[tauri::command]
+pub async fn delete_project(id: String, hard: bool) -> Result<(), String> {
+    // Soft delete by default (hard=false) - keeps data but marks as deleted
+    // Hard delete (hard=true) - permanently removes project and all related data
+    // Note: This does NOT delete the physical folder on disk
+    api::projects::delete(&id, hard)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 // ============================================================
 // Feature Commands
 // ============================================================

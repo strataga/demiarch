@@ -184,6 +184,23 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
     return newProject;
   },
 
+  delete_project: (args) => {
+    const projects = getStorage<Array<{ id: string }>>(STORAGE_KEYS.projects, []);
+    const projectIndex = projects.findIndex((p) => p.id === args?.id);
+    if (projectIndex === -1) return false;
+
+    // Delete project from list
+    projects.splice(projectIndex, 1);
+    setStorage(STORAGE_KEYS.projects, projects);
+
+    // Also delete all features for this project
+    const features = getStorage<Feature[]>(STORAGE_KEYS.features, []);
+    const remainingFeatures = features.filter((f) => f.project_id !== args?.id);
+    setStorage(STORAGE_KEYS.features, remainingFeatures);
+
+    return true;
+  },
+
   get_features: (args) => {
     const features = getStorage<Array<{ project_id: string }>>(STORAGE_KEYS.features, []);
     const projectId = args?.project_id || args?.projectId;

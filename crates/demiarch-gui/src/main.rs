@@ -17,6 +17,7 @@ fn main() {
             commands::get_projects,
             commands::get_project,
             commands::create_project,
+            commands::delete_project,
             commands::get_features,
             commands::get_feature,
             commands::update_feature_status,
