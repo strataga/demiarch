@@ -446,30 +446,28 @@ async fn start_agent_watcher(app: tauri::AppHandle) -> Result<(), String> {
                     if file.seek(SeekFrom::Start(last_position)).is_ok() {
                         let reader = BufReader::new(&file);
 
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                if let Ok(event) = serde_json::from_str::<AgentEvent>(&line) {
-                                    // Track session ID - only emit events from current session
-                                    if last_session_id.is_none()
-                                        || last_session_id == Some(event.session_id)
-                                    {
-                                        last_session_id = Some(event.session_id);
+                        for line in reader.lines().map_while(Result::ok) {
+                            if let Ok(event) = serde_json::from_str::<AgentEvent>(&line) {
+                                // Track session ID - only emit events from current session
+                                if last_session_id.is_none()
+                                    || last_session_id == Some(event.session_id)
+                                {
+                                    last_session_id = Some(event.session_id);
 
-                                        // Emit to frontend
-                                        let _ = app.emit("agent-event", &event);
-                                    } else if Some(event.session_id) != last_session_id {
-                                        // New session started, update filter and emit
-                                        last_session_id = Some(event.session_id);
-                                        // Emit session change event
-                                        let _ = app.emit(
-                                            "agent-session-change",
-                                            event.session_id.to_string(),
-                                        );
-                                        let _ = app.emit("agent-event", &event);
-                                    }
+                                    // Emit to frontend
+                                    let _ = app.emit("agent-event", &event);
+                                } else if Some(event.session_id) != last_session_id {
+                                    // New session started, update filter and emit
+                                    last_session_id = Some(event.session_id);
+                                    // Emit session change event
+                                    let _ = app.emit(
+                                        "agent-session-change",
+                                        event.session_id.to_string(),
+                                    );
+                                    let _ = app.emit("agent-event", &event);
                                 }
-                                last_position += line.len() as u64 + 1; // +1 for newline
                             }
+                            last_position += line.len() as u64 + 1; // +1 for newline
                         }
                     }
                 }
@@ -495,7 +493,7 @@ async fn get_recent_agent_events(count: Option<usize>) -> Result<Vec<AgentEvent>
 
     let mut all_events: Vec<AgentEvent> = reader
         .lines()
-        .filter_map(|line| line.ok())
+        .map_while(Result::ok)
         .filter_map(|line| serde_json::from_str(&line).ok())
         .collect();
 
