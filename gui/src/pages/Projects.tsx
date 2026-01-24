@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { invoke } from '../lib/api';
 import { Link } from 'react-router-dom';
-import { Plus, FolderOpen, ArrowRight, X, Send, Bot, User, Sparkles, Settings, Check } from 'lucide-react';
+import { Plus, FolderOpen, ArrowRight, X, Send, Bot, User, Sparkles, Settings, Check, Search } from 'lucide-react';
+import SearchInput from '../components/SearchInput';
+import { ProjectCardSkeletonList } from '../components/Skeleton';
 import {
   processConversation,
   getInitialMessage,
@@ -26,11 +28,21 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'discovery', label: 'Discovery' },
+  { value: 'planning', label: 'Planning' },
+  { value: 'building', label: 'Building' },
+  { value: 'complete', label: 'Complete' },
+];
+
 export default function Projects() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   async function loadProjects() {
     try {
@@ -55,10 +67,31 @@ export default function Projects() {
     setShowModal(false);
   }
 
+  // Filter projects
+  const filteredProjects = projects.filter((project) => {
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      if (!project.name.toLowerCase().includes(query) &&
+          !project.framework.toLowerCase().includes(query)) {
+        return false;
+      }
+    }
+    // Status filter
+    if (statusFilter !== 'all' && project.status !== statusFilter) {
+      return false;
+    }
+    return true;
+  });
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-pulse text-accent-teal">Loading projects...</div>
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="h-8 w-32 bg-background-surface rounded animate-pulse" />
+          <div className="h-10 w-32 bg-background-surface rounded animate-pulse" />
+        </div>
+        <ProjectCardSkeletonList count={6} />
       </div>
     );
   }
@@ -75,6 +108,40 @@ export default function Projects() {
           New Project
         </button>
       </div>
+
+      {/* Search and Filters */}
+      {projects.length > 0 && (
+        <div className="flex items-center gap-4">
+          <SearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search projects..."
+            className="w-64"
+          />
+
+          <div className="flex gap-1 bg-background-surface rounded-lg p-1">
+            {STATUS_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => setStatusFilter(filter.value)}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  statusFilter === filter.value
+                    ? 'bg-accent-teal text-background-deep font-medium'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+
+          {(searchQuery || statusFilter !== 'all') && (
+            <span className="text-sm text-gray-500">
+              {filteredProjects.length} of {projects.length} projects
+            </span>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg">
@@ -95,9 +162,23 @@ export default function Projects() {
             Start Building
           </button>
         </div>
+      ) : filteredProjects.length === 0 && (searchQuery || statusFilter !== 'all') ? (
+        <div className="text-center py-12">
+          <Search className="w-12 h-12 mx-auto text-gray-500 mb-4" />
+          <h3 className="text-lg font-medium text-gray-300 mb-2">No projects found</h3>
+          <p className="text-gray-500 mb-4">
+            No projects match your search criteria
+          </p>
+          <button
+            onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
+            className="text-accent-teal hover:underline"
+          >
+            Clear filters
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((project) => (
+          {filteredProjects.map((project) => (
             <Link
               key={project.id}
               to={`/projects/${project.id}`}

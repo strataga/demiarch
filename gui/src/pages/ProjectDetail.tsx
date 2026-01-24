@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { invoke } from '../lib/api';
-import { ArrowLeft, FileText, LayoutGrid, Clock, Edit3, Save, X } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { invoke, Feature } from '../lib/api';
+import { ArrowLeft, FileText, LayoutGrid, Clock, Edit3, Save, X, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import ExtractFeaturesModal from '../components/ExtractFeaturesModal';
 
 interface Project {
   id: string;
@@ -17,12 +18,14 @@ interface Project {
 
 export default function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'prd' | 'kanban'>('prd');
   const [isEditing, setIsEditing] = useState(false);
   const [editedPrd, setEditedPrd] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showExtractModal, setShowExtractModal] = useState(false);
 
   useEffect(() => {
     async function loadProject() {
@@ -66,6 +69,20 @@ export default function ProjectDetail() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleFeaturesCreated(features: Feature[]) {
+    setShowExtractModal(false);
+    // Update project feature count
+    if (project) {
+      setProject({
+        ...project,
+        feature_count: project.feature_count + features.length,
+        status: 'building',
+      });
+    }
+    // Navigate to kanban to see the new features
+    navigate(`/projects/${projectId}/kanban`);
   }
 
   if (loading) {
@@ -116,13 +133,24 @@ export default function ProjectDetail() {
         </div>
         {/* Edit/Save buttons */}
         {!isEditing ? (
-          <button
-            onClick={handleStartEdit}
-            className="flex items-center gap-2 px-4 py-2 bg-background-surface text-gray-300 hover:text-white rounded-lg transition-colors"
-          >
-            <Edit3 className="w-4 h-4" />
-            Edit PRD
-          </button>
+          <div className="flex gap-2">
+            {project.prd && (
+              <button
+                onClick={() => setShowExtractModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-accent-teal/10 text-accent-teal hover:bg-accent-teal/20 rounded-lg transition-colors"
+              >
+                <Sparkles className="w-4 h-4" />
+                Extract Features
+              </button>
+            )}
+            <button
+              onClick={handleStartEdit}
+              className="flex items-center gap-2 px-4 py-2 bg-background-surface text-gray-300 hover:text-white rounded-lg transition-colors"
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit PRD
+            </button>
+          </div>
         ) : (
           <div className="flex gap-2">
             <button
@@ -207,6 +235,16 @@ What are we building and why?
           </div>
         )}
       </div>
+
+      {/* Extract Features Modal */}
+      {showExtractModal && project?.prd && projectId && (
+        <ExtractFeaturesModal
+          prd={project.prd}
+          projectId={projectId}
+          onClose={() => setShowExtractModal(false)}
+          onFeaturesCreated={handleFeaturesCreated}
+        />
+      )}
     </div>
   );
 }

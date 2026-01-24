@@ -275,3 +275,187 @@ export const AVAILABLE_MODELS = [
   { id: 'google/gemini-pro-1.5', name: 'Gemini Pro 1.5' },
   { id: 'meta-llama/llama-3.1-405b-instruct', name: 'Llama 3.1 405B' },
 ];
+
+/**
+ * Extracted feature from PRD
+ */
+export interface ExtractedFeature {
+  name: string;
+  description: string;
+  userStory: string;
+  priority: number; // 0-4 (P0-P4)
+  acceptanceCriteria: string[];
+}
+
+/**
+ * Extract features from a PRD using AI
+ */
+export async function extractFeaturesFromPRD(prd: string): Promise<{
+  features: ExtractedFeature[];
+  error?: string;
+}> {
+  const apiKey = localStorage.getItem('openrouter_api_key');
+  const model = localStorage.getItem('openrouter_model') || DEFAULT_MODEL;
+
+  if (!apiKey) {
+    return {
+      features: [],
+      error: 'API key required for feature extraction. Add your OpenRouter API key in Settings.',
+    };
+  }
+
+  const systemPrompt = `You are a PRD parser that extracts features from Product Requirements Documents.
+
+Your task is to analyze the PRD and extract all features/requirements mentioned.
+
+For each feature, extract:
+1. **name**: A short, descriptive feature name (3-6 words)
+2. **description**: A 1-2 sentence description of what the feature does
+3. **userStory**: The user story if explicitly mentioned, otherwise generate one in format "As a [user], I want [action] so that [benefit]"
+4. **priority**: Convert priority to a number:
+   - P0 or Critical = 0
+   - P1 or High = 1
+   - P2 or Medium or default = 2
+   - P3 or Low = 3
+   - P4 or Backlog = 4
+5. **acceptanceCriteria**: List of testable acceptance criteria
+
+Look for features in sections like:
+- "Core Features (MVP)"
+- "Features"
+- Sections with "### Feature Name" headers
+- Bullet points describing functionality
+
+Respond with ONLY valid JSON in this exact format, no other text:
+{
+  "features": [
+    {
+      "name": "Feature Name",
+      "description": "Description of the feature",
+      "userStory": "As a user, I want X so that Y",
+      "priority": 2,
+      "acceptanceCriteria": ["Criteria 1", "Criteria 2"]
+    }
+  ]
+}`;
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'Demiarch Feature Extractor',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Extract features from this PRD:\n\n${prd}` },
+        ],
+        max_tokens: 4096,
+        response_format: { type: 'json_object' },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API error:', response.status, errorData);
+
+      if (response.status === 401) {
+        return { features: [], error: 'Invalid API key. Please check your OpenRouter API key.' };
+      }
+
+      if (response.status === 402) {
+        return { features: [], error: 'Insufficient credits. Please add credits to your OpenRouter account.' };
+      }
+
+      return { features: [], error: `API error: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content || '{}';
+
+    try {
+      const parsed = JSON.parse(content);
+      return { features: parsed.features || [] };
+    } catch (parseError) {
+      console.error('Failed to parse AI response:', parseError, content);
+      return { features: [], error: 'Failed to parse AI response. Please try again.' };
+    }
+  } catch (error) {
+    console.error('Feature extraction failed:', error);
+    return {
+      features: [],
+      error: error instanceof Error ? error.message : 'Failed to connect to AI service.',
+    };
+  }
+}
+
+/**
+ * Extract features from PRD without AI (pattern matching fallback)
+ */
+export function extractFeaturesFromPRDLocal(prd: string): ExtractedFeature[] {
+  const features: ExtractedFeature[] = [];
+
+  // Match ### Feature headers
+  const featureHeaderRegex = /### ([^\n]+)/g;
+  let match;
+
+  while ((match = featureHeaderRegex.exec(prd)) !== null) {
+    const featureName = match[1].trim();
+    const startIndex = match.index + match[0].length;
+
+    // Find the next ### header or end of document
+    const nextHeaderMatch = /\n### |\n## |\n# /g;
+    nextHeaderMatch.lastIndex = startIndex;
+    const nextMatch = nextHeaderMatch.exec(prd);
+    const endIndex = nextMatch ? nextMatch.index : prd.length;
+
+    const featureContent = prd.slice(startIndex, endIndex);
+
+    // Extract user story
+    const userStoryMatch = featureContent.match(/\*\*User Story\*\*:\s*(.+)/i);
+    const userStory = userStoryMatch ? userStoryMatch[1].trim() : '';
+
+    // Extract priority
+    const priorityMatch = featureContent.match(/\*\*Priority\*\*:\s*(P[0-4]|Critical|High|Medium|Low|Backlog)/i);
+    let priority = 2; // default to medium
+    if (priorityMatch) {
+      const p = priorityMatch[1].toLowerCase();
+      if (p === 'p0' || p === 'critical') priority = 0;
+      else if (p === 'p1' || p === 'high') priority = 1;
+      else if (p === 'p2' || p === 'medium') priority = 2;
+      else if (p === 'p3' || p === 'low') priority = 3;
+      else if (p === 'p4' || p === 'backlog') priority = 4;
+    }
+
+    // Extract acceptance criteria
+    const criteriaMatch = featureContent.match(/\*\*Acceptance Criteria\*\*:?\s*([\s\S]*?)(?=\n\*\*|$)/i);
+    const acceptanceCriteria: string[] = [];
+    if (criteriaMatch) {
+      const criteriaText = criteriaMatch[1];
+      const bulletPoints = criteriaText.match(/[-•]\s*(.+)/g);
+      if (bulletPoints) {
+        bulletPoints.forEach((bp) => {
+          acceptanceCriteria.push(bp.replace(/^[-•]\s*/, '').trim());
+        });
+      }
+    }
+
+    // Get first paragraph as description
+    const descLines = featureContent.split('\n').filter((l) => l.trim() && !l.startsWith('-') && !l.startsWith('*'));
+    const description = descLines[0]?.trim() || '';
+
+    features.push({
+      name: featureName,
+      description,
+      userStory: userStory || `As a user, I want ${featureName.toLowerCase()}`,
+      priority,
+      acceptanceCriteria,
+    });
+  }
+
+  return features;
+}

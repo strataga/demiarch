@@ -17,6 +17,21 @@ const STORAGE_KEYS = {
   sessions: 'demiarch_sessions',
 };
 
+// Feature interface with enhanced fields
+export interface Feature {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  priority: number;
+  project_id: string;
+  phase_id: string;
+  due_date: string | null;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+}
+
 // Generate a UUID
 function uuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -107,6 +122,113 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
       setStorage(STORAGE_KEYS.features, features);
     }
     return feature;
+  },
+
+  create_feature: (args) => {
+    const features = getStorage<Feature[]>(STORAGE_KEYS.features, []);
+    const now = new Date().toISOString();
+    const newFeature: Feature = {
+      id: uuid(),
+      name: (args?.name as string) || 'Untitled Feature',
+      description: (args?.description as string) || null,
+      status: (args?.status as string) || 'pending',
+      priority: (args?.priority as number) || 3,
+      project_id: args?.project_id as string,
+      phase_id: (args?.phase_id as string) || 'mvp',
+      due_date: (args?.due_date as string) || null,
+      tags: (args?.tags as string[]) || [],
+      created_at: now,
+      updated_at: now,
+    };
+    features.push(newFeature);
+    setStorage(STORAGE_KEYS.features, features);
+
+    // Update project feature count
+    const projects = getStorage<Array<{ id: string; feature_count: number }>>(STORAGE_KEYS.projects, []);
+    const project = projects.find((p) => p.id === args?.project_id);
+    if (project) {
+      project.feature_count = (project.feature_count || 0) + 1;
+      setStorage(STORAGE_KEYS.projects, projects);
+    }
+
+    return newFeature;
+  },
+
+  update_feature: (args) => {
+    const features = getStorage<Feature[]>(STORAGE_KEYS.features, []);
+    const featureIndex = features.findIndex((f) => f.id === args?.id);
+    if (featureIndex === -1) return null;
+
+    const feature = features[featureIndex];
+    // Update allowed fields
+    if (args?.name !== undefined) feature.name = args.name as string;
+    if (args?.description !== undefined) feature.description = args.description as string | null;
+    if (args?.status !== undefined) feature.status = args.status as string;
+    if (args?.priority !== undefined) feature.priority = args.priority as number;
+    if (args?.due_date !== undefined) feature.due_date = args.due_date as string | null;
+    if (args?.tags !== undefined) feature.tags = args.tags as string[];
+    feature.updated_at = new Date().toISOString();
+
+    setStorage(STORAGE_KEYS.features, features);
+    return feature;
+  },
+
+  delete_feature: (args) => {
+    const features = getStorage<Feature[]>(STORAGE_KEYS.features, []);
+    const featureIndex = features.findIndex((f) => f.id === args?.id);
+    if (featureIndex === -1) return false;
+
+    const deletedFeature = features[featureIndex];
+    features.splice(featureIndex, 1);
+    setStorage(STORAGE_KEYS.features, features);
+
+    // Update project feature count
+    const projects = getStorage<Array<{ id: string; feature_count: number }>>(STORAGE_KEYS.projects, []);
+    const project = projects.find((p) => p.id === deletedFeature.project_id);
+    if (project && project.feature_count > 0) {
+      project.feature_count -= 1;
+      setStorage(STORAGE_KEYS.projects, projects);
+    }
+
+    return true;
+  },
+
+  bulk_create_features: (args) => {
+    const features = getStorage<Feature[]>(STORAGE_KEYS.features, []);
+    const now = new Date().toISOString();
+    const newFeatures: Feature[] = [];
+    const featuresToCreate = args?.features as Array<Partial<Feature>> || [];
+    const projectId = args?.project_id as string;
+
+    for (const f of featuresToCreate) {
+      const newFeature: Feature = {
+        id: uuid(),
+        name: f.name || 'Untitled Feature',
+        description: f.description || null,
+        status: f.status || 'pending',
+        priority: f.priority || 3,
+        project_id: projectId,
+        phase_id: f.phase_id || 'mvp',
+        due_date: f.due_date || null,
+        tags: f.tags || [],
+        created_at: now,
+        updated_at: now,
+      };
+      newFeatures.push(newFeature);
+      features.push(newFeature);
+    }
+
+    setStorage(STORAGE_KEYS.features, features);
+
+    // Update project feature count
+    const projects = getStorage<Array<{ id: string; feature_count: number }>>(STORAGE_KEYS.projects, []);
+    const project = projects.find((p) => p.id === projectId);
+    if (project) {
+      project.feature_count = (project.feature_count || 0) + newFeatures.length;
+      setStorage(STORAGE_KEYS.projects, projects);
+    }
+
+    return newFeatures;
   },
 
   get_sessions: () => {

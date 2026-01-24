@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '../lib/api';
 import { hasApiKey, setApiKey, getModel, setModel, AVAILABLE_MODELS } from '../lib/ai';
+import { getSettings, updateSettings, getCostData, getCostStatus } from '../lib/settings';
 import {
   Settings as SettingsIcon,
   Key,
@@ -9,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   Check,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface DoctorResult {
@@ -25,6 +27,15 @@ export default function Settings() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [selectedModel, setSelectedModel] = useState(getModel());
   const [saved, setSaved] = useState(false);
+
+  // Cost settings
+  const settings = getSettings();
+  const [dailyLimit, setDailyLimit] = useState(settings.dailyLimitUsd);
+  const [alertThreshold, setAlertThreshold] = useState(settings.alertThresholdPercent);
+  const [costSaved, setCostSaved] = useState(false);
+
+  const costData = getCostData();
+  const costStatus = getCostStatus();
 
   async function loadHealth() {
     try {
@@ -56,6 +67,20 @@ export default function Settings() {
   function handleModelChange(model: string) {
     setSelectedModel(model);
     setModel(model);
+  }
+
+  function handleDailyLimitChange(value: number) {
+    setDailyLimit(value);
+    updateSettings({ dailyLimitUsd: value });
+    setCostSaved(true);
+    setTimeout(() => setCostSaved(false), 2000);
+  }
+
+  function handleAlertThresholdChange(value: number) {
+    setAlertThreshold(value);
+    updateSettings({ alertThresholdPercent: value });
+    setCostSaved(true);
+    setTimeout(() => setCostSaved(false), 2000);
   }
 
   if (loading) {
@@ -155,15 +180,55 @@ export default function Settings() {
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-accent-amber" />
             Cost Management
+            {costSaved && (
+              <span className="text-xs text-accent-teal flex items-center gap-1">
+                <Check className="w-3 h-3" /> Saved
+              </span>
+            )}
           </h2>
         </div>
         <div className="p-4 space-y-4">
+          {/* Today's Usage */}
+          <div className="p-4 rounded-lg bg-background-surface">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-400">Today's Usage</span>
+              <span className={`font-medium ${costStatus.isOverLimit ? 'text-red-400' : costStatus.isNearLimit ? 'text-accent-amber' : 'text-accent-teal'}`}>
+                ${costData.todayUsd.toFixed(2)} / ${dailyLimit.toFixed(2)}
+              </span>
+            </div>
+            <div className="h-2 bg-background-mid rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  costStatus.isOverLimit
+                    ? 'bg-red-500'
+                    : costStatus.isNearLimit
+                    ? 'bg-accent-amber'
+                    : 'bg-accent-teal'
+                }`}
+                style={{ width: `${costStatus.percentUsed}%` }}
+              />
+            </div>
+            {costStatus.isNearLimit && !costStatus.isOverLimit && (
+              <div className="flex items-center gap-2 mt-2 text-accent-amber text-sm">
+                <AlertTriangle className="w-4 h-4" />
+                Approaching daily limit
+              </div>
+            )}
+            {costStatus.isOverLimit && (
+              <div className="flex items-center gap-2 mt-2 text-red-400 text-sm">
+                <AlertTriangle className="w-4 h-4" />
+                Daily limit exceeded
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Daily Limit (USD)</label>
               <input
                 type="number"
-                defaultValue={10}
+                value={dailyLimit}
+                onChange={(e) => handleDailyLimitChange(Number(e.target.value))}
                 step={0.5}
                 min={0}
                 className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent-teal"
@@ -173,13 +238,18 @@ export default function Settings() {
               <label className="block text-sm text-gray-400 mb-1">Alert Threshold (%)</label>
               <input
                 type="number"
-                defaultValue={80}
+                value={alertThreshold}
+                onChange={(e) => handleAlertThresholdChange(Number(e.target.value))}
                 min={0}
                 max={100}
                 className="w-full bg-background-surface border border-background-surface rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent-teal"
               />
             </div>
           </div>
+
+          <p className="text-xs text-gray-500">
+            Remaining today: ${costStatus.remaining.toFixed(2)}
+          </p>
         </div>
       </div>
     </div>
