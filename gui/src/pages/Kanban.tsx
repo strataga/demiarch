@@ -90,6 +90,23 @@ export default function Kanban() {
       ]);
       setFeatures(featuresData);
       setProject(projectData);
+
+      // Auto-update project status based on progress
+      if (projectData && projectData.status === 'discovery') {
+        const hasFeatures = featuresData.length > 0;
+        const hasPrd = !!projectData.prd;
+        if (hasFeatures || hasPrd) {
+          // Upgrade from discovery to planning/building
+          const hasInProgress = featuresData.some(f => f.status === 'in_progress');
+          const hasComplete = featuresData.some(f => f.status === 'complete');
+          const newStatus = hasInProgress || hasComplete ? 'building' : 'planning';
+          const updated = await invoke<Project>('update_project', {
+            id: projectData.id,
+            status: newStatus,
+          });
+          setProject(updated);
+        }
+      }
     } catch (error) {
       console.error('Failed to load features:', error);
     } finally {
