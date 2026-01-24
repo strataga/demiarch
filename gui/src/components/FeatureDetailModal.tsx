@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal } from 'lucide-react';
+import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw } from 'lucide-react';
 import { invoke, Feature } from '../lib/api';
 import { useModalShortcuts } from '../hooks/useKeyboardShortcuts';
 
@@ -8,6 +8,7 @@ interface FeatureDetailModalProps {
   onClose: () => void;
   onUpdated: (feature: Feature) => void;
   onDeleted: (featureId: string) => void;
+  onRetry?: (feature: Feature) => void;
 }
 
 const PRIORITY_OPTIONS = [
@@ -30,6 +31,7 @@ export default function FeatureDetailModal({
   onClose,
   onUpdated,
   onDeleted,
+  onRetry,
 }: FeatureDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -460,6 +462,26 @@ export default function FeatureDetailModal({
                   <> · Updated: {new Date(feature.updated_at).toLocaleString()}</>
                 )}
               </div>
+
+              {/* Retry Button for Blocked Features */}
+              {feature.status === 'blocked' && onRetry && (
+                <div className="pt-4 border-t border-background-surface">
+                  <div className="flex items-center gap-2 mb-2 text-accent-magenta">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span className="text-sm font-medium">This feature is blocked</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mb-3">
+                    The build failed. Check that your API key is configured in Settings, then retry.
+                  </p>
+                  <button
+                    onClick={() => onRetry(feature)}
+                    className="flex items-center gap-2 px-4 py-2 bg-accent-amber text-background-deep rounded-lg font-medium hover:bg-accent-amber/90 transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Retry Build
+                  </button>
+                </div>
+              )}
 
               {/* Delete Button */}
               <div className="pt-4 border-t border-background-surface">

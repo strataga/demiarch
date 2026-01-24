@@ -431,6 +431,25 @@ export default function Kanban() {
           onClose={() => setSelectedFeature(null)}
           onUpdated={handleFeatureUpdated}
           onDeleted={handleFeatureDeleted}
+          onRetry={async (feature) => {
+            // Move feature back to pending for retry
+            try {
+              await invoke('update_feature_status', {
+                id: feature.id,
+                status: 'pending',
+              });
+              const updated = { ...feature, status: 'pending' };
+              handleFeatureUpdated(updated);
+              setSelectedFeature(null);
+              // If Auto Build is enabled, it will pick up the feature automatically
+              // Otherwise, show a message
+              if (!autoBuild.state.enabled) {
+                console.log('Feature moved to pending. Enable Auto Build to retry, or use Manual build.');
+              }
+            } catch (error) {
+              console.error('Failed to retry feature:', error);
+            }
+          }}
         />
       )}
 
