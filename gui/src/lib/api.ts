@@ -79,6 +79,20 @@ export interface AgentStatus {
   generated_files?: string[];
 }
 
+// UI Preview stored on a feature
+// Tree shape: { root: string, elements: Record<string, UIElement> }
+// Using 'any' for elements to avoid type issues with json-render's UIElement type
+export interface UIPreview {
+  tree: {
+    root: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    elements: Record<string, any>;
+  };
+  prompt: string;     // User's description prompt
+  approved: boolean;  // User approved this preview
+  generatedAt: string;
+}
+
 // Feature interface with enhanced fields
 export interface Feature {
   id: string;
@@ -95,6 +109,7 @@ export interface Feature {
   generated_code?: GeneratedCode[];
   dependencies?: Dependency[];
   setup_requirements?: SetupRequirement[];
+  ui_preview?: UIPreview;
 }
 
 // Generate a UUID
@@ -236,6 +251,7 @@ const mockHandlers: Record<string, (args?: Record<string, unknown>) => unknown> 
     if (args?.generated_code !== undefined) feature.generated_code = args.generated_code as GeneratedCode[];
     if (args?.dependencies !== undefined) feature.dependencies = args.dependencies as Dependency[];
     if (args?.setup_requirements !== undefined) feature.setup_requirements = args.setup_requirements as SetupRequirement[];
+    if (args?.ui_preview !== undefined) feature.ui_preview = args.ui_preview as UIPreview | undefined;
     feature.updated_at = new Date().toISOString();
 
     setStorage(STORAGE_KEYS.features, features);

@@ -431,6 +431,7 @@ export default function Kanban() {
           onClose={() => setSelectedFeature(null)}
           onUpdated={handleFeatureUpdated}
           onDeleted={handleFeatureDeleted}
+          projectName={project?.name}
           onRetry={async (feature) => {
             // Move feature back to pending for retry
             try {

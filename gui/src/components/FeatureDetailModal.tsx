@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw, FolderOpen, History, Copy, Check, GitBranch, CheckCircle2, Clock, XCircle, Loader2 } from 'lucide-react';
-import { invoke, Feature } from '../lib/api';
+import { useState, useEffect, useCallback } from 'react';
+import { X, Edit3, Save, Trash2, Calendar, Tag, AlertTriangle, Package, Settings, FileCode, Terminal, RefreshCw, FolderOpen, History, Copy, Check, GitBranch, CheckCircle2, Clock, XCircle, Loader2, Wand2 } from 'lucide-react';
+import { invoke, Feature, UIPreview } from '../lib/api';
 import { useModalShortcuts } from '../hooks/useKeyboardShortcuts';
 import { openFolder, copyToClipboard, getGitHistory, GitCommit } from '../lib/shell';
+import FeaturePreviewTab from './FeaturePreviewTab';
 
 interface FeatureDetailModalProps {
   feature: Feature;
@@ -11,6 +12,7 @@ interface FeatureDetailModalProps {
   onDeleted: (featureId: string) => void;
   onRetry?: (feature: Feature) => void;
   projectPath?: string;
+  projectName?: string;
 }
 
 const PRIORITY_OPTIONS = [
@@ -35,6 +37,7 @@ export default function FeatureDetailModal({
   onDeleted,
   onRetry,
   projectPath,
+  projectName,
 }: FeatureDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -45,7 +48,7 @@ export default function FeatureDetailModal({
   const [commitHistory, setCommitHistory] = useState<GitCommit[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'code' | 'setup'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'preview' | 'code' | 'setup'>('overview');
 
   // Edit form state
   const [name, setName] = useState(feature.name);
@@ -178,6 +181,18 @@ export default function FeatureDetailModal({
     }
     setLoadingHistory(false);
   }
+
+  const handlePreviewChange = useCallback(async (preview: UIPreview | undefined) => {
+    try {
+      const updated = await invoke<Feature>('update_feature', {
+        id: feature.id,
+        ui_preview: preview,
+      });
+      onUpdated(updated);
+    } catch (err) {
+      console.error('Failed to update feature preview:', err);
+    }
+  }, [feature.id, onUpdated]);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -416,7 +431,8 @@ export default function FeatureDetailModal({
               </div>
 
               {/* Tabs for Details */}
-              {(feature.generated_code?.length || feature.dependencies?.length || feature.setup_requirements?.length) ? (
+              {/* Tabs for Details */}
+              {(
                 <>
                   <div className="flex border-b border-background-surface">
                     <button
@@ -428,6 +444,20 @@ export default function FeatureDetailModal({
                       }`}
                     >
                       Overview
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('preview')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1 ${
+                        activeTab === 'preview'
+                          ? 'border-accent-teal text-accent-teal'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Wand2 className="w-3 h-3" />
+                      Preview
+                      {feature.ui_preview?.approved && (
+                        <Check className="w-3 h-3 text-green-400" />
+                      )}
                     </button>
                     <button
                       onClick={() => setActiveTab('code')}
@@ -506,6 +536,15 @@ export default function FeatureDetailModal({
                           </div>
                         )}
                       </div>
+                    )}
+
+                    {activeTab === 'preview' && (
+                      <FeaturePreviewTab
+                        feature={feature}
+                        projectName={projectName}
+                        onPreviewChange={handlePreviewChange}
+                        currentPreview={feature.ui_preview}
+                      />
                     )}
 
                     {activeTab === 'code' && (
@@ -682,65 +721,6 @@ export default function FeatureDetailModal({
                     )}
                   </div>
                 </>
-              ) : (
-                // Simple view for features without generated content
-                <div className="space-y-4">
-                  {feature.description && (
-                    <div>
-                      <h4 className="text-sm text-gray-400 mb-1">Description</h4>
-                      <p className="text-sm">{feature.description}</p>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="text-sm text-gray-400 mb-1">Priority</h4>
-                      <span className={`text-sm font-medium ${priorityInfo.color}`}>
-                        {priorityInfo.label}
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="text-sm text-gray-400 mb-1 flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        Due Date
-                      </h4>
-                      {feature.due_date ? (
-                        <span className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : ''}`}>
-                          {isOverdue && <AlertTriangle className="w-4 h-4 inline mr-1" />}
-                          {new Date(feature.due_date).toLocaleDateString()}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-500">Not set</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {feature.tags && feature.tags.length > 0 && (
-                    <div>
-                      <h4 className="text-sm text-gray-400 mb-1 flex items-center gap-1">
-                        <Tag className="w-4 h-4" />
-                        Tags
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {feature.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="px-2 py-1 bg-accent-teal/10 text-accent-teal text-xs rounded"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-xs text-gray-500">
-                    Created: {new Date(feature.created_at).toLocaleString()}
-                    {feature.updated_at !== feature.created_at && (
-                      <> · Updated: {new Date(feature.updated_at).toLocaleString()}</>
-                    )}
-                  </div>
-                </div>
               )}
 
               {/* Retry Button for Blocked Features */}
