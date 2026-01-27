@@ -83,7 +83,7 @@ image = "0.25"
 
 # Caching
 # WASM (for plugins)
-wasmtime = "38.0.4"
+wasmtime = "40.0.3"
 
 [profile.release]
 lto = true
