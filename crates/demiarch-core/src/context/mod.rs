@@ -548,6 +548,150 @@ impl Default for ProgressiveContext {
     }
 }
 
+// ----------------------------------------------------------------------------
+// Context manager facade
+// ----------------------------------------------------------------------------
+use crate::domain::memory::{
+    ContextStats, MemoryError, MemoryRecord, MemoryStore, PersistentMemoryStore, RecallQuery,
+    SimpleEmbedder,
+};
+use chrono::{Duration, Utc};
+use std::fmt;
+use std::sync::Arc;
+
+/// High-level manager that wraps progressive context handling and storage.
+#[derive(Clone)]
+pub struct ContextManager {
+    store: MemoryStore,
+    persistent: Option<PersistentMemoryStore>,
+    budget: ContextBudget,
+}
+
+impl ContextManager {
+    /// Create a new manager with the default budget and in-memory store
+    pub fn new() -> Self {
+        Self {
+            store: MemoryStore::new(Arc::new(SimpleEmbedder::default()), "context-embedder"),
+            persistent: None,
+            budget: ContextBudget::default(),
+        }
+    }
+
+    /// Override the memory store (useful for testing)
+    pub fn with_store(store: MemoryStore) -> Self {
+        Self {
+            store,
+            persistent: None,
+            budget: ContextBudget::default(),
+        }
+    }
+
+    /// Enable persistence using the provided store
+    pub fn with_persistent_store(mut self, persistent: PersistentMemoryStore) -> Self {
+        self.persistent = Some(persistent);
+        self
+    }
+
+    /// Access the underlying memory store
+    pub fn store(&self) -> &MemoryStore {
+        &self.store
+    }
+
+    /// Access persistent store (if configured)
+    pub fn persistent(&self) -> Option<&PersistentMemoryStore> {
+        self.persistent.as_ref()
+    }
+
+    /// Current budget configuration
+    pub fn budget(&self) -> &ContextBudget {
+        &self.budget
+    }
+
+    /// Ingest a list of messages into the memory store
+    pub async fn ingest_messages(&self, messages: &[Message]) -> Result<MemoryRecord, MemoryError> {
+        let mut content = String::new();
+        for msg in messages {
+            if !content.is_empty() {
+                content.push_str("\n\n");
+            }
+            content.push_str(&format!(
+                "[{role}] {body}",
+                role = msg.role,
+                body = msg.content
+            ));
+        }
+        let record = self.store.add(&content).await?;
+
+        if let Some(persistent) = &self.persistent {
+            // Fallback IDs since we don't have project/conversation here
+            let project_id = "unknown";
+            persistent
+                .ingest(project_id, None, "chat", None, &content)
+                .await?;
+        }
+
+        Ok(record)
+    }
+
+    /// Retrieve relevant context with progressive disclosure
+    pub async fn recall(
+        &self,
+        query: &str,
+        max_tokens: usize,
+    ) -> Result<Vec<MemoryRecord>, MemoryError> {
+        let recall_query = RecallQuery {
+            query: query.to_string(),
+            max_tokens,
+            ..Default::default()
+        };
+        if let Some(persistent) = &self.persistent {
+            persistent.recall(None, recall_query).await
+        } else {
+            self.store.recall(recall_query).await
+        }
+    }
+
+    /// Prune entries older than the provided number of days
+    pub async fn prune(&self, older_than_days: u32) -> usize {
+        let cutoff = Utc::now() - Duration::days(older_than_days as i64);
+        if let Some(persistent) = &self.persistent {
+            match persistent.prune(None, cutoff, false).await {
+                Ok(count) => count,
+                Err(_) => 0,
+            }
+        } else {
+            self.store.prune_before(cutoff).await
+        }
+    }
+
+    /// Retrieve statistics about stored context
+    pub async fn stats(&self) -> ContextStats {
+        if let Some(persistent) = &self.persistent {
+            match persistent.stats(None).await {
+                Ok(stats) => stats,
+                Err(_) => ContextStats::default(),
+            }
+        } else {
+            ContextStats {
+                stats: self.store.stats().await,
+                total_tokens: 0,
+            }
+        }
+    }
+}
+
+impl Default for ContextManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Debug for ContextManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ContextManager")
+    }
+}
+
 // Helper functions for text processing
 
 /// Summarize text by extracting first and last sentences

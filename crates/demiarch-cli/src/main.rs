@@ -6,18 +6,21 @@ use demiarch_core::commands::{
     chat, checkpoint, document, feature, generate, graph, image, project,
 };
 use demiarch_core::config::Config;
+use demiarch_core::context::ContextManager;
 use demiarch_core::cost::CostTracker;
 use demiarch_core::domain::knowledge::{EntityType, RelationshipType};
 use demiarch_core::domain::locking::{LockConfig, LockManager};
+use demiarch_core::domain::memory::{PersistentMemoryStore, RecallQuery};
 use demiarch_core::domain::session::{
     SessionManager, SessionStatus, ShutdownConfig, ShutdownHandler,
 };
 use demiarch_core::llm::{LlmClient, Message, StreamEvent};
-use demiarch_core::storage::{Database, DatabaseManager};
+use demiarch_core::storage::{self, Database, DatabaseManager};
 use demiarch_core::visualization::{HierarchyTree, NodeStyle, RenderOptions, TreeBuilder};
 use futures_util::StreamExt;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use serde_json;
 use std::io::{self, Write};
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -798,17 +801,26 @@ async fn main() -> anyhow::Result<()> {
             cmd_documents(&db, action, cli.quiet).await
         }
 
-        Commands::Skills { action } => cmd_skills(action, cli.quiet).await,
+        Commands::Skills { action } => {
+            let db = get_db().await?;
+            cmd_skills(&db, action, cli.quiet).await
+        }
 
         Commands::Routing { action } => cmd_routing(action, cli.quiet).await,
 
-        Commands::Context { action } => cmd_context(action, cli.quiet).await,
+        Commands::Context { action } => {
+            let db = get_db().await?;
+            cmd_context(&db, action, cli.quiet).await
+        }
 
         Commands::Hooks { action } => cmd_hooks(action, cli.quiet).await,
 
         Commands::Costs { project } => cmd_costs(project.as_deref(), cli.quiet).await,
 
-        Commands::Sync { action } => cmd_sync(action, cli.quiet).await,
+        Commands::Sync { action } => {
+            let db = get_db().await?;
+            cmd_sync(&db, action, cli.quiet).await
+        }
 
         Commands::Checkpoints { action } => cmd_checkpoints(action, cli.quiet).await,
 
@@ -1109,6 +1121,8 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
     let db = Database::default()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to open database: {}", e))?;
+    let context_store = PersistentMemoryStore::new(db.pool().clone());
+    let context_manager = ContextManager::new().with_persistent_store(context_store);
 
     // Try to detect project from current directory first
     let current_dir = std::env::current_dir()?;
@@ -1353,7 +1367,7 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
 
                         // Save assistant message
                         if !response.is_empty() {
-                            chat::send_message(
+                            let saved = chat::send_message(
                                 &db,
                                 &conversation.id,
                                 chat::MessageRole::Assistant,
@@ -1361,6 +1375,23 @@ async fn cmd_chat(quiet: bool) -> anyhow::Result<()> {
                             )
                             .await
                             .map_err(|e| anyhow::anyhow!("Failed to save response: {}", e))?;
+
+                            // Ingest conversation slice into context store for progressive recall
+                            let history = chat::get_history(&db, &conversation.id, Some(12))
+                                .await
+                                .map_err(|e| anyhow::anyhow!("Failed to get history: {}", e))?;
+                            let content = format_history_for_context(&history);
+                            let _ = context_manager
+                                .persistent()
+                                .unwrap()
+                                .ingest(
+                                    &active_project.id,
+                                    Some(&conversation.id),
+                                    "chat",
+                                    Some(&saved.id),
+                                    &content,
+                                )
+                                .await;
                         }
 
                         // Check if the response suggests code generation
@@ -1840,49 +1871,132 @@ async fn cmd_documents(db: &Database, action: DocumentAction, quiet: bool) -> an
     Ok(())
 }
 
-async fn cmd_skills(action: SkillAction, quiet: bool) -> anyhow::Result<()> {
+async fn cmd_skills(db: &Database, action: SkillAction, quiet: bool) -> anyhow::Result<()> {
+    use demiarch_core::skills::{LearnedSkill, SkillCategory, SkillPattern, SkillsManager};
+
+    let manager = SkillsManager::with_database(db.clone());
+
     match action {
         SkillAction::List { category } => {
-            if !quiet {
-                println!("Skills:");
-                if let Some(cat) = category {
-                    println!("  (filtered by category: {})", cat);
+            let cat = category.as_deref().map(SkillCategory::parse);
+            let skills = manager.list(cat, None).await?;
+            if skills.is_empty() {
+                if !quiet {
+                    println!("No skills learned yet.");
                 }
-                println!("  (No skills learned yet)");
+                return Ok(());
+            }
+
+            if !quiet {
+                println!("Skills ({}):", skills.len());
+            }
+            for skill in skills {
+                println!(
+                    "- {} [{}] (used {}x)",
+                    skill.name,
+                    skill.category.as_str(),
+                    skill.usage_stats.times_used
+                );
             }
         }
-        SkillAction::Show { id } => {
-            println!("Skill: {}", id);
-            println!("(Skill details not yet implemented)");
-        }
         SkillAction::Search { query } => {
-            if !quiet {
-                println!("Searching skills for: {}", query);
-                println!("  (No matching skills found)");
+            let skills = manager.search(&query).await?;
+            if skills.is_empty() {
+                if !quiet {
+                    println!("No matching skills for query '{}'.", query);
+                }
+            } else {
+                if !quiet {
+                    println!("Found {} matching skills:", skills.len());
+                }
+                for skill in skills {
+                    println!("- {} [{}]", skill.name, skill.category.as_str());
+                }
             }
         }
         SkillAction::Extract { description } => {
+            let desc = description.unwrap_or_else(|| "Manually added skill".to_string());
+            let mut skill = LearnedSkill::new(
+                desc.clone(),
+                desc.clone(),
+                SkillCategory::Other,
+                SkillPattern::technique(desc.clone()),
+            )
+            .with_tags(vec!["manual".into()]);
+            manager.save(&skill).await?;
+            // Record immediate usage to populate stats slightly
+            skill.record_usage(true);
+            manager.save(&skill).await?;
             if !quiet {
-                println!("Extracting skills from current context...");
-                if let Some(desc) = description {
-                    println!("  Description: {}", desc);
-                }
-                println!("(Skill extraction not yet implemented)");
+                println!("Saved manual skill '{}'", skill.name);
             }
         }
         SkillAction::Delete { id } => {
+            let removed = manager.delete(&id).await?;
             if !quiet {
-                println!("Deleting skill: {}", id);
-                println!("(Skill deletion not yet implemented)");
+                if removed {
+                    println!("Deleted skill {}", id);
+                } else {
+                    println!("Skill {} not found", id);
+                }
             }
         }
         SkillAction::Stats => {
+            let stats = manager.stats().await?;
             if !quiet {
                 println!("Skill Statistics:");
-                println!("  Total skills: 0");
-                println!("  By category: (none)");
+                println!("  Total skills: {}", stats.total_skills);
+                println!("  Total uses: {}", stats.total_uses);
+                println!("  High-confidence: {}", stats.high_confidence_skills);
+                println!("  By category:");
+                for (cat, count) in stats.skills_by_category {
+                    println!("    - {}: {}", cat.as_str(), count);
+                }
             }
         }
+        SkillAction::Show { id } => match manager.get(&id).await? {
+            Some(skill) => {
+                manager.record_usage(&id, true).await.ok();
+                let skill = manager.get(&id).await?.unwrap_or(skill);
+                if quiet {
+                    println!("{}", serde_json::to_string_pretty(&skill)?);
+                } else {
+                    println!("{}", skill.name);
+                    println!("  ID: {}", skill.id);
+                    println!("  Category: {}", skill.category.as_str());
+                    println!("  Description: {}", skill.description);
+                    println!("  Tags: {}", skill.tags.join(", "));
+                    println!("  Confidence: {}", skill.confidence.as_str());
+                    println!("  Pattern: {}", skill.pattern.pattern_type.as_str());
+                    println!("  Template:\n{}", indent(&skill.pattern.template, 4));
+                    if !skill.pattern.variables.is_empty() {
+                        println!("  Variables:");
+                        for v in &skill.pattern.variables {
+                            println!("    - {}: {}", v.name, v.description);
+                        }
+                    }
+                    if !skill.pattern.applicability.is_empty() {
+                        println!(
+                            "  Applicability: {}",
+                            skill.pattern.applicability.join("; ")
+                        );
+                    }
+                    if !skill.pattern.limitations.is_empty() {
+                        println!("  Limitations: {}", skill.pattern.limitations.join("; "));
+                    }
+                    println!(
+                        "  Usage: {} used, {} successes, {} failures",
+                        skill.usage_stats.times_used,
+                        skill.usage_stats.success_count,
+                        skill.usage_stats.failure_count
+                    );
+                    if let Some(last) = skill.usage_stats.last_used_at {
+                        println!("  Last used: {}", last.to_rfc3339());
+                    }
+                }
+            }
+            None => println!("Skill not found: {}", id),
+        },
     }
     Ok(())
 }
@@ -1930,51 +2044,111 @@ async fn cmd_routing(action: RoutingAction, quiet: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn cmd_context(action: ContextAction, quiet: bool) -> anyhow::Result<()> {
+async fn cmd_context(db: &Database, action: ContextAction, quiet: bool) -> anyhow::Result<()> {
+    use demiarch_core::domain::memory::PersistentMemoryStore;
+
+    let project_repo = project::ProjectRepository::new(db);
+    let active_project = project_repo
+        .list(None)
+        .await?
+        .into_iter()
+        .find(|p| p.path.is_some())
+        .ok_or_else(|| {
+            anyhow::anyhow!("No projects found. Create one with: demiarch new <name>")
+        })?;
+
+    let store = PersistentMemoryStore::new(db.pool().clone());
+    let manager = ContextManager::new().with_persistent_store(store);
+
     match action {
         ContextAction::Stats { project } => {
+            let project_id = project.unwrap_or(active_project.id.clone());
+            let stats = if let Some(p) = manager.persistent() {
+                p.stats(Some(&project_id)).await?
+            } else {
+                Default::default()
+            };
+
             if !quiet {
-                println!("Context Statistics:");
-                if let Some(p) = project {
-                    println!("  Project: {}", p);
+                println!("Context Statistics (project: {}):", project_id);
+                println!("  Total entries: {}", stats.stats.total_records);
+                println!("  Total tokens: {}", stats.total_tokens);
+                if let Some(oldest) = stats.stats.oldest_at {
+                    println!("  Oldest: {}", oldest);
                 }
-                println!("  Total entries: 0");
-                println!("  Total tokens: 0");
+                if let Some(newest) = stats.stats.newest_at {
+                    println!("  Newest: {}", newest);
+                }
             }
         }
-        ContextAction::Search { query, level } => {
-            if !quiet {
-                println!("Searching context for: {}", query);
-                if let Some(l) = level {
-                    println!("  Detail level: {}", l);
+        ContextAction::Search { query, level: _ } => {
+            let results = if let Some(p) = manager.persistent() {
+                p.recall(
+                    Some(&active_project.id),
+                    RecallQuery {
+                        query: query.clone(),
+                        ..Default::default()
+                    },
+                )
+                .await?
+            } else {
+                Vec::new()
+            };
+
+            if results.is_empty() {
+                if !quiet {
+                    println!("No matching context found for '{}'.", query);
                 }
-                println!("  (No matching context found)");
+            } else {
+                if !quiet {
+                    println!("Context matches ({}):", results.len());
+                }
+                for rec in results {
+                    println!("- {} | {}", rec.created_at.to_rfc3339(), rec.index_summary);
+                }
             }
         }
         ContextAction::Prune {
             older_than,
             dry_run,
         } => {
+            let days = older_than.unwrap_or(30);
+            let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+            let removed = if let Some(p) = manager.persistent() {
+                p.prune(Some(&active_project.id), cutoff, dry_run).await?
+            } else {
+                0usize
+            };
             if !quiet {
-                let days = older_than.unwrap_or(30);
                 if dry_run {
-                    println!("Dry run: Would prune context older than {} days", days);
+                    println!(
+                        "Dry run: would remove {} entries older than {} days",
+                        removed, days
+                    );
                 } else {
-                    println!("Pruning context older than {} days...", days);
+                    println!(
+                        "Removed {} context entries older than {} days",
+                        removed, days
+                    );
                 }
-                println!("  (No context to prune)");
             }
         }
         ContextAction::Rebuild { project } => {
+            let project_id = project.unwrap_or(active_project.id.clone());
+            let updated = if let Some(p) = manager.persistent() {
+                p.rebuild(Some(&project_id)).await?
+            } else {
+                0usize
+            };
             if !quiet {
-                println!("Rebuilding context index...");
-                if let Some(p) = project {
-                    println!("  Project: {}", p);
-                }
-                println!("  (Context rebuild not yet implemented)");
+                println!(
+                    "Rebuilt {} context entries for project {}",
+                    updated, project_id
+                );
             }
         }
     }
+
     Ok(())
 }
 
@@ -2089,26 +2263,127 @@ async fn cmd_costs(project: Option<&str>, quiet: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn cmd_sync(action: SyncAction, quiet: bool) -> anyhow::Result<()> {
+async fn cmd_sync(db: &Database, action: SyncAction, quiet: bool) -> anyhow::Result<()> {
+    // Resolve the active project (prefer current directory, fallback to most recent with a path)
+    let current_dir = std::env::current_dir()?;
+    let project = if let Some(p) = project::find_by_directory(db, &current_dir)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to detect project: {}", e))?
+    {
+        p
+    } else {
+        let repo = project::ProjectRepository::new(db);
+        repo.list(None)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to list projects: {}", e))?
+            .into_iter()
+            .find(|p| p.path.is_some())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No projects registered. Run `demiarch new` or `demiarch init` in your project directory first."
+                )
+            })?
+    };
+
+    let project_path = project.path.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Project '{}' has no saved path. Re-run `demiarch init` inside the project directory to register it.",
+            project.name
+        )
+    })?;
+    let project_dir = std::path::PathBuf::from(&project_path);
+
     match action {
         SyncAction::Flush => {
             if !quiet {
-                println!("Flushing SQLite to JSONL...");
-                println!("  (Sync not yet implemented)");
+                println!(
+                    "Flushing SQLite to JSONL for project '{}' ({}):",
+                    project.name,
+                    project_dir.display()
+                );
+            }
+
+            let result = storage::export_to_jsonl(db.pool(), &project_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!(
+                    "  Wrote {} records to {}",
+                    result.metadata.total_records,
+                    result.sync_dir.display()
+                );
+                let mut counts: Vec<_> = result.metadata.record_counts.iter().collect();
+                counts.sort_by(|a, b| a.0.cmp(b.0));
+                for (table, count) in counts {
+                    println!("    {:<24} {}", table, count);
+                }
+                println!(
+                    "  Exported at: {}",
+                    result.metadata.exported_at.to_rfc3339()
+                );
             }
         }
         SyncAction::Import => {
+            let sync_dir = project_dir.join(storage::SYNC_DIR);
+            if !sync_dir.exists() {
+                return Err(anyhow::anyhow!(
+                    "No sync directory found at {}. Run `demiarch sync flush` first.",
+                    sync_dir.display()
+                ));
+            }
+
             if !quiet {
-                println!("Importing JSONL to SQLite...");
-                println!("  (Sync not yet implemented)");
+                println!("Importing JSONL from {}...", sync_dir.display());
+            }
+
+            let result = storage::import_from_jsonl(db.pool(), &project_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            if !quiet {
+                println!("  Imported {} records", result.total_records);
+                let mut counts: Vec<_> = result.record_counts.iter().collect();
+                counts.sort_by(|a, b| a.0.cmp(b.0));
+                for (table, count) in counts {
+                    println!("    {:<24} {}", table, count);
+                }
+                if !result.warnings.is_empty() {
+                    println!("Warnings:");
+                    for warn in &result.warnings {
+                        println!("  - {}", warn);
+                    }
+                }
             }
         }
         SyncAction::Status => {
+            let status = storage::check_sync_status(db.pool(), &project_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
+
             if !quiet {
-                println!("Sync Status:");
-                println!("  SQLite: up to date");
-                println!("  JSONL: up to date");
-                println!("  Last sync: never");
+                println!(
+                    "Sync status for '{}' ({}):",
+                    project.name,
+                    project_dir.display()
+                );
+                println!(
+                    "  State: {}",
+                    if status.dirty {
+                        "needs export"
+                    } else {
+                        "clean"
+                    }
+                );
+                println!(
+                    "  Last sync: {}",
+                    status
+                        .last_sync_at
+                        .as_deref()
+                        .unwrap_or("never (no export yet)")
+                );
+                println!("  Pending changes: {}", status.pending_changes);
+                println!("  Note: {}", status.message);
             }
         }
     }
@@ -3044,6 +3319,22 @@ fn format_duration(duration: chrono::Duration) -> String {
             format!("{}d", days)
         }
     }
+}
+
+fn indent(text: &str, spaces: usize) -> String {
+    let pad = " ".repeat(spaces);
+    text.lines()
+        .map(|line| format!("{}{}", pad, line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn format_history_for_context(messages: &[chat::ChatMessage]) -> String {
+    messages
+        .iter()
+        .map(|m| format!("[{}] {}", m.role.as_str(), m.content))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // ============================================================================

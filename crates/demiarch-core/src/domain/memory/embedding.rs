@@ -1,6 +1,7 @@
 use crate::domain::memory::error::MemoryError;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+
+use super::MemoryLayer;
 
 /// Trait for embedding providers
 pub trait Embedder {
@@ -20,7 +21,7 @@ impl Embeddings {
     pub fn new(model: &str, index: Vec<f32>, timeline: Vec<f32>, full: Vec<f32>) -> Self {
         Self {
             index,
-            timeline, 
+            timeline,
             full,
             model: model.to_string(),
         }
@@ -34,20 +35,12 @@ impl Embeddings {
             MemoryLayer::Full => &self.full,
         }
     }
-}
 
-/// Error variants for embedding operations
-#[derive(Debug, Error)]
-pub enum EmbeddingError {
-    #[error("Embedding failed for model {0}: {1}")]
-    EmbeddingFailed(String, String),
-    
-    #[error("Dimension mismatch: expected {0}, got {1}")]
-    DimensionMismatch(usize, usize),
-}
-
-impl From<EmbeddingError> for MemoryError {
-    fn from(e: EmbeddingError) -> Self {
-        MemoryError::Embedding(e)
+    pub fn into_vec_for_layer(self, layer: MemoryLayer) -> Vec<f32> {
+        match layer {
+            MemoryLayer::Index => self.index,
+            MemoryLayer::Timeline => self.timeline,
+            MemoryLayer::Full => self.full,
+        }
     }
 }

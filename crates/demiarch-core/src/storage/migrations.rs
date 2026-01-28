@@ -6,7 +6,7 @@
 use sqlx::SqlitePool;
 
 /// Current schema version
-pub const CURRENT_VERSION: i32 = 12;
+pub const CURRENT_VERSION: i32 = 13;
 
 /// SQL for creating the migrations tracking table
 const CREATE_MIGRATIONS_TABLE: &str = r#"
@@ -750,6 +750,33 @@ const MIGRATION_V12: &str = r#"
     CREATE INDEX IF NOT EXISTS idx_projects_path ON projects(path);
 "#;
 
+/// Migration 13: Context entries for progressive disclosure
+///
+/// Stores multi-layer summaries and embeddings for chat/agent context so we
+/// can perform search, pruning, and rebuilds across CLI sessions.
+const MIGRATION_V13: &str = r#"
+    CREATE TABLE IF NOT EXISTS context_entries (
+        id TEXT PRIMARY KEY NOT NULL,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,
+        source TEXT NOT NULL, -- e.g., "chat", "agent"
+        source_reference TEXT,
+        index_summary TEXT NOT NULL,
+        timeline_summary TEXT NOT NULL,
+        highlights TEXT,
+        full_context TEXT NOT NULL,
+        embedding_model TEXT NOT NULL,
+        embedding_json TEXT NOT NULL,
+        tokens_estimated INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_context_entries_project_id ON context_entries(project_id);
+    CREATE INDEX IF NOT EXISTS idx_context_entries_conversation_id ON context_entries(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_context_entries_created_at ON context_entries(created_at);
+"#;
+
 /// Get the current schema version from the database
 async fn get_current_version(pool: &SqlitePool) -> anyhow::Result<i32> {
     // Ensure migrations table exists
@@ -858,6 +885,12 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
         tracing::info!("Applying migration v12: Project path for workspace management");
         sqlx::raw_sql(MIGRATION_V12).execute(pool).await?;
         record_migration(pool, 12).await?;
+    }
+
+    if current_version < 13 {
+        tracing::info!("Applying migration v13: Context entries for progressive disclosure");
+        sqlx::raw_sql(MIGRATION_V13).execute(pool).await?;
+        record_migration(pool, 13).await?;
     }
 
     tracing::info!("Database migrations completed");
