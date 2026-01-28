@@ -1,0 +1,102 @@
+:root {
+  color-scheme: light;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: radial-gradient(circle at 10% 10%, #f0f5ff, #ffffff 40%);
+}
+
+body {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  padding: 48px 16px;
+  color: #0f172a;
+}
+
+.app {
+  width: min(640px, 100%);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+  padding: 28px;
+}
+
+header h1 {
+  margin: 0 0 4px 0;
+}
+
+.hint {
+  margin: 0 0 16px 0;
+  color: #475569;
+}
+
+.composer {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+#new-todo {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  font-size: 16px;
+}
+
+#add-btn,
+#clear-completed {
+  padding: 12px 14px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #2563eb, #7c3aed);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+}
+
+#clear-completed {
+  background: #e2e8f0;
+  color: #0f172a;
+  box-shadow: none;
+  margin-left: auto;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+li.done .text {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.text {
+  flex: 1;
+}
+
+.destroy {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+footer {
+  display: flex;
+  align-items: center;
+  margin-top: 16px;
+  color: #475569;
+}
