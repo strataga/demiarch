@@ -53,6 +53,7 @@ pub const EXPORTABLE_TABLES: &[&str] = &[
     "features",
     "conversations",
     "messages",
+    "context_entries",
     "checkpoints",
     "generated_files",
     "documents",
@@ -129,6 +130,25 @@ pub struct MessageRecord {
     pub model: Option<String>,
     pub tokens_used: Option<i32>,
     pub created_at: String,
+}
+
+/// Context entry record for JSONL export
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ContextEntryRecord {
+    pub id: String,
+    pub project_id: String,
+    pub conversation_id: Option<String>,
+    pub source: String,
+    pub source_reference: Option<String>,
+    pub index_summary: String,
+    pub timeline_summary: String,
+    pub highlights: Option<String>,
+    pub full_context: String,
+    pub embedding_model: String,
+    pub embedding_json: String,
+    pub tokens_estimated: i32,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Checkpoint record for JSONL export
@@ -390,6 +410,7 @@ async fn export_table(pool: &SqlitePool, table: &str, file_path: &Path) -> Resul
         "features" => export_features(pool, &mut writer).await?,
         "conversations" => export_conversations(pool, &mut writer).await?,
         "messages" => export_messages(pool, &mut writer).await?,
+        "context_entries" => export_context_entries(pool, &mut writer).await?,
         "checkpoints" => export_checkpoints(pool, &mut writer).await?,
         "generated_files" => export_generated_files(pool, &mut writer).await?,
         "documents" => export_documents(pool, &mut writer).await?,
@@ -496,6 +517,29 @@ async fn export_messages<W: Write>(pool: &SqlitePool, writer: &mut W) -> Result<
         SELECT id, conversation_id, role, content, model, tokens_used, created_at
         FROM messages
         ORDER BY conversation_id, created_at, id
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let count = rows.len();
+    for record in rows {
+        serde_json::to_writer(&mut *writer, &record)
+            .map_err(|e| Error::Other(format!("JSON serialization error: {}", e)))?;
+        writeln!(writer).map_err(Error::Io)?;
+    }
+    Ok(count)
+}
+
+async fn export_context_entries<W: Write>(pool: &SqlitePool, writer: &mut W) -> Result<usize> {
+    let rows: Vec<ContextEntryRecord> = sqlx::query_as(
+        r#"
+        SELECT id, project_id, conversation_id, source, source_reference,
+               index_summary, timeline_summary, highlights, full_context,
+               embedding_model, embedding_json, tokens_estimated,
+               created_at, updated_at
+        FROM context_entries
+        ORDER BY created_at, id
         "#,
     )
     .fetch_all(pool)
@@ -771,6 +815,7 @@ async fn import_table(pool: &SqlitePool, table: &str, file_path: &Path) -> Resul
         "features" => import_features(pool, reader).await,
         "conversations" => import_conversations(pool, reader).await,
         "messages" => import_messages(pool, reader).await,
+        "context_entries" => import_context_entries(pool, reader).await,
         "checkpoints" => import_checkpoints(pool, reader).await,
         "generated_files" => import_generated_files(pool, reader).await,
         "documents" => import_documents(pool, reader).await,
@@ -940,6 +985,53 @@ async fn import_messages<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<usi
         .bind(&record.model)
         .bind(record.tokens_used)
         .bind(&record.created_at)
+        .execute(pool)
+        .await?;
+
+        count += 1;
+    }
+    Ok(count)
+}
+
+async fn import_context_entries<R: BufRead>(pool: &SqlitePool, reader: R) -> Result<usize> {
+    let mut count = 0;
+    for line in reader.lines() {
+        let line = line.map_err(Error::Io)?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let record: ContextEntryRecord = serde_json::from_str(&line)
+            .map_err(|e| Error::Parse(format!("Invalid JSON: {}", e)))?;
+
+        sqlx::query(
+            r#"
+            INSERT OR REPLACE INTO context_entries (
+                id, project_id, conversation_id, source, source_reference,
+                index_summary, timeline_summary, highlights, full_context,
+                embedding_model, embedding_json, tokens_estimated,
+                created_at, updated_at
+            ) VALUES (
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, 
+                ?, ?, ?, 
+                ?, ?
+            )
+            "#,
+        )
+        .bind(&record.id)
+        .bind(&record.project_id)
+        .bind(&record.conversation_id)
+        .bind(&record.source)
+        .bind(&record.source_reference)
+        .bind(&record.index_summary)
+        .bind(&record.timeline_summary)
+        .bind(&record.highlights)
+        .bind(&record.full_context)
+        .bind(&record.embedding_model)
+        .bind(&record.embedding_json)
+        .bind(record.tokens_estimated)
+        .bind(&record.created_at)
+        .bind(&record.updated_at)
         .execute(pool)
         .await?;
 

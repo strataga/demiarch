@@ -301,6 +301,7 @@ pub struct ContextStats {
 }
 
 #[derive(Debug, Clone, FromRow)]
+#[allow(dead_code)]
 struct ContextEntryRow {
     id: String,
     project_id: String,

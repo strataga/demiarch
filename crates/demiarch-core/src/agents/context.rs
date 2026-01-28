@@ -24,7 +24,11 @@ use crate::context::{
     estimate_messages_tokens, ContextBudget, ContextWindow, DisclosureLevel, TokenAllocation,
 };
 use crate::cost::CostTracker;
+use crate::domain::memory::PersistentMemoryStore;
 use crate::llm::{LlmClient, Message};
+use crate::skills::{ExtractionContext, SkillExtractor, SkillsManager};
+use crate::storage::Database;
+use tokio::task;
 
 /// Unique identifier for an agent instance
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -331,7 +335,44 @@ impl SharedAgentState {
                 AgentStatus::Failed
             };
             info.tokens_used = tokens;
-            info.result = Some(result);
+            info.result = Some(result.clone());
+        }
+
+        // Persist context + extract skills asynchronously
+        if let Some(project_id) = self.project_id {
+            let project_id_str = project_id.to_string();
+            let feature_id = self.feature_id.clone();
+            let llm_client = self.llm_client.clone();
+            task::spawn(async move {
+                if let Ok(db) = Database::default().await {
+                    let store = PersistentMemoryStore::new(db.pool().clone());
+                    let _ = store
+                        .ingest(
+                            &project_id_str,
+                            None,
+                            "agent",
+                            None,
+                            &format_agent_result(&result),
+                        )
+                        .await;
+
+                    let skills_manager = SkillsManager::with_database(db.clone());
+                    let extractor = SkillExtractor::new(llm_client);
+                    let ctx = ExtractionContext {
+                        task_description: Some(result.output.clone()),
+                        project_id: Some(project_id_str.clone()),
+                        feature_id: feature_id.map(|f| f.to_string()),
+                        agent_type: Some("agent".to_string()),
+                        ..Default::default()
+                    };
+                    if let Ok(skills) = extractor.extract_from_result(&result, ctx).await {
+                        for skill in skills {
+                            let _ = skills_manager.save(&skill).await;
+                            let _ = skills_manager.record_usage(&skill.id, true).await;
+                        }
+                    }
+                }
+            });
         }
     }
 
@@ -720,6 +761,21 @@ impl std::fmt::Debug for AgentContext {
             .field("inherited_messages_count", &self.inherited_messages.len())
             .finish()
     }
+}
+
+fn format_agent_result(result: &AgentResult) -> String {
+    let mut out = String::new();
+    out.push_str(&result.output);
+    if !result.artifacts.is_empty() {
+        out.push_str("\n\nArtifacts:\n");
+        for art in &result.artifacts {
+            out.push_str(&format!(
+                "- {} ({:?}): {}\n",
+                art.name, art.artifact_type, art.content
+            ));
+        }
+    }
+    out
 }
 
 #[cfg(test)]
