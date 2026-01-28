@@ -7,6 +7,7 @@ import Kanban from './pages/Kanban';
 import Agents from './pages/Agents';
 import Settings from './pages/Settings';
 import ConflictResolution from './pages/ConflictResolution';
+import DemoTodo from './pages/DemoTodo';
 import ToastContainer from './components/ToastContainer';
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
           <Route path="projects/:projectId/conflicts/:conflictId" element={<ConflictResolution />} />
           <Route path="agents" element={<Agents />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="demo/todo" element={<DemoTodo />} />
         </Route>
       </Routes>
       <ToastContainer />
